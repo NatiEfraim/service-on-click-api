@@ -1,0 +1,50 @@
+# Secrets and local env
+.env
+.env.*
+
+# Dependencies (rebuilt inside the image by composer install)
+vendor/
+node_modules/
+
+# Downloaded copy of the mobile project, for reference only
+structure-project/
+
+# Git and editor files
+.git/
+.gitattributes
+.gitignore
+.editorconfig
+.idea/
+.vscode/
+.claude/
+
+# Docker files
+Dockerfile
+.dockerignore
+*.tar
+
+# Docs and tests
+README.md
+AGENTS.md
+CLAUDE.md
+tests/
+phpunit.xml
+.phpunit.cache/
+.phpunit.result.cache
+
+# Frontend build tooling (an API - nothing to build)
+package.json
+package-lock.json
+vite.config.js
+tailwind.config.js
+postcss.config.js
+.npmrc
+
+# Generated / runtime files from the build machine (config.php cached here would hide the container's env)
+bootstrap/cache/*.php
+public/hot
+public/storage
+storage/logs/*.log
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
