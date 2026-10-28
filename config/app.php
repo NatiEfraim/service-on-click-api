@@ -123,4 +123,39 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    // Requests per minute the "api" rate limiter allows (per user, or per IP when not logged in).
+    'rate_limitation' => env('RATE_LIMITATION', 100),
+
+    // Set PROD_STAGE=false outside production: the bucket name is then part of the object keys (StorageService).
+    'prod_stage' => env('PROD_STAGE', true),
+
+    // Booking type settings the management endpoints fall back to when no system reference overrides them.
+    'booking_type' => [
+        'barber_booking' => [
+            'haircut_time' => env('HAIRCUT_TIME', 30),
+            'clean_time' => env('CLEAN_TIME', 15),
+            'advance_month' => env('ADVANCE_MONTH', 2),
+            'service_start_time' => env('SERVICE_START_TIME', '07:00'),
+            'service_end_time' => env('SERVICE_END_TIME', '18:00'),
+            'break_start_time' => env('BREAK_START_TIME', '11:15'),
+            'break_end_time' => env('BREAK_END_TIME', '14:45'),
+        ],
+        'uploads' => [
+            'image' => [
+                'mimes' => explode(',', env('BOOKING_UPLOAD_IMAGE_MIMES', 'image/png,image/jpeg,image/jpg')),
+                'max_kb' => (int) env('BOOKING_UPLOAD_IMAGE_MAX_KB', 5120),
+            ],
+            'file' => [
+                'mimes' => explode(',', env(
+                    'BOOKING_UPLOAD_FILE_MIMES',
+                    'application/pdf,'
+                    . 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,'
+                    . 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,'
+                    . 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                )),
+                'max_kb' => (int) env('BOOKING_UPLOAD_FILE_MAX_KB', 10240),
+            ],
+        ],
+    ],
+
 ];

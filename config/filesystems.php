@@ -60,6 +60,20 @@ return [
             'report' => false,
         ],
 
+        // Local development (STORAGE_SERVICE=minio). The s3 disk above is for the servers.
+        'minio' => [
+            'driver' => 's3',
+            'key' => env('MINIO_ACCESS_KEY_ID'),
+            'secret' => env('MINIO_SECRET_ACCESS_KEY'),
+            'region' => env('MINIO_DEFAULT_REGION', 'us-east-1'),
+            'bucket' => env('MINIO_BUCKET'),
+            'url' => env('MINIO_URL'),
+            'endpoint' => env('MINIO_ENDPOINT'),
+            'use_path_style_endpoint' => filter_var(env('MINIO_USE_PATH_STYLE_ENDPOINT', true), FILTER_VALIDATE_BOOL),
+            'throw' => true,
+            'report' => false,
+        ],
+
     ],
 
     /*
@@ -75,6 +89,21 @@ return [
 
     'links' => [
         public_path('storage') => storage_path('app/public'),
+    ],
+
+    // Which disk stores the booking images and files: "minio" (local) or "s3" (servers).
+    'storage_service' => env('STORAGE_SERVICE', 'minio'),
+
+    // Folder inside the bucket for the uploaded files.
+    'storage_dir' => env('STORAGE_DIR', 'public'),
+
+    // Lifetime (minutes) of the signed URLs returned for the private bucket.
+    'temp_url_lifetime' => (int) env('TEMP_URL_LIFETIME', 30),
+
+    // Folder names inside the bucket.
+    'folder_name' => [
+        // The application log, uploaded to the bucket when a request fails (StorageService::logToS3()).
+        'log_folder_name' => (string) env('LOG_FOLDER_NAME', 'logs'),
     ],
 
 ];

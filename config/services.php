@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    // The login: ADFS returns the person behind the token the portal sent (see ADFS/AuthController.php).
+    'adfs' => [
+        'url' => env('ADFS_URL'),
+        'user' => env('ADFS_USER'),
+        'password' => env('ADFS_PASSWORD'),
+    ],
+
+    // The people directory: looks a person up by personal number.
+    'vatican' => [
+        'url' => env('VATICAN_URL'),
+        'token' => env('VATICAN_TOKEN'),
+    ],
+
 ];

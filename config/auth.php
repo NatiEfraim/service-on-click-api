@@ -16,7 +16,7 @@ return [
     */
 
     'defaults' => [
-        'guard' => env('AUTH_GUARD', 'web'),
+        'guard' => env('AUTH_GUARD', 'api'),
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
 
@@ -118,5 +118,17 @@ return [
     */
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Personal Access Token Name
+    |--------------------------------------------------------------------------
+    |
+    | The name of the Passport personal access client, and of the cookie the
+    | login sets the token in (VerifyCookie turns that cookie into a bearer token).
+    |
+    */
+
+    'access_token_name' => env('ACCESS_TOKEN_NAME'),
 
 ];
