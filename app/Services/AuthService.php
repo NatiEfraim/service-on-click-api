@@ -47,6 +47,9 @@ class AuthService
     /** Revoke the user's earlier tokens, issue a new personal access token and answer with who the user is and the token cookie. @param User $user @return JsonResponse */
     public function loginResponse(User $user): JsonResponse
     {
+        // Whoever logs in has at least the user role.
+        $this->userService->ensureUserRole($user);
+
         Token::where('user_id', $user->id)->update(['revoked' => true]);
 
         $tokenName = config('auth.access_token_name');

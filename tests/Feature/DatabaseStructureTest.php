@@ -3,18 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\RoleEnum;
-use Database\Seeders\ProdSeeders\ActionTypeSeeder;
-use Database\Seeders\ProdSeeders\BookingTypeHasStatementSeeder;
-use Database\Seeders\ProdSeeders\BookingTypeHasStatusSeeder;
-use Database\Seeders\ProdSeeders\BookingTypeSeeder;
-use Database\Seeders\ProdSeeders\FieldTypeSeeder;
-use Database\Seeders\ProdSeeders\FormFieldSeeder;
-use Database\Seeders\ProdSeeders\OptionFieldSeeder;
-use Database\Seeders\ProdSeeders\RoleAndPermissionSeeder;
-use Database\Seeders\ProdSeeders\StatusSeeder;
-use Database\Seeders\ProdSeeders\SystemReferencesSeeder;
-use Database\Seeders\ProdSeeders\UnitHasBookingTypeSeeder;
-use Database\Seeders\ProdSeeders\UnitSeeder;
+use Database\Seeders\ProdSeeder;
 use Illuminate\Support\Facades\DB;
 
 class DatabaseStructureTest extends ManagementTestCase
@@ -32,7 +21,7 @@ class DatabaseStructureTest extends ManagementTestCase
         13 => 'construction_booking',
     ];
 
-    public function test_the_four_roles_are_seeded_with_the_ids_of_the_role_enum(): void
+    public function test_the_five_roles_are_seeded_with_the_ids_of_the_role_enum(): void
     {
         $roles = DB::table('roles')->orderBy('id')->pluck('name', 'id')->all();
 
@@ -41,6 +30,7 @@ class DatabaseStructureTest extends ManagementTestCase
             RoleEnum::ADMIN->value => 'admin',
             RoleEnum::APPROVER->value => 'approver',
             RoleEnum::VICE_APPROVER->value => 'vice_approver',
+            RoleEnum::USER->value => 'user',
         ], $roles);
 
         $this->assertSame(['passport'], DB::table('roles')->distinct()->pluck('guard_name')->all());
@@ -54,20 +44,28 @@ class DatabaseStructureTest extends ManagementTestCase
         );
     }
 
-    public function test_every_booking_type_has_an_admin_approver_and_vice_approver_permission(): void
+    public function test_every_booking_type_has_an_admin_approver_vice_approver_and_user_permission(): void
     {
         $permissions = DB::table('permissions')->pluck('name')->all();
 
         foreach (array_keys(self::BOOKING_TYPES) as $bookingTypeId) {
-            foreach (['admin_', 'approver_', 'vice_approver_'] as $prefix) {
+            foreach (['admin_', 'approver_', 'vice_approver_', 'user_'] as $prefix) {
                 $this->assertContains($prefix . $bookingTypeId, $permissions);
             }
         }
 
-        $this->assertCount(count(self::BOOKING_TYPES) * 3, $permissions);
+        $this->assertCount(count(self::BOOKING_TYPES) * 4, $permissions);
     }
 
-    public function test_every_booking_type_is_linked_to_the_three_management_roles(): void
+    public function test_the_super_admin_has_no_per_booking_type_permission(): void
+    {
+        $this->assertSame(
+            0,
+            DB::table('permissions')->where('name', 'like', 'super_admin%')->count()
+        );
+    }
+
+    public function test_every_booking_type_is_linked_to_the_three_management_roles_and_the_user_role(): void
     {
         foreach (array_keys(self::BOOKING_TYPES) as $bookingTypeId) {
             $roleIds = DB::table('booking_type_has_roles')
@@ -78,7 +76,7 @@ class DatabaseStructureTest extends ManagementTestCase
                 ->all();
 
             $this->assertSame(
-                [RoleEnum::ADMIN->value, RoleEnum::APPROVER->value, RoleEnum::VICE_APPROVER->value],
+                [RoleEnum::ADMIN->value, RoleEnum::APPROVER->value, RoleEnum::VICE_APPROVER->value, RoleEnum::USER->value],
                 $roleIds,
                 'booking type ' . $bookingTypeId
             );
@@ -111,20 +109,7 @@ class DatabaseStructureTest extends ManagementTestCase
 
         $before = array_map(fn(string $table) => DB::table($table)->count(), $tables);
 
-        $this->seed([
-            BookingTypeSeeder::class,
-            RoleAndPermissionSeeder::class,
-            UnitSeeder::class,
-            ActionTypeSeeder::class,
-            FieldTypeSeeder::class,
-            StatusSeeder::class,
-            BookingTypeHasStatusSeeder::class,
-            FormFieldSeeder::class,
-            OptionFieldSeeder::class,
-            SystemReferencesSeeder::class,
-            UnitHasBookingTypeSeeder::class,
-            BookingTypeHasStatementSeeder::class,
-        ]);
+        $this->seed(ProdSeeder::class);
 
         $this->assertSame($before, array_map(fn(string $table) => DB::table($table)->count(), $tables));
     }

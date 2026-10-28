@@ -16,10 +16,11 @@ class UserSeeder extends Seeder
     {
         $managers = [
             // personal_number => [full_name, role]
-            '1000001' => ['מנהל מערכת בדיקה', RoleEnum::SUPER_ADMIN],
-            '1000002' => ['מפקד מחנה בדיקה', RoleEnum::ADMIN],
-            '1000003' => ['מפקד תחום בדיקה', RoleEnum::APPROVER],
-            '1000004' => ['גורם מטפל בדיקה', RoleEnum::VICE_APPROVER],
+            '99804761' => ['רועי סחייק', RoleEnum::SUPER_ADMIN],
+            '99810738' => ['נתנאל רפאל אפרים', RoleEnum::ADMIN],
+            '99815080' => ['ליאון לב', RoleEnum::ADMIN],
+            '99815386' => ['דניאל יצחק קם', RoleEnum::APPROVER],
+            '99807387' => ['אופיר גולדברג', RoleEnum::USER],
         ];
 
         $bookingTypeIds = BookingType::query()->pluck('id');

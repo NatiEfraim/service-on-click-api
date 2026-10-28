@@ -92,22 +92,42 @@ class AuthTest extends ManagementTestCase
         $this->withCookieToken($second)->getJson('/api/user')->assertOk();
     }
 
-    public function test_a_person_with_no_role_can_log_in_but_is_allowed_nothing(): void
+    public function test_a_person_with_no_role_logs_in_as_a_plain_user(): void
     {
+        $this->assertFalse(User::where('personal_number', self::NO_ROLE)->first()->hasAnyRole(['user', 'admin']));
+
         $this->postJson('/api/login', ['personal_number' => self::NO_ROLE])
             ->assertCreated()
-            ->assertJsonPath('role', [])
+            ->assertJsonPath('role', ['user'])
             ->assertJsonPath('permissions', []);
+
+        $this->assertTrue(User::where('personal_number', self::NO_ROLE)->first()->hasRole('user'));
+
+        $this->app['auth']->forgetGuards();
 
         $this->actingAsPersonalNumber(self::NO_ROLE)
             ->getJson('/api/user')
             ->assertOk()
-            ->assertJsonPath('data.roles', []);
+            ->assertJsonPath('data.roles.0.name', 'user');
+    }
 
-        $this->app['auth']->forgetGuards();
+    public function test_a_manager_whose_role_was_taken_away_logs_in_as_a_plain_user(): void
+    {
+        $approver = User::where('personal_number', self::APPROVER)->firstOrFail();
+        $approver->syncPermissions([]);
+        $approver->removeRole('approver');
 
-        $this->actingAsPersonalNumber(self::NO_ROLE)->getJson('/api/users')->assertForbidden();
-        $this->app['auth']->forgetGuards();
-        $this->actingAsPersonalNumber(self::NO_ROLE)->getJson('/api/bookings-approver-management/get-bookings/1')->assertForbidden();
+        $this->postJson('/api/login', ['personal_number' => self::APPROVER])
+            ->assertCreated()
+            ->assertJsonPath('role', ['user']);
+    }
+
+    public function test_a_manager_keeps_the_manager_role_and_does_not_get_the_user_role(): void
+    {
+        $this->postJson('/api/login', ['personal_number' => self::ADMIN])
+            ->assertCreated()
+            ->assertJsonPath('role', ['admin']);
+
+        $this->assertFalse(User::where('personal_number', self::ADMIN)->first()->hasRole('user'));
     }
 }

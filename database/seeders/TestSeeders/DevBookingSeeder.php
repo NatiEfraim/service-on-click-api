@@ -3,6 +3,7 @@
 namespace Database\Seeders\TestSeeders;
 
 use App\Enums\FieldTypeEnum;
+use App\Enums\RoleEnum;
 use App\Enums\UnitEnum;
 use App\Models\BarberBooking;
 use App\Models\Booking;
@@ -28,12 +29,22 @@ class DevBookingSeeder extends Seeder
     /** Run the database seeds. */
     public function run(): void
     {
-        $owners = User::query()->whereNotNull('personal_id')->get();
-        $viceApprover = User::query()->where('personal_number', '1000004')->first();
+        // Whoever has the user role (they log in and see their own bookings) and the people the mobile app knows by ID number.
+        $owners = User::query()
+            ->whereNotNull('personal_id')
+            ->orWhereHas('roles', fn($query) => $query->where('name', RoleEnum::USER->toSpatieRoleName()))
+            ->orderBy('id')
+            ->get();
 
-        if ($owners->isEmpty() || !$viceApprover) {
+        if ($owners->isEmpty()) {
             return;
         }
+
+        // Optional: the vice approver of every booking, and whoever writes the comment.
+        $viceApprover = $this->firstUserWithRole(RoleEnum::VICE_APPROVER);
+        $commenter = $viceApprover
+            ?? $this->firstUserWithRole(RoleEnum::APPROVER)
+            ?? $this->firstUserWithRole(RoleEnum::ADMIN);
 
         foreach (BookingType::query()->orderBy('id')->get() as $bookingType) {
             $statusIds = BookingTypeHasStatus::query()
@@ -54,17 +65,19 @@ class DevBookingSeeder extends Seeder
 
                 $this->createValues($booking);
 
-                ViceApproverHasBooking::create([
-                    'user_id' => $viceApprover->id,
-                    'booking_id' => $booking->id,
-                    'approved_by_vice_approver' => false,
-                    'is_deleted' => false,
-                ]);
+                if ($viceApprover) {
+                    ViceApproverHasBooking::create([
+                        'user_id' => $viceApprover->id,
+                        'booking_id' => $booking->id,
+                        'approved_by_vice_approver' => false,
+                        'is_deleted' => false,
+                    ]);
+                }
 
-                if ($index === 0) {
+                if ($index === 0 && $commenter) {
                     Comment::create([
                         'booking_id' => $booking->id,
-                        'user_id' => $viceApprover->id,
+                        'user_id' => $commenter->id,
                         'comment' => 'הערת בדיקה',
                     ]);
                 }
@@ -80,6 +93,15 @@ class DevBookingSeeder extends Seeder
                 }
             }
         }
+    }
+
+    /** The first user (by id) that holds the role, if there is one. @param RoleEnum $role @return ?User */
+    private function firstUserWithRole(RoleEnum $role): ?User
+    {
+        return User::query()
+            ->whereHas('roles', fn($query) => $query->where('name', $role->toSpatieRoleName()))
+            ->orderBy('id')
+            ->first();
     }
 
     /** A value for every top-level form field of the booking's type: the first option for lists, a sample for the rest. @param Booking $booking */

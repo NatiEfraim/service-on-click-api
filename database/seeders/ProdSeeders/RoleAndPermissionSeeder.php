@@ -22,6 +22,8 @@ class RoleAndPermissionSeeder extends Seeder
         RoleEnum::ADMIN,
         RoleEnum::APPROVER,
         RoleEnum::VICE_APPROVER,
+        // Everyone else who logs in: sees only their own bookings (GET /bookings/my-bookings and GET /bookings/{uuid}).
+        RoleEnum::USER,
     ];
 
     /** Run the database seeds. */

@@ -99,6 +99,7 @@ class UserService
             RoleEnum::ADMIN->toSpatieRoleName() => 1,
             RoleEnum::APPROVER->toSpatieRoleName() => 2,
             RoleEnum::VICE_APPROVER->toSpatieRoleName() => 3,
+            RoleEnum::USER->toSpatieRoleName() => 4,
         ];
 
         return User::whereIn('personal_number', array_values(array_unique(array_filter($personalNumbers))))
@@ -106,12 +107,12 @@ class UserService
             ->get()
             ->sortBy(fn (User $user) => [
                 (int) $user->is_deleted,
-                $user->roles->map(fn ($role) => $priority[$role->name] ?? 4)->min() ?? 4,
+                $user->roles->map(fn ($role) => $priority[$role->name] ?? 5)->min() ?? 5,
             ])
             ->first();
     }
 
-    /** Creates an account named from Vatican, with no role; null when Vatican does not know the person. @param string $personalNumber @return ?User */
+    /** Creates an account named from Vatican, with the user role; null when Vatican does not know the person. @param string $personalNumber @return ?User */
     public function createFromVatican(string $personalNumber): ?User
     {
         $data = $this->getUserFromVatican($personalNumber);
@@ -123,10 +124,22 @@ class UserService
         return $this->createUser($data['personal_number'], $data['full_name']);
     }
 
-    /** Creates an account with no role (or returns the one already there): it can log in, but every management endpoint refuses it. @param string $personalNumber, ?string $fullName @return User */
+    /** Creates a plain user (or returns the one already there): it can log in and see its own bookings, and every management endpoint refuses it. @param string $personalNumber, ?string $fullName @return User */
     public function createUser(string $personalNumber, ?string $fullName = null): User
     {
-        return User::firstOrCreate(['personal_number' => $personalNumber], ['full_name' => $fullName]);
+        $user = User::firstOrCreate(['personal_number' => $personalNumber], ['full_name' => $fullName]);
+
+        $this->ensureUserRole($user);
+
+        return $user;
+    }
+
+    /** A person with no role at all becomes a plain user - e.g. after the last manager role was taken away - so they can still see their own bookings. @param User $user */
+    public function ensureUserRole(User $user): void
+    {
+        if ($user->roles()->doesntExist()) {
+            $user->assignRole(RoleEnum::USER->value);
+        }
     }
 
     /** Look a person up by personal number in Vatican; null when it does not know them or cannot be reached. @param string $personalNumber @return ?array{full_name: string, personal_number: string} */

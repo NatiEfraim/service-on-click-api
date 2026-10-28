@@ -14,6 +14,7 @@ class BookingTypeHasRoleSeeder extends Seeder
         RoleEnum::ADMIN->value,
         RoleEnum::APPROVER->value,
         RoleEnum::VICE_APPROVER->value,
+        RoleEnum::USER->value,
     ];
 
     /** Run the database seeds. */

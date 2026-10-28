@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\RoleEnum;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
@@ -31,6 +33,18 @@ class Booking extends Model
         'is_status_exported' => 'boolean',
         'is_updated_value' => 'boolean',
     ];
+
+    /** Bookings the user may see: own bookings for plain users (a user with no role counts as plain), the whole unit otherwise. @param Builder $query, User $user @return Builder */
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        $isPlainUser = $user->roles->every(
+            fn($role): bool => (int) $role->id === RoleEnum::USER->value
+        );
+
+        return $isPlainUser
+            ? $query->where('user_id', $user->id)
+            : $query->where('unit_id', $user->unit_id);
+    }
 
     //TODO need to change it
     protected static function booted()

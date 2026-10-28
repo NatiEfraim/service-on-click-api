@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingAdminManagementController;
 use App\Http\Controllers\BookingApproverManagementController;
+use App\Http\Controllers\BookingController;
 use App\Http\Controllers\BookingSuperAdminManagementController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,15 @@ Route::controller(UserController::class)
     ->group(function () {
         Route::get('/{identifier?}', [UserController::class, 'index']);
         Route::post('/', [UserController::class, 'store']);
+    });
+
+// The only endpoints a person with just the user role may call (besides GET /user and POST /logout).
+Route::controller(BookingController::class)
+    ->prefix('bookings')
+    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|user'])
+    ->group(function () {
+        Route::get('/my-bookings', [BookingController::class, 'myBookings']);
+        Route::get('/{bookingUuid}', [BookingController::class, 'show'])->whereUuid('bookingUuid');
     });
 
 Route::controller(BookingApproverManagementController::class)

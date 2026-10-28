@@ -10,11 +10,14 @@ class ManagementAccessTest extends ManagementTestCase
     private const ALL_MANAGERS = ['super_admin', 'admin', 'approver', 'vice_approver'];
     private const ADMIN_AND_UP = ['super_admin', 'admin'];
     private const SUPER_ADMIN_ONLY = ['super_admin'];
+    /** The bookings endpoints are the only ones a person with just the user role may call. */
+    private const EVERYONE_WITH_A_ROLE = ['super_admin', 'admin', 'approver', 'vice_approver', 'user'];
 
     /** @return array<string, array{0: string, 1: array<int, string>}> */
     public static function endpoints(): array
     {
         return [
+            'my bookings' => ['/api/bookings/my-bookings', self::EVERYONE_WITH_A_ROLE],
             'users' => ['/api/users', self::ADMIN_AND_UP],
             'users by identifier' => ['/api/users/1000', self::ADMIN_AND_UP],
             'dashboard' => ['/api/bookings-approver-management/dashboard/car-booking', self::ALL_MANAGERS],
@@ -39,6 +42,7 @@ class ManagementAccessTest extends ManagementTestCase
             'admin' => self::ADMIN,
             'approver' => self::APPROVER,
             'vice_approver' => self::VICE_APPROVER,
+            'user' => self::PLAIN_USER,
             'no_role' => self::NO_ROLE,
         ];
 
