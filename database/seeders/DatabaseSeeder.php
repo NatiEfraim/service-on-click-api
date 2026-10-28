@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use Database\Seeders\TestSeeders\DevBookingSeeder;
+// use Database\Seeders\TestSeeders\DevBookingSeeder;
 use Database\Seeders\TestSeeders\UserSeeder;
 use Illuminate\Database\Seeder;
 
@@ -18,7 +18,7 @@ class DatabaseSeeder extends Seeder
         if (app()->environment(['local', 'testing'])) {
             $this->call([
                 UserSeeder::class,
-                DevBookingSeeder::class,
+                // DevBookingSeeder::class,
             ]);
         }
     }
