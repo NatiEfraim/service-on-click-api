@@ -129,6 +129,34 @@ return [
     // Set PROD_STAGE=false outside production: the bucket name is then part of the object keys (StorageService).
     'prod_stage' => env('PROD_STAGE', true),
 
+    // The b2r json files the mobile side drops in the bucket (import-json/...), read by the import commands.
+    'import_json' => [
+        // IMPORT_JSON_ENABLED=false stops the commands and GET /api/test-import from reading the bucket.
+        'enabled' => filter_var(env('IMPORT_JSON_ENABLED', true), FILTER_VALIDATE_BOOL),
+
+        // Rows per queued chunk job.
+        'booking_chunk_size' => (int) env('IMPORT_BOOKING_JSON_CHUNK_SIZE', 100),
+        'application_log_chunk_size' => (int) env('IMPORT_APPLICATION_LOG_JSON_CHUNK_SIZE', 500),
+    ],
+
+    // Queue job retry/timeout settings and schedule times; each block is read by a job in app/Jobs.
+    'jobs' => [
+        'import_booking_json' => [
+            'cron' => env('IMPORT_BOOKING_JSON_CRON', '*/5 * * * *'),
+            'tries' => (int) env('IMPORT_BOOKING_JSON_JOB_TRIES', 3),
+            'backoff' => (int) env('IMPORT_BOOKING_JSON_JOB_BACKOFF', 10),
+            'timeout' => (int) env('IMPORT_BOOKING_JSON_JOB_TIMEOUT', 900),
+        ],
+
+        // One minute after the bookings, and more tries: a log waits (backoff seconds) for its booking to be saved.
+        'import_application_log_json' => [
+            'cron' => env('IMPORT_APPLICATION_LOG_JSON_CRON', '1-59/5 * * * *'),
+            'tries' => (int) env('IMPORT_APPLICATION_LOG_JSON_JOB_TRIES', 5),
+            'backoff' => (int) env('IMPORT_APPLICATION_LOG_JSON_JOB_BACKOFF', 60),
+            'timeout' => (int) env('IMPORT_APPLICATION_LOG_JSON_JOB_TIMEOUT', 900),
+        ],
+    ],
+
     // Booking type settings the management endpoints fall back to when no system reference overrides them.
     'booking_type' => [
         'barber_booking' => [

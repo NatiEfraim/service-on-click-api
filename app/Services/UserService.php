@@ -10,6 +10,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ResponseException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
@@ -234,8 +235,47 @@ class UserService
         }
     }
 
+    /**
+     * The user id of every ID number given, in one query. A person the database does not know yet gets a bare row - the ID number and the unit
+     * of the booking they came with - because the mobile app's people arrive here only through the bookings and logs they appear in.
+     * (Nobody is created by the ADFS login; see findForAdfsLogin.) Throws on a database error, so a queued job tries again.
+     * @param array<string, ?int> $unitIdByPersonalId ID number (already normalized) => unit id @return array<string, int> ID number => user id
+     */
+    public function idsByPersonalId(array $unitIdByPersonalId): array
+    {
+        if ($unitIdByPersonalId === []) {
+            return [];
+        }
+
+        $userIds = User::whereIn('personal_id', array_map('strval', array_keys($unitIdByPersonalId)))
+            ->pluck('id', 'personal_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        foreach ($unitIdByPersonalId as $personalId => $unitId) {
+            $personalId = (string) $personalId;
+
+            if (isset($userIds[$personalId])) {
+                continue;
+            }
+
+            try {
+                $userIds[$personalId] = User::create([
+                    'personal_id' => $personalId,
+                    'unit_id' => $unitId,
+                    'is_deleted' => false,
+                ])->id;
+            } catch (UniqueConstraintViolationException) {
+                // Another job saved this person a moment ago.
+                $userIds[$personalId] = (int) User::where('personal_id', $personalId)->value('id');
+            }
+        }
+
+        return $userIds;
+    }
+
     /** An ID number as the database keeps it - nine digits, leading zeros included; null for anything that cannot be one (empty, too long, not digits, all zeros). @param mixed $value @return ?string */
-    private function normalizePersonalId(mixed $value): ?string
+    public static function normalizePersonalId(mixed $value): ?string
     {
         if (!is_int($value) && !is_string($value)) {
             return null;

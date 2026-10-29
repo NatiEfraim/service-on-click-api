@@ -104,6 +104,17 @@ return [
     'folder_name' => [
         // The application log, uploaded to the bucket when a request fails (StorageService::logToS3()).
         'log_folder_name' => (string) env('LOG_FOLDER_NAME', 'logs'),
+
+        // The b2r files the mobile side drops in the bucket - read by ImportBookingService / ImportApplicationLogService.
+        'import_json' => [
+            'base' => (string) env('IMPORT_JSON', 'import-json'),
+
+            'booking_data' => (string) env('BOOKING_DATA_JSON_FOLDER_NAME', 'booking-data'),
+            'application_log' => (string) env('APPLICATION_LOG_JSON_FOLDER_NAME', 'application-log'),
+        ],
+
+        // A file that was read moves here (both kinds of files, side by side).
+        'loaded_json' => (string) env('LOADED_JSON_FOLDER_NAME', 'loaded-json'),
     ],
 
 ];

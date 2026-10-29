@@ -22,6 +22,11 @@ Route::controller(UserController::class)
         Route::post('/', [UserController::class, 'store']);
     });
 
+// Reads the json files waiting in the bucket right now (what the scheduled import commands do) and returns the imported data.
+// Open on a local machine (APP_ENV=local) so Postman needs no token; on any other environment only the super admin may call it.
+Route::get('/test-import', [UserController::class, 'testImport'])
+    ->middleware(app()->environment('local') ? [] : ['auth:api', 'throttle:api', 'role:super_admin']);
+
 // The only endpoints a person with just the user role may call (besides GET /user and POST /logout).
 Route::controller(BookingController::class)
     ->prefix('bookings')

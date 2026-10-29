@@ -12,7 +12,8 @@ return new class extends Migration
         Schema::create('bookings', function (Blueprint $table) {
             $table->id();
             $table->uuid();
-            $table->bigInteger('serial_number')->nullable();
+            // The number both apps show. The import finds a booking by it, so two bookings may never share one.
+            $table->bigInteger('serial_number')->nullable()->unique();
             $table->foreignId('unit_id')->constrained('units')->onDelete('cascade');
             $table->foreignId('booking_type_id')->constrained('booking_types')->onDelete('cascade');
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');

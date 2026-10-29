@@ -59,6 +59,15 @@ trait ResolvesBarberSchedule
         );
     }
 
+    /** Minutes the barber needs to clean up after a haircut - a slot lasts the haircut plus this. */
+    protected function barberCleanTime(): int
+    {
+        return (int) (
+            $this->barberReferenceValue(SystemReferenceEnum::BARBER_CLEAN_TIME)['clean_time']
+            ?? config('app.booking_type.barber_booking.clean_time', 15)
+        );
+    }
+
     protected function barberAdvanceMonths(): int
     {
         return (int) (
