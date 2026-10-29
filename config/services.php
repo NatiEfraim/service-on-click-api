@@ -42,7 +42,7 @@ return [
         'password' => env('ADFS_PASSWORD'),
     ],
 
-    // The people directory: looks a person up by personal number.
+    // The people directory: the login asks it for the ID number of a personal number (see UserService::findForAdfsLogin).
     'vatican' => [
         'url' => env('VATICAN_URL'),
         'token' => env('VATICAN_TOKEN'),

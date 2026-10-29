@@ -7,4 +7,5 @@ enum AdfsColumnsEnum: string
     case PERSONAL_NUMBER = 'personalNumber';
     case FIRST_NAME = 'firstName';
     case SURNAME = 'surname';
+    case PERSONAL_ID = 'personalId';
 }

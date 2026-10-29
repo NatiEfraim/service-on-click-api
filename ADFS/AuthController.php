@@ -57,14 +57,14 @@ class AuthController extends Controller
             if (!is_null($personalNumber)) {
                 // the number in the user name (ARMY\c9810738) may be how the system stores the person
                 $usernameNumber = preg_match('/(\d+)$/', (string) ($userDecoded->username ?? ''), $match) ? $match[1] : null;
-                $user = $this->UserService->findForLogin([(string) $personalNumber, $usernameNumber])
-                    ?? $this->UserService->createFromVatican((string) $personalNumber)
-                    ?? $this->UserService->createUser((string) $personalNumber);
+                // By personal number, else by the ID number Vatican holds for it. Nobody is created at login.
+                $user = $this->UserService->findForAdfsLogin((string) $personalNumber, $usernameNumber);
             } else {
                 return response()->json('מספר אישי לא תקין', Response::HTTP_NOT_FOUND);
             }
 
-            if ($user->is_deleted) {
+            // Whoever the system does not know is turned away, like a deleted user.
+            if (is_null($user) || $user->is_deleted) {
                 return response()->json(["errors" => ["message" => 'המשתמש לא קיים במערכת']], Response::HTTP_FORBIDDEN);
             }
 
