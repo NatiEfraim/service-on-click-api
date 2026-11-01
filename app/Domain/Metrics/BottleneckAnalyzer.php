@@ -6,19 +6,7 @@ use App\Domain\Workflow\Workflow;
 use App\Enums\BookingStageEnum;
 use App\Enums\StatusBookingEnum;
 
-/**
- * Where bookings wait, stage by stage, measured against the HANDLING TARGET of each booking type: a type has one target, the total time from
- * a booking's opening to its closing. A booking is overdue when its total age passes the target of its type; a stage is a bottleneck when
- * overdue bookings pile up in it. No database access.
- *
- * An interval is a booking's stay in one status:
- *   ['booking_id' => serial, 'booking_type_id', 'status_id', 'entered_at' (unix), 'left_at' (unix, null while it is still there),
- *    'created_at' (unix: when the booking was opened), 'handler' => name of whoever moved it on (optional)]
- *  - open (left_at null): stage age = now - entered_at, total age = now - created_at
- *  - closed: duration = left_at - entered_at; its share of the lead time = the stage's durations / all stages' durations
- *  - severity needs a target: critical = (25% or more of the waiting bookings overdue AND at least 2) OR 5 or more overdue; warning = any
- *    overdue or near the target; ok; no_target when none of the stage's booking types has a target
- */
+/** Finds where bookings wait, stage by stage, against each booking type's handling target. */
 final class BottleneckAnalyzer
 {
     /** @param array<int, array{target_hours: float, warn_ratio?: float}> $targets by booking type id */
@@ -27,8 +15,10 @@ final class BottleneckAnalyzer
     }
 
     /**
-     * @param array<int, array<string, mixed>> $intervals
-     * @return array<int, array<string, mixed>> one entry per stage that has an interval, the most severe first
+     * Severity: critical = 5+ overdue, or 2+ and 25% of waiting bookings overdue; warning = any overdue or near target; no_target when none is set.
+     * @param array<int, array<string, mixed>> $intervals one row per stay in a status: booking_id, booking_type_id, status_id, entered_at,
+     *        left_at (null while open), created_at (unix), optional handler
+     * @return array<int, array<string, mixed>> one entry per stage with an interval, most severe first
      */
     public function analyze(array $intervals, int $now): array
     {
@@ -102,7 +92,7 @@ final class BottleneckAnalyzer
                 'p90_hours' => self::percentile($stage['durations'], 90),
                 'sample_size' => count($stage['durations']),
                 'share_of_lead_time' => $totalDuration > 0 ? round($sum / $totalDuration, 3) : null,
-                // The target of the booking type; null when the stage mixes booking types.
+                // Null when the stage mixes booking types.
                 'target_hours' => count($domains) === 1 ? reset($domains) : null,
                 'breached_open' => $hasTarget ? count($over) : null,
                 'near_breach_open' => $hasTarget ? count($near) : null,
@@ -118,7 +108,7 @@ final class BottleneckAnalyzer
         return $out;
     }
 
-    /** The $p-th percentile (linear interpolation) of a list of numbers; null for an empty list. @param array<int, float|int> $values */
+    /** Linear-interpolated $p-th percentile; null for an empty list. @param array<int, float|int> $values */
     public static function percentile(array $values, int $p): ?float
     {
         if (!$values) {

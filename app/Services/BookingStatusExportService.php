@@ -13,15 +13,11 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Sends the decisions made here back to the mobile app, as r2b files in the bucket (export-json/...):
- *  - booking_status: the decisions the mobile app has not confirmed yet - the status here differs from the last one seen from it. The mobile
- *    importer reads ONE file per day by its exact name and skips the rows that did not change, so each run writes a cumulative snapshot under
- *    today's name: sending it again is harmless, and a decision that waited for days (the bucket was down) is in it too. A decision stops being
- *    in the snapshot once the mobile app shows the same status in a file it sends us (ImportBookingService: "confirm").
- *  - booking_values: the corrected date / time values, one file per correction, in the order they were made (queued by BookingValueService).
- *  - system_config: the changes of the configuration, one file per request, in the order they were made (queued by ConfigOutboxService).
- * A booking with an open sync conflict is held back until a person decides. A file that cannot be written is tried again with a growing wait.
- * Every file is checked before it is written: one that holds the name of a unit or a department is blocked, not sent (PayloadGuard).
+ * Sends the decisions made here back to the mobile app as r2b files in the bucket (export-json/...):
+ *  - booking_status: a cumulative daily snapshot of unconfirmed decisions (the mobile importer reads one file per day by exact name);
+ *  - booking_values: corrected date/time values, one file per correction, in order (queued by BookingValueService);
+ *  - system_config: configuration changes, one file per request, in order (queued by ConfigOutboxService).
+ * Bookings with an open sync conflict are held back; failed files retry with a growing wait; every payload passes PayloadGuard.
  */
 class BookingStatusExportService
 {
@@ -32,14 +28,14 @@ class BookingStatusExportService
     ) {
     }
 
-    /** Send what is waiting. @return array{enabled: bool, busy?: bool, status?: array<string, mixed>, values?: array<string, mixed>, config?: array<string, mixed>} */
+    /** Sends what is waiting. @return array{enabled: bool, busy?: bool, status?: array<string, mixed>, values?: array<string, mixed>, config?: array<string, mixed>} */
     public function run(): array
     {
         if (!config('app.export_json.enabled', true)) {
             return ['enabled' => false];
         }
 
-        // The scheduler and a person pressing "send now" may both come by: only one writes at a time.
+        // The scheduler and a manual "send now" may overlap: only one writes at a time.
         $lock = Cache::lock('export-json', 300);
 
         if (!$lock->get()) {
@@ -53,7 +49,7 @@ class BookingStatusExportService
         }
     }
 
-    /** Write today's snapshot of the unconfirmed decisions. @return array{sent: bool, reason?: string, file_id?: int, error?: string} */
+    /** Writes today's snapshot of the unconfirmed decisions. @return array{sent: bool, reason?: string, file_id?: int, error?: string} */
     public function exportStatus(): array
     {
         $decisions = $this->unconfirmedDecisions();
@@ -62,7 +58,7 @@ class BookingStatusExportService
             return ['sent' => false, 'reason' => 'no_decisions'];
         }
 
-        // The mobile importer reads the file named for its "today": the day is counted in the timezone it uses.
+        // The mobile importer reads the file of its own "today", so the day is counted in its timezone.
         $fileName = ExportFileNames::bookingStatusFile(now(config('app.export_json.timezone')), (string) config('app.export_json.booking_status_prefix'));
         $hasNew = $decisions->contains(fn (Booking $booking): bool => !$booking->is_status_exported);
         $sentToday = SyncFile::query()
@@ -70,7 +66,7 @@ class BookingStatusExportService
             ->where('file_name', $fileName)->where('state', SyncFile::STATE_SENT)
             ->exists();
 
-        // Nothing new, and today's file is out already: it still holds every unconfirmed decision. (After midnight it is a new name.)
+        // Nothing new and today's file is out already; it still holds every unconfirmed decision.
         if (!$hasNew && $sentToday) {
             return ['sent' => false, 'reason' => 'nothing_new'];
         }
@@ -84,14 +80,13 @@ class BookingStatusExportService
             'updated_at' => (string) $booking->statusSince()->getTimestamp(),
         ])->values()->all()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
-        // The file name (the day) is part of what identifies a snapshot: the same decisions still waiting tomorrow are a new file under tomorrow's
-        // name - the mobile importer reads only the file of its "today" - not yesterday's file again.
+        // The day in the file name identifies the snapshot, so decisions still waiting tomorrow go in a new file.
         $file = SyncFile::query()->firstOrCreate(
             ['direction' => 'outbound', 'sha256' => hash('sha256', $fileName . "\n" . $json)],
             ['kind' => SyncFile::KIND_BOOKING_STATUS, 'file_name' => $fileName, 'state' => SyncFile::STATE_QUEUED, 'record_count' => $decisions->count(), 'payload' => $json]
         );
 
-        // The same snapshot failed before: it waits out its back-off, and after the last attempt a person sends it (POST /sync/files/{id}/retry).
+        // The same snapshot failed before: wait out the back-off; after the last attempt a person retries it.
         if ($file->state === SyncFile::STATE_FAILED) {
             if ($file->next_attempt_at === null) {
                 return ['sent' => false, 'reason' => 'needs_manual_retry', 'file_id' => $file->id];
@@ -109,15 +104,15 @@ class BookingStatusExportService
                 return $result;
             }
 
-            // An older snapshot (of today or of an earlier day) that never made it is replaced by this one: it holds every decision still waiting.
+            // An older snapshot that never made it is replaced by this one, which holds every waiting decision.
             SyncFile::query()
                 ->where('direction', 'outbound')->where('kind', SyncFile::KIND_BOOKING_STATUS)
                 ->whereIn('state', [SyncFile::STATE_QUEUED, SyncFile::STATE_FAILED])->where('id', '!=', $file->id)
                 ->update(['state' => SyncFile::STATE_SUPERSEDED, 'next_attempt_at' => null]);
         }
 
-        // What is in the file is sent. A booking that was changed again while the file was written has a newer version than the file holds:
-        // it stays pending and goes in the next one.
+        // A booking changed while the file was written has a newer version than the file holds:
+        // it stays pending and goes in the next file.
         foreach ($decisions->reject(fn (Booking $booking): bool => $booking->is_status_exported) as $booking) {
             Booking::query()->whereKey($booking->id)->where('version', $booking->version)->toBase()->update(['is_status_exported' => true]);
         }
@@ -126,9 +121,8 @@ class BookingStatusExportService
     }
 
     /**
-     * Send the queued corrections of values, oldest first. A later correction never arrives before an earlier one of the same booking: a file
-     * that failed waits out its back-off (after the last attempt, for a person to send it) and the later files of its bookings wait with it.
-     * The first file that fails to be written ends the round - the bucket is probably down, there is no point in trying the others.
+     * Sends queued value corrections, oldest first. A failed file and the later files of its bookings wait out the back-off
+     * (or a person's retry), and the first write failure ends the round (the bucket is probably down).
      * @return array{sent: int}
      */
     public function exportValues(): array
@@ -164,13 +158,13 @@ class BookingStatusExportService
     }
 
     /**
-     * Send the queued changes of the configuration, oldest first, and stop at the first that cannot go: a later change must never reach the mobile
-     * app before an earlier one (a field renamed, then removed). That is a file that failed and waits out its back-off, or one that is blocked.
+     * Sends queued configuration changes, oldest first, stopping at the first that cannot go (waiting to retry or blocked),
+     * so a later change never reaches the mobile app before an earlier one.
      * @return array{sent: int, stopped_at?: int, reason?: string, error?: string} reason: waiting_to_retry | needs_manual_retry | blocked | failed
      */
     public function exportConfig(): array
     {
-        // Switched on after changes were kept: they go out now.
+        // Changes kept while the channel was off go out once it is switched on.
         if (config('app.export_json.config_channel_enabled', true)) {
             SyncFile::query()
                 ->where('direction', 'outbound')->where('kind', SyncFile::KIND_SYSTEM_CONFIG)->where('state', SyncFile::STATE_AWAITING_SUPPORT)
@@ -188,7 +182,7 @@ class BookingStatusExportService
 
         foreach ($files as $file) {
             if ($file->state === SyncFile::STATE_FAILED && $file->next_attempt_at === null) {
-                // Out of attempts: a person sends it (POST /sync/files/{id}/retry).
+                // Out of attempts: a person retries it (POST /sync/files/{id}/retry).
                 return ['sent' => $sent, 'stopped_at' => (int) $file->id, 'reason' => 'needs_manual_retry'];
             }
 
@@ -208,10 +202,10 @@ class BookingStatusExportService
         return ['sent' => $sent];
     }
 
-    /** Write one file to the bucket. A failure is kept on the file, with when to try again. @return array{sent: bool, file_id?: int, error?: string} */
+    /** Writes one file to the bucket; a failure is kept on the file with the next try time. @return array{sent: bool, file_id?: int, error?: string} */
     public function attempt(SyncFile $file): array
     {
-        // Before anything is written: what leaves must not name a unit or a department.
+        // What leaves must not name a unit or a department.
         $leaks = $this->configOutbox->violations(json_decode((string) $file->payload, true));
 
         if ($leaks !== []) {
@@ -261,9 +255,8 @@ class BookingStatusExportService
     }
 
     /**
-     * Send a failed file again by hand (after the cause was fixed).
+     * Retries a failed file by hand.
      * @return array{sent: bool, file_id?: int, error?: string}
-     * @throws DomainError 403 not allowed, 404 no such file, 409 it was sent already or replaced
      */
     public function retry(AccessScope $scope, int $fileId): array
     {
@@ -283,7 +276,7 @@ class BookingStatusExportService
             throw new DomainError('הקובץ הוחלף בקובץ עדכני יותר', 409);
         }
 
-        // A change kept while the configuration channel was off goes out when it is switched on - not by hand before.
+        // A change kept while the configuration channel was off goes out when it is switched on, not by hand.
         if ($file->state === SyncFile::STATE_AWAITING_SUPPORT && !config('app.export_json.config_channel_enabled', true)) {
             throw new DomainError('ערוץ ההגדרות כבוי', 409);
         }
@@ -294,8 +287,8 @@ class BookingStatusExportService
     }
 
     /**
-     * Keep a file back because it names a unit or a department. It stays blocked (and the changes after it wait) until the name is gone from the
-     * file's content or a person sends it again by hand; the audit log gets one row when it becomes blocked, not one for every round.
+     * Keeps back a file that names a unit or a department until the name is gone or a person resends it;
+     * the audit log gets one row when it becomes blocked, not one per round.
      * @param string[] $leaks where in the payload the names were found
      * @return array{sent: bool, file_id: int, error: string}
      */
@@ -316,7 +309,7 @@ class BookingStatusExportService
         return ['sent' => false, 'file_id' => $file->id, 'error' => $error];
     }
 
-    /** The decisions the mobile app has not confirmed, none held by an open conflict. @return \Illuminate\Database\Eloquent\Collection<int, Booking> */
+    /** @return \Illuminate\Database\Eloquent\Collection<int, Booking> decisions not confirmed by the mobile app and not held by an open conflict */
     private function unconfirmedDecisions(): \Illuminate\Database\Eloquent\Collection
     {
         return Booking::query()
@@ -328,7 +321,7 @@ class BookingStatusExportService
             ->get();
     }
 
-    /** Who made the latest decision on each booking: the ID number the mobile app knows them by. @param array<int, int> $bookingIds @return array<int, ?string> booking id => personal_id */
+    /** Personal ID of whoever made the latest decision on each booking. @return array<int, ?string> booking id => personal_id */
     private function deciders(array $bookingIds): array
     {
         $deciders = [];
@@ -348,13 +341,13 @@ class BookingStatusExportService
         return $deciders;
     }
 
-    /** The serial numbers of the bookings a corrections file is about. @return array<int, int|string> */
+    /** @return array<int, int|string> serial numbers of the bookings a corrections file covers */
     private function serialsOf(SyncFile $file): array
     {
         return array_values(array_unique(array_column(json_decode((string) $file->payload, true)['changes'] ?? [], 'serial_number')));
     }
 
-    /** The bookings of a sent corrections file are no longer waiting to be sent - unless a later correction of theirs is still queued. */
+    /** Clears the pending flag of a sent corrections file's bookings unless a later correction is still queued. */
     private function clearUpdatedValueFlags(SyncFile $file): void
     {
         $serials = $this->serialsOf($file);

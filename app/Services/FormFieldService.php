@@ -17,14 +17,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * The form of a booking type in a unit: add, rename, change, move and remove its fields, and decide which date / time field an approver may
- * correct. Super admin only. Every change is checked, versioned, written to the audit log and queued for the mobile app (ConfigOutboxService) in
- * one transaction, so a refused change leaves nothing behind.
- *
- * The two systems keep their own ids, so a field is known to both by its field_name: the fields the mobile app has keep their names, a field made
- * here gets "int_<12 characters>". A field of the mobile app can be renamed, made required or not and moved, but its type is not changed and it is
- * not removed - the code of the mobile app (and of this system) finds it by name. A booking's values are never deleted with their field: a field
- * that holds any is archived (out of the form, the values stay) and only a field nobody filled is deleted.
+ * Super-admin management of a booking type's form in a unit: add, change, move and remove fields, and mark which date/time field an approver may correct.
+ * Each change is validated, versioned, audited and queued for the mobile app in one transaction; fields are known to both systems by field_name.
+ * Fields with values are archived, never deleted; mobile-app fields can be renamed, moved or made required, but not retyped or removed.
  */
 class FormFieldService
 {
@@ -35,10 +30,9 @@ class FormFieldService
     }
 
     /**
-     * Add a field to the end of the form.
+     * Adds a field at the end of the form.
      * @param array{field_display_name: string, field_type_id: int, is_required?: bool, editable?: bool, options?: array<int, string>} $data
      * @return array<string, mixed> the field as the screen shows it
-     * @throws DomainError 403 not a super admin, 404 the unit does not offer the booking type, 422 the field is not valid
      */
     public function create(AccessScope $scope, int $unitId, int $bookingTypeId, array $data): array
     {
@@ -53,7 +47,7 @@ class FormFieldService
         }
 
         return DB::transaction(function () use ($scope, $unitId, $bookingTypeId, $data): array {
-            // The form is locked while its place at the end is taken, so two new fields do not get the same one.
+            // Lock the form so two new fields do not take the same last place.
             $last = (int) FormField::query()->where('unit_id', $unitId)->where('booking_type_id', $bookingTypeId)->where('is_active', true)->lockForUpdate()->max('position');
             $type = (int) $data['field_type_id'];
             $label = trim($data['field_display_name']);
@@ -70,7 +64,7 @@ class FormFieldService
                 'is_required' => $required,
                 'editable' => (bool) ($data['editable'] ?? false),
                 'position' => $last + 1,
-                // (Said here, because the model does not hold the database's defaults after the insert and the answer below is read from it.)
+                // Set explicitly: the model does not hold the database defaults after the insert.
                 'version' => 1,
                 'is_active' => true,
             ]);
@@ -112,10 +106,9 @@ class FormFieldService
     }
 
     /**
-     * Change a field's name, type, required or editable. Send only what changes, and the version you saw.
+     * Changes a field's name, type, required or editable flag; send only the changes and the version you saw.
      * @param array{field_display_name?: string, field_type_id?: int, is_required?: bool, editable?: bool} $data
      * @return array<string, mixed>
-     * @throws DomainError 403, 404, 409 changed meanwhile, 422 not valid (a type that cannot change, a duplicate name...)
      */
     public function update(AccessScope $scope, int $fieldId, array $data, int $expectedVersion): array
     {
@@ -132,8 +125,7 @@ class FormFieldService
 
             $before = $this->snapshot($field);
 
-            // What the request asks for, over what the field is now. Only what it CHANGES is checked: a field of the mobile app may carry a name
-            // that repeats another's or an editable flag on a type that cannot use it, and an unrelated change (required) must not trip on that.
+            // Only what the request changes is validated, so an unrelated change does not trip on a legacy duplicate name.
             $label = array_key_exists('field_display_name', $data) ? trim((string) $data['field_display_name']) : $before['field_display_name'];
             $type = array_key_exists('field_type_id', $data) ? (int) $data['field_type_id'] : $before['field_type_id'];
             $wanted = [
@@ -165,7 +157,7 @@ class FormFieldService
 
             $attributes = $changed;
 
-            // The rules of a field of the mobile app are the mobile app's; the one of a field made here follows its name, its type and required flag.
+            // Mobile-app fields follow the mobile app's rules; custom fields follow their name, type and required flag.
             if ($field->isCustom()) {
                 $attributes['field_validations'] = $wanted['is_required'] ? ['required' => 'יש לספק ' . $label] : null;
                 $attributes += FormFieldRules::defaultsFor($type);
@@ -189,10 +181,9 @@ class FormFieldService
     }
 
     /**
-     * Put the fields of a form in a new order: send the ids of ALL the fields in it that stand alone (the ones inside another field follow it).
+     * Reorders the form: send the ids of ALL standalone fields (fields inside another field follow it).
      * @param array<int, int> $orderedIds
-     * @return array{saved: bool, order: array<int, string>} the field names in the new order
-     * @throws DomainError 403, 409 the list is not the fields of the form as it is now (somebody changed it)
+     * @return array{saved: bool, order: array<int, string>} field names in the new order
      */
     public function reorder(AccessScope $scope, int $unitId, int $bookingTypeId, array $orderedIds): array
     {
@@ -240,10 +231,9 @@ class FormFieldService
     }
 
     /**
-     * Take a field out of the form: archived when any booking holds a value for it, deleted when none does. Never the last field of the form, a
-     * field of the mobile app, a field inside another field, or one a setting or a filter depends on.
+     * Archives the field when any booking holds a value for it, deletes it otherwise. Refused for the last field, mobile-app fields,
+     * fields inside another field and fields a setting or filter depends on.
      * @return array{mode: string, used_by: int}
-     * @throws DomainError 403, 404, 409 changed meanwhile / the last field / in use by a setting, 422 a field that cannot be removed
      */
     public function remove(AccessScope $scope, int $fieldId, ?int $expectedVersion = null): array
     {
@@ -283,7 +273,7 @@ class FormFieldService
             if ($mode === 'archive') {
                 $field->forceFill(['is_active' => false, 'version' => (int) $field->version + 1])->save();
             } else {
-                // Nobody filled it: its options go with it (said here, not left to the cascade of one database).
+                // Nobody filled it: delete its options explicitly instead of relying on the database cascade.
                 OptionField::query()->where('form_field_id', $field->id)->delete();
                 $field->delete();
             }
@@ -303,9 +293,8 @@ class FormFieldService
     }
 
     /**
-     * Whether an approver may correct the value of a date / time field while a booking is handled.
+     * Sets whether an approver may correct this date/time field while handling a booking.
      * @return array{id: int, editable: bool, version: int}
-     * @throws DomainError 403 not a super admin, 404 no such field, 409 changed meanwhile, 422 not a date or a time
      */
     public function setEditable(AccessScope $scope, int $fieldId, bool $editable, int $expectedVersion): array
     {
@@ -355,9 +344,7 @@ class FormFieldService
         });
     }
 
-    //----------------------------- Private Methods ------------------------//
-
-    /** The fields in the form now (the archived ones are not), for the checks of the name. @return array<int, array{id: int, field_display_name: string}> */
+    /** @return array<int, array{id: int, field_display_name: string}> the active fields of the form, for name checks */
     private function siblings(int $unitId, int $bookingTypeId): array
     {
         return FormField::query()
@@ -367,7 +354,7 @@ class FormFieldService
             ->all();
     }
 
-    /** How many records hold something for the field: the bookings with a value, and the files and images uploaded under it. */
+    /** Counts the bookings with a value for the field plus the files and images uploaded under it. */
     public function usedBy(FormField $field): int
     {
         return BookingValue::query()->where('form_field_id', $field->id)->distinct()->count('booking_id')
@@ -409,7 +396,6 @@ class FormFieldService
         ];
     }
 
-    /** @throws DomainError 403 */
     private function authorize(AccessScope $scope, string $op, mixed $id = null): void
     {
         if (!$scope->can('config.global')) {

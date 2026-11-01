@@ -10,7 +10,6 @@ use Illuminate\Database\Seeder;
 
 class BookingTypeHasStatementSeeder extends Seeder
 {
-    /** Run the database seeds. */
     public function run(): void
     {
         // [booking type, statement, when it is shown] - an empty statement is seeded inactive.

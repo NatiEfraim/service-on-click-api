@@ -19,7 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // The personal access token arrives in a cookie; turn it into the bearer token before anything else.
+        // The access token arrives in a cookie; turn it into a bearer token first.
         $middleware->prepend([
             VerifyCookie::class,
         ]);
@@ -35,10 +35,10 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
 
-        // A refusal by a business rule is an answer, not an error: it is not written to the log (the audit log records the ones that matter).
+        // A business-rule refusal is an answer, not an error: not logged.
         $exceptions->dontReport(DomainError::class);
 
-        // One vague answer for every refused request (403 - also a missing role -, 404 and 405): it does not say whether a record exists or why.
+        // One vague answer for 403/404/405 so it never reveals whether a record exists.
         $exceptions->render(function (HttpExceptionInterface $e, Request $request) {
             $deniedStatusCodes = [
                 SymfonyResponse::HTTP_FORBIDDEN,
@@ -53,8 +53,7 @@ return Application::configure(basePath: dirname(__DIR__))
             return response()->json(['message' => HttpStatusCodeEnum::DENIED_MESSAGE], $e->getStatusCode());
         });
 
-        // A business rule said no. A refusal for lack of permission or of a visible record (403/404/405) gets the same vague answer as above;
-        // every other one (409 the booking changed meanwhile, 422 the value is not valid...) says what is wrong. The audit log keeps the real reason.
+        // 403/404/405 get the same vague answer; other statuses (409, 422...) say what is wrong.
         $exceptions->render(function (DomainError $e, Request $request) {
             $denied = in_array($e->status, [
                 SymfonyResponse::HTTP_FORBIDDEN,

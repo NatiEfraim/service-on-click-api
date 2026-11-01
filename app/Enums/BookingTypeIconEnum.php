@@ -4,7 +4,6 @@ namespace App\Enums;
 
 enum BookingTypeIconEnum: string
 {
-    //
     case EQUIPMENT_BOOKING = '2';
     case EQUIPMENT_BOOKING_MALE = '3';
     case EQUIPMENT_BOOKING_FEMALE = '4';
@@ -28,7 +27,7 @@ enum BookingTypeIconEnum: string
     case ENTRY_PERMISSION_BOOKING = '22';
 
 
-    // NEW - Work Spaces  
+    // Work spaces
     case WORK_SPACES = '23';
     case LARGE_COMMAND_ROOM_BOOKING = '24'; // חד"ן רחט"ל גדול
     case SMALL_COMMAND_ROOM_BOOKING = '25'; // חד"ן רחט"ל קטן

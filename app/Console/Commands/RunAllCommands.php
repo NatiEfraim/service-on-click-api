@@ -18,12 +18,12 @@ class RunAllCommands extends Command
         $this->call('optimize:clear');
         $database = config('database.connections.' . config('database.default') . '.database');
 
-        if ($database === self::PREPROD_DATABASE) {
-            $this->call('migrate', ['--force' => true]);
-        } else {
-            $this->call('migrate:fresh', ['--seed' => true]);
-        }
-        // $this->call('migrate', ['--force' => true]);
+        // if ($database === self::PREPROD_DATABASE) {
+        //     $this->call('migrate', ['--force' => true]);
+        // } else {
+        //     $this->call('migrate:fresh', ['--seed' => true]);
+        // }
+        $this->call('migrate', ['--force' => true]);
         // $this->call('migrate:fresh', ['--seed' => true]);
         if (!$this->hasPersonalAccessClient()) {
             $this->call('passport:client', [

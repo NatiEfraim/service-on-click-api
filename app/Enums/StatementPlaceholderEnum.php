@@ -7,7 +7,6 @@ enum StatementPlaceholderEnum: string
     case BARBER_CLEAN_TIME = 'clean_time';
     case BARBER_HAIRCUT_TIME = 'haircut_time';
 
-    /** Get the system reference id for this placeholder. @return int */
     public function getSystemReferenceId(): int
     {
         return match ($this) {
@@ -16,19 +15,19 @@ enum StatementPlaceholderEnum: string
         };
     }
 
-    /** Get the JSON key to read from the system reference value. @return string */
+    /** JSON key read from the system reference value. */
     public function getJsonKey(): string
     {
         return $this->value;
     }
 
-    /** Get the placeholder with braces as used in statements, e.g. "{clean_time}". @return string */
+    /** The placeholder as written in statements, e.g. "{clean_time}". */
     public function getPlaceholder(): string
     {
         return '{' . $this->value . '}';
     }
 
-    /** Get the default config fallback path. @return ?string */
+    /** Config path used when the system reference has no value. */
     public function getConfigFallback(): ?string
     {
         return match ($this) {

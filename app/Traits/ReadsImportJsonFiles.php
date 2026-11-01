@@ -8,25 +8,21 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * What both import services do before they save anything: find the files of their type waiting in the bucket,
- * queue the rows of each as chunk jobs and move the file to loaded-json.
+ * Shared import step: reads waiting bucket files, queues their rows as chunk jobs, moves the file to loaded-json.
  * The using service needs a StorageService in $this->storageService.
  */
 trait ReadsImportJsonFiles
 {
-    /** The kind of file the service reads. */
     abstract protected function jsonModelType(): JsonModelTypeEnum;
 
-    /** Rows in one chunk job. */
     abstract protected function chunkSize(): int;
 
-    /** The chunk job for one slice of the file's rows. @param array $rows, int $chunkIndex */
     abstract protected function makeChunkJob(array $rows, int $chunkIndex): object;
 
     /**
-     * Read every file of this type waiting in import-json/<folder>, oldest first, queue its rows chunk by chunk and move the file to loaded-json.
-     * A file is moved only once all its chunks are queued (or, with $sync, were saved without an error); a file that cannot be read stays where it is.
-     * @param bool $sync run the chunk jobs right now, in this process, and add up what they did - the queue worker is not needed
+     * Imports every waiting file of this type, oldest first. A file is moved only once all its chunks are queued
+     * (or saved without error when $sync); an unreadable file stays in place.
+     * @param bool $sync run the chunk jobs in this process instead of queueing them
      * @return array{busy: bool, files: array<int, array>, errors: array<int, array{file: string, message: string}>}
      */
     public function importFromBucket(bool $sync = false): array
@@ -34,7 +30,7 @@ trait ReadsImportJsonFiles
         $type = $this->jsonModelType();
         $result = ['busy' => false, 'files' => [], 'errors' => []];
 
-        // The scheduler and GET /api/test-import may both come by: only one of them reads the folder at a time.
+        // The scheduler and /api/test-import may overlap; only one reads the folder at a time.
         $lock = Cache::lock('import-json:' . $type->name, 600);
 
         if (!$lock->get()) {
@@ -62,7 +58,7 @@ trait ReadsImportJsonFiles
         return $result;
     }
 
-    /** Queue (or run) the chunks of one file, then move it. @return array{file: string, rows: int, chunks: int, moved_to: ?string, stats: array<string, int>, errors: array<int, string>} */
+    /** @return array{file: string, rows: int, chunks: int, moved_to: ?string, stats: array<string, int>, errors: array<int, string>} */
     private function importFile(JsonModelTypeEnum $type, string $fileName, string $directory, bool $sync): array
     {
         $payload = $this->storageService->readJsonFromBucket($fileName, $directory);
@@ -72,7 +68,7 @@ trait ReadsImportJsonFiles
             throw new \InvalidArgumentException("Invalid {$fileName}: missing the {$type->payloadKey()} array");
         }
 
-        // The keys stay, so a log line can say which row of the file it means.
+        // Keys are preserved so logs can name the row.
         $chunks = array_chunk($rows, $this->chunkSize(), true);
         $stats = [];
         $errors = [];

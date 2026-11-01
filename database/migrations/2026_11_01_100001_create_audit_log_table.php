@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /** Run the migrations. */
     public function up(): void
     {
         // Who did what to what, and what it looked like before and after. Written only by App\Services\AuditService; each row carries the hash of the

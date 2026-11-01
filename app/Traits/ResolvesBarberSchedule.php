@@ -6,7 +6,7 @@ use App\Enums\BookingTypeEnum;
 use App\Enums\SystemReferenceEnum;
 use Carbon\Carbon;
 
-/** Resolve the barber service window from the barber system references, so it follows the admin config. */
+/** Resolves the barber service window from the barber system references. */
 trait ResolvesBarberSchedule
 {
     /** Open service dates from today up to the configured advance window, excluding Friday/Saturday. */
@@ -59,7 +59,7 @@ trait ResolvesBarberSchedule
         );
     }
 
-    /** Minutes the barber needs to clean up after a haircut - a slot lasts the haircut plus this. */
+    /** Clean-up minutes after a haircut; a slot is haircut time plus this. */
     protected function barberCleanTime(): int
     {
         return (int) (

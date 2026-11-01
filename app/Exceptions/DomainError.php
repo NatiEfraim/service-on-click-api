@@ -5,8 +5,7 @@ namespace App\Exceptions;
 use RuntimeException;
 
 /**
- * A business-rule refusal: an HTTP status and a Hebrew message that is safe to show.
- * 403/404/405 are answered with the project's one vague message (see bootstrap/app.php) - the audit log keeps the real reason.
+ * A business-rule refusal: an HTTP status plus a Hebrew message that is safe to show.
  */
 class DomainError extends RuntimeException
 {

@@ -2,23 +2,19 @@
 
 namespace App\Domain\Sync;
 
-/**
- * The check on everything that leaves for the mobile app (the r2b files): the mobile app knows a unit by its letter only, so the display name of a
- * unit, the name of a department and any reference to a department must never go out. Fail closed: a payload that holds one is not sent.
- * No database access - the names to look for are given.
- */
+/** Fail-closed check on r2b payloads: unit display names and department names/references must never leave. */
 final class PayloadGuard
 {
     /** Keys that carry a unit's display name or a department. */
     public const FORBIDDEN_KEYS = ['unit_name', 'unit_display_name', 'internal_name', 'department', 'department_id', 'department_name'];
 
-    /** A name shorter than this is not looked for: it would match ordinary words (and a unit's letter is not secret). */
+    /** Shorter names are skipped: they would match ordinary words. */
     public const MIN_NAME_LENGTH = 3;
 
     /**
-     * Where the payload holds a forbidden key or a text with one of the names as a whole word ("NASA" is found in "ביחידת NASA", not in "NASAL").
-     * @param string[] $forbiddenValues the internal names (see usableNames)
-     * @return string[] the paths of what was found, empty when the payload is clean
+     * Paths where the payload holds a forbidden key or one of the names as a whole word.
+     * @param string[] $forbiddenValues
+     * @return string[] empty when the payload is clean
      */
     public static function violations(mixed $payload, array $forbiddenValues, string $path = '$'): array
     {
@@ -48,9 +44,8 @@ final class PayloadGuard
     }
 
     /**
-     * The names worth looking for: not empty, not shorter than MIN_NAME_LENGTH, not the same as a unit letter (a unit that has no name of its own
-     * shows its letter), each once.
-     * @param array<int, ?string> $names the display names of the units and the names of the departments @param array<int, string> $unitLetters
+     * Names worth searching for: non-empty, long enough, not a unit letter, each once.
+     * @param array<int, ?string> $names @param array<int, string> $unitLetters
      * @return string[]
      */
     public static function usableNames(array $names, array $unitLetters = []): array

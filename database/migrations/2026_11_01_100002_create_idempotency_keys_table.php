@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /** Run the migrations. */
     public function up(): void
     {
         // A double click or a network retry of a status change sends the same Idempotency-Key: the second request gets the first one's answer.
@@ -24,7 +23,6 @@ return new class extends Migration
         });
     }
 
-    /** Reverse the migrations. */
     public function down(): void
     {
         Schema::dropIfExists('idempotency_keys');

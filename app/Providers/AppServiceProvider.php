@@ -14,10 +14,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /** Register any application services. */
+    /** Bind the booking workflow. */
     public function register(): void
     {
-        // The booking route's rules. Built once per request (or test), on first use - the database is read then, not at boot.
+        // Lazy: the database is read on first use, not at boot.
         $this->app->singleton(Workflow::class, fn (): Workflow => new Workflow(
             controlOfficerBookingTypeIds: BookingTypeHasRole::query()
                 ->where('role_id', RoleEnum::TRANSPORTATION_CONTROL_OFFICER->value)
@@ -29,7 +29,6 @@ class AppServiceProvider extends ServiceProvider
         ));
     }
 
-    /** Bootstrap services: rate limiting. */
     public function boot(): void
     {
         $this->configureRateLimiting();

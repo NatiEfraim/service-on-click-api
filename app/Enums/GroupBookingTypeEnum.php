@@ -9,7 +9,6 @@ use App\Models\GroupBookingType;
 
 enum GroupBookingTypeEnum
 {
-    //
     case CAR;
     case WEAPON;
     case FOODֹ_BOOKING;
@@ -17,7 +16,7 @@ enum GroupBookingTypeEnum
 
     case WORK_SPACES;
 
-    /** Get the id for this group booking type, cached per-request since it's resolved via a DB query. */
+    /** The group's DB id, memoized per request. */
     public function getGroupBookingTypeId(): ?int
     {
         static $cache = [];
@@ -35,7 +34,7 @@ enum GroupBookingTypeEnum
         };
     }
 
-    /** Get booking type ids by group booking type id. */
+    /** Booking type ids that belong to a group. */
     public static function getBookingTypeIdsByGroupId(int $groupBookingTypeId): array
     {
         return GroupBookingTypeHasBookingType::where('group_booking_id', $groupBookingTypeId)
@@ -43,7 +42,6 @@ enum GroupBookingTypeEnum
             ->toArray();
     }
 
-    /** Get the Hebrew nav title for this group booking type. @return ?string */
     public function getNavTitle(): ?string
     {
         return match ($this) {
@@ -56,7 +54,7 @@ enum GroupBookingTypeEnum
             default => null,
         };
     }
-    /** Get the Hebrew management nav title ("הגדרות" prefix for super admin). @return ?string */
+    /** Hebrew management nav title ("הגדרות" prefix for super admin). */
     public function getManagementNavTitle(): ?string
     {
 
@@ -78,7 +76,7 @@ enum GroupBookingTypeEnum
         };
     }
 
-    /** Get the GroupBookingTypeEnum instance based on the booking type name. */
+    /** Resolves the enum from the group name. */
     public static function fromGroupBookingTypeName(string $name): ?self
     {
         return match ($name) {

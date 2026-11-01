@@ -2,16 +2,13 @@
 
 namespace App\Domain\Org;
 
-/**
- * Units and departments. A unit has a CODE - the letter the mobile app knows (H, N, M, R), which never changes - and an internal NAME that
- * people see here and that never leaves this system. A department exists only here. No database access.
- */
+/** Validation for units (fixed mobile-app letter code plus internal name) and departments. */
 final class OrgRules
 {
     /**
      * @param array{code?: string, name?: string} $data
-     * @param array<int, array{code: string, name: string}> $others the other units (code and the name people see)
-     * @return ?string the Hebrew error, or null when the unit is fine
+     * @param array<int, array{code: string, name: string}> $others the other units
+     * @return ?string Hebrew error, or null when valid
      */
     public static function validateUnit(array $data, array $others): ?string
     {
@@ -57,7 +54,7 @@ final class OrgRules
         return null;
     }
 
-    /** A department with people in it is not switched off until they are moved. */
+    /** A department with people in it cannot be deactivated until they are moved. */
     public static function canDeactivateDepartment(int $activeUsers): ?string
     {
         return $activeUsers > 0 ? "למחלקה משויכים {$activeUsers} משתמשים פעילים. יש להעביר אותם למחלקה אחרת לפני ההשבתה" : null;

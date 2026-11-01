@@ -11,7 +11,7 @@ enum UnitEnum: int
     case M  = 3;
     case R = 4;
 
-    /** Get this unit's DB id by its name. @return ?int */
+    /** The unit's DB id, looked up by name. */
     public function getUnitId(): ?int
     {
         return match ($this) {

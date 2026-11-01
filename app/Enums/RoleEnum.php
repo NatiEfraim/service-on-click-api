@@ -12,7 +12,7 @@ enum RoleEnum: int
 
     case TRANSPORTATION_CONTROL_OFFICER = 6;
 
-    /** Get the display name for permissions based on the role and booking type. */
+    /** Hebrew display name of the role. */
     public function getPermissionDisplayName(): string
     {
         return match ($this) {
@@ -25,8 +25,7 @@ enum RoleEnum: int
         };
     }
 
-
-    /** Convert a Spatie role string ("admin") into the matching RoleEnum value. */
+    /** Maps a Spatie role name ("admin") to the enum. */
     public static function fromSpatieRole(string $roleName): ?self
     {
         return match ($roleName) {
@@ -40,7 +39,7 @@ enum RoleEnum: int
         };
     }
 
-    /** Map a RoleEnum value to its matching PermissionEnum prefix, e.g. ADMIN → "admin_". */
+    /** The matching PermissionEnum prefix, e.g. ADMIN -> "admin_". */
     public function toPermissionEnum(): PermissionEnum
     {
         return match ($this) {
@@ -53,7 +52,7 @@ enum RoleEnum: int
         };
     }
 
-    /** Map to permission; control officer -> VICE_APPROVER unless TRANSPORTATION_BOOKING. @param int $bookingTypeId @return PermissionEnum */
+    /** Like toPermissionEnum(), but a control officer acts as VICE_APPROVER outside TRANSPORTATION_BOOKING. */
     public function toPermissionEnumForBookingType(int $bookingTypeId): PermissionEnum
     {
         if ($this === self::TRANSPORTATION_CONTROL_OFFICER) {
@@ -67,7 +66,7 @@ enum RoleEnum: int
         return $this->toPermissionEnum();
     }
 
-    /** Convert RoleEnum into the string used by Spatie roles table, e.g. ADMIN → "admin". */
+    /** The Spatie role name, e.g. ADMIN -> "admin". */
     public function toSpatieRoleName(): string
     {
         return match ($this) {

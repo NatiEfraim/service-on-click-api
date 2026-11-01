@@ -17,7 +17,6 @@ class User extends Authenticatable
 
     protected string $guard_name = "passport";
 
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'uuid',
         'full_name',
@@ -29,14 +28,12 @@ class User extends Authenticatable
         'is_deleted',
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'updated_at',
         'created_at',
         'is_deleted',
     ];
 
-    /** Attribute casts. @var array<string, string> */
     protected $casts = [
         'is_deleted' => 'boolean',
     ];
@@ -50,7 +47,6 @@ class User extends Authenticatable
         });
     }
 
-    /** Get all bookings made by the user. @return HasMany */
     public function booking()
     {
         return $this->hasMany(Booking::class);
@@ -61,19 +57,17 @@ class User extends Authenticatable
         return $this->hasMany(ApplicationLog::class);
     }
 
-    /** Get the user's unit. @return BelongsTo */
     public function unit()
     {
         return $this->belongsTo(Unit::class, 'unit_id');
     }
 
-    /** Get the user's department (internal only). @return BelongsTo */
     public function department()
     {
         return $this->belongsTo(Department::class, 'department_id');
     }
 
-    /** How the user is named in the audit log and in the files sent to the mobile app: the personal number, else the ID number. @return ?string */
+    /** Identifier used in the audit log and mobile files: personal number, else ID number. */
     public function actorId(): ?string
     {
         return $this->personal_number ?? $this->personal_id;

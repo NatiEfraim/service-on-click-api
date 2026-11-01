@@ -4,7 +4,6 @@ namespace App\Enums;
 
 enum PayloadSectionEnum:int
 {
-    //
     case NONE = 0;
     case INPUTS = 1;
     case SELECTS = 2;

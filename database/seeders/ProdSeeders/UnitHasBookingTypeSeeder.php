@@ -9,7 +9,6 @@ use Illuminate\Database\Seeder;
 
 class UnitHasBookingTypeSeeder extends Seeder
 {
-    /** Run the database seeds. */
     public function run(): void
     {
         $bookingTypesIds = BookingType::all()->pluck('id');

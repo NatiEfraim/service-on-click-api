@@ -2,7 +2,7 @@
 
 namespace App\Enums;
 
-/** Who or what a booking is waiting for - derived from its status and booking type by App\Domain\Workflow\Workflow::stageOf(). */
+/** Who or what a booking is waiting for (see Workflow::stageOf()). */
 enum BookingStageEnum: string
 {
     case CONTROL_OFFICER = 'control_officer';
@@ -15,7 +15,6 @@ enum BookingStageEnum: string
     case BARBER_DONE = 'barber_done';
     case CLOSED = 'closed';
 
-    /** Hebrew name of the stage. @return string */
     public function label(): string
     {
         return match ($this) {
@@ -31,7 +30,7 @@ enum BookingStageEnum: string
         };
     }
 
-    /** What kind of wait this is - only what the status itself proves (no guessing). @return ?string approval | customer_info | supplier | realization */
+    /** Kind of wait: approval | customer_info | supplier | realization (null when closed). */
     public function waitKind(): ?string
     {
         return match ($this) {
@@ -43,7 +42,7 @@ enum BookingStageEnum: string
         };
     }
 
-    /** The role whose turn it is in this stage; null when no single role owns it. @return ?RoleEnum */
+    /** The role whose turn it is; null when no single role owns the stage. */
     public function actingRole(): ?RoleEnum
     {
         return match ($this) {

@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /** Run the migrations. */
     public function up(): void
     {
         Schema::create('system_reference_has_form_fields', function (Blueprint $table) {
@@ -17,7 +16,6 @@ return new class extends Migration
         });
     }
 
-    /** Reverse the migrations. */
     public function down(): void
     {
         Schema::dropIfExists('system_reference_has_form_fields');

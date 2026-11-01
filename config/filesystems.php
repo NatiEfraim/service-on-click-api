@@ -2,31 +2,7 @@
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Default Filesystem Disk
-    |--------------------------------------------------------------------------
-    |
-    | Here you may specify the default filesystem disk that should be used
-    | by the framework. The "local" disk, as well as a variety of cloud
-    | based disks are available to your application for file storage.
-    |
-    */
-
     'default' => env('FILESYSTEM_DISK', 'local'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Filesystem Disks
-    |--------------------------------------------------------------------------
-    |
-    | Below you may configure as many filesystem disks as necessary, and you
-    | may even configure multiple disks for the same driver. Examples for
-    | most supported storage drivers are configured here for reference.
-    |
-    | Supported drivers: "local", "ftp", "sftp", "s3"
-    |
-    */
 
     'disks' => [
 
@@ -60,7 +36,7 @@ return [
             'report' => false,
         ],
 
-        // Local development (STORAGE_SERVICE=minio). The s3 disk above is for the servers.
+        // Local development only; the s3 disk is for the servers.
         'minio' => [
             'driver' => 's3',
             'key' => env('MINIO_ACCESS_KEY_ID'),
@@ -76,36 +52,23 @@ return [
 
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Symbolic Links
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure the symbolic links that will be created when the
-    | `storage:link` Artisan command is executed. The array keys should be
-    | the locations of the links and the values should be their targets.
-    |
-    */
-
     'links' => [
         public_path('storage') => storage_path('app/public'),
     ],
 
-    // Which disk stores the booking images and files: "minio" (local) or "s3" (servers).
+    // "minio" locally, "s3" on the servers.
     'storage_service' => env('STORAGE_SERVICE', 'minio'),
 
-    // Folder inside the bucket for the uploaded files.
     'storage_dir' => env('STORAGE_DIR', 'public'),
 
-    // Lifetime (minutes) of the signed URLs returned for the private bucket.
+    // Minutes a signed URL for the private bucket stays valid.
     'temp_url_lifetime' => (int) env('TEMP_URL_LIFETIME', 30),
 
     // Folder names inside the bucket.
     'folder_name' => [
-        // The application log, uploaded to the bucket when a request fails (StorageService::logToS3()).
         'log_folder_name' => (string) env('LOG_FOLDER_NAME', 'logs'),
 
-        // The b2r files the mobile side drops in the bucket - read by ImportBookingService / ImportApplicationLogService.
+        // b2r files dropped by the mobile side.
         'import_json' => [
             'base' => (string) env('IMPORT_JSON', 'import-json'),
 
@@ -113,15 +76,13 @@ return [
             'application_log' => (string) env('APPLICATION_LOG_JSON_FOLDER_NAME', 'application-log'),
         ],
 
-        // A file that was read moves here (both kinds of files, side by side).
+        // Processed files are moved here.
         'loaded_json' => (string) env('LOADED_JSON_FOLDER_NAME', 'loaded-json'),
 
-        // The files and images of the bookings (the bytes - the booking json only names them, SrvOnClickFiles_<stored name>, without the extension).
-        // The mobile side's own backup folder is export-files: set ATTACHMENTS_FOLDER_NAME=export-files to read it directly when the bucket is shared.
+        // Set ATTACHMENTS_FOLDER_NAME=export-files to read the mobile backup folder directly.
         'attachments' => (string) env('ATTACHMENTS_FOLDER_NAME', 'import-files'),
 
-        // The r2b files this system writes for the mobile side - the decisions made here, the corrected values and the changes of the
-        // configuration (BookingStatusExportService).
+        // r2b files written for the mobile side.
         'export_json' => [
             'base' => (string) env('EXPORT_JSON', 'export-json'),
 

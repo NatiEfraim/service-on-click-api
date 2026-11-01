@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 
 trait InterpolatesStatement
 {
-    /** Interpolate a statement template's placeholders (e.g. {clean_time}) with system reference values. */
+    /** Replaces placeholders such as {clean_time} with system reference values. */
     public function interpolateStatement(?string $statement, int $unitId): ?string
     {
         if (is_null($statement)) {
@@ -25,7 +25,7 @@ trait InterpolatesStatement
         return $result;
     }
 
-    /** Get all placeholder values for a given unit, as ['{placeholder}' => 'value'] pairs. */
+    /** @return array<string, string> ['{placeholder}' => 'value'] for the unit. */
     private function getPlaceholderValues(int $unitId): array
     {
         $values = [];
@@ -40,7 +40,6 @@ trait InterpolatesStatement
         return $values;
     }
 
-    /** Get a single placeholder value from system references. */
     private function getPlaceholderValue(StatementPlaceholderEnum $placeholder, int $unitId): string|int|null
     {
         $systemReferenceId = $placeholder->getSystemReferenceId();
@@ -59,7 +58,6 @@ trait InterpolatesStatement
             }
         }
 
-        // Fallback to config
         if ($configFallback) {
             return config($configFallback);
         }

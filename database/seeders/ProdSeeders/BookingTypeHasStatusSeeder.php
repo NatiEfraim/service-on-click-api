@@ -22,7 +22,6 @@ class BookingTypeHasStatusSeeder extends Seeder
         StatusBookingEnum::CANCELED_BY_APPROVER->value,
     ];
 
-    /** Run the database seeds. */
     public function run(): void
     {
         $bookingTypes = BookingType::query()->get(['id']);

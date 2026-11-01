@@ -2,98 +2,21 @@
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Application Name
-    |--------------------------------------------------------------------------
-    |
-    | This value is the name of your application, which will be used when the
-    | framework needs to place the application's name in a notification or
-    | other UI elements where an application name needs to be displayed.
-    |
-    */
-
     'name' => env('APP_NAME', 'Laravel'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application Environment
-    |--------------------------------------------------------------------------
-    |
-    | This value determines the "environment" your application is currently
-    | running in. This may determine how you prefer to configure various
-    | services the application utilizes. Set this in your ".env" file.
-    |
-    */
 
     'env' => env('APP_ENV', 'production'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Application Debug Mode
-    |--------------------------------------------------------------------------
-    |
-    | When your application is in debug mode, detailed error messages with
-    | stack traces will be shown on every error that occurs within your
-    | application. If disabled, a simple generic error page is shown.
-    |
-    */
-
     'debug' => (bool) env('APP_DEBUG', false),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application URL
-    |--------------------------------------------------------------------------
-    |
-    | This URL is used by the console to properly generate URLs when using
-    | the Artisan command line tool. You should set this to the root of
-    | the application so that it's available within Artisan commands.
-    |
-    */
 
     'url' => env('APP_URL', 'http://localhost'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Application Timezone
-    |--------------------------------------------------------------------------
-    |
-    | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
-    |
-    */
-
     'timezone' => 'UTC',
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application Locale Configuration
-    |--------------------------------------------------------------------------
-    |
-    | The application locale determines the default locale that will be used
-    | by Laravel's translation / localization methods. This option can be
-    | set to any locale for which you plan to have translation strings.
-    |
-    */
 
     'locale' => env('APP_LOCALE', 'en'),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Encryption Key
-    |--------------------------------------------------------------------------
-    |
-    | This key is utilized by Laravel's encryption services and should be set
-    | to a random, 32 character string to ensure that all encrypted values
-    | are secure. You should do this prior to deploying the application.
-    |
-    */
 
     'cipher' => 'AES-256-CBC',
 
@@ -105,64 +28,47 @@ return [
         ),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Maintenance Mode Driver
-    |--------------------------------------------------------------------------
-    |
-    | These configuration options determine the driver used to determine and
-    | manage Laravel's "maintenance mode" status. The "cache" driver will
-    | allow maintenance mode to be controlled across multiple machines.
-    |
-    | Supported drivers: "file", "cache", "array"
-    |
-    */
-
     'maintenance' => [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
-    // Requests per minute the "api" rate limiter allows (per user, or per IP when not logged in).
+    // Requests per minute for the "api" rate limiter.
     'rate_limitation' => env('RATE_LIMITATION', 100),
 
-    // Set PROD_STAGE=false outside production: the bucket name is then part of the object keys (StorageService).
+    // false outside production: the bucket name becomes part of the object keys.
     'prod_stage' => env('PROD_STAGE', true),
 
-    // The b2r json files the mobile side drops in the bucket (import-json/...), read by the import commands.
+    // b2r files the mobile side drops in the bucket.
     'import_json' => [
-        // IMPORT_JSON_ENABLED=false stops the commands and GET /api/test-import from reading the bucket.
+        // false stops the import commands and GET /api/test-import.
         'enabled' => filter_var(env('IMPORT_JSON_ENABLED', true), FILTER_VALIDATE_BOOL),
 
-        // Rows per queued chunk job.
         'booking_chunk_size' => (int) env('IMPORT_BOOKING_JSON_CHUNK_SIZE', 100),
         'application_log_chunk_size' => (int) env('IMPORT_APPLICATION_LOG_JSON_CHUNK_SIZE', 500),
     ],
 
-    // The r2b files this system writes into the bucket for the mobile side (export-json/...): the decisions made here and the corrected values.
+    // r2b files this system writes for the mobile side.
     'export_json' => [
-        // EXPORT_JSON_ENABLED=false stops the schedule and POST /sync/run from writing to the bucket; the decisions wait here until it is on.
+        // false stops the schedule and POST /sync/run; decisions wait until it is on.
         'enabled' => filter_var(env('EXPORT_JSON_ENABLED', true), FILTER_VALIDATE_BOOL),
 
-        // The mobile side's importer reads ONE status file per day by its exact name. Its configuration says r2b, its importer looks for b2r:
-        // set this to the prefix it really reads (EXPORT_BOOKING_STATUS_PREFIX=SrvOnClick_b2r_booking_status_).
+        // Must match the prefix the mobile importer actually reads (it looks for b2r).
         'booking_status_prefix' => (string) env('EXPORT_BOOKING_STATUS_PREFIX', 'SrvOnClick_r2b_booking_status_'),
 
-        // The day in that file name is the day in this timezone. Empty = the application's timezone (UTC). Set it (e.g. Asia/Jerusalem) to the
-        // timezone the mobile importer uses to name the file it reads "today", or decisions made around midnight go into a file it no longer reads.
+        // Timezone of the day in the status file name; null = app timezone.
         'timezone' => env('EXPORT_JSON_TIMEZONE') ?: null,
 
-        // The changes of the configuration (form structure, options, statements, settings) are sent to the mobile app as r2b "system_config" files.
-        // The mobile side needs an importer for them (see docs/admin-api.md); with the channel off they are kept, and go out when it is switched on.
+        // Sends configuration changes as r2b system_config files; kept while off.
         'config_channel_enabled' => filter_var(env('SYNC_CONFIG_CHANNEL_ENABLED', true), FILTER_VALIDATE_BOOL),
 
-        // A file that cannot be written is tried again with a growing wait (up to an hour); after this many attempts a person sends it again.
+        // Failed writes retry with growing waits.
         'max_attempts' => (int) env('EXPORT_JSON_MAX_ATTEMPTS', 8),
 
         'cron' => env('EXPORT_JSON_CRON', '*/2 * * * *'),
     ],
 
-    // Queue job retry/timeout settings and schedule times; each block is read by a job in app/Jobs.
+    // Retry/timeout settings and schedule per job in app/Jobs.
     'jobs' => [
         'import_booking_json' => [
             'cron' => env('IMPORT_BOOKING_JSON_CRON', '*/5 * * * *'),
@@ -171,7 +77,6 @@ return [
             'timeout' => (int) env('IMPORT_BOOKING_JSON_JOB_TIMEOUT', 900),
         ],
 
-        // One minute after the bookings, and more tries: a log waits (backoff seconds) for its booking to be saved.
         'import_application_log_json' => [
             'cron' => env('IMPORT_APPLICATION_LOG_JSON_CRON', '1-59/5 * * * *'),
             'tries' => (int) env('IMPORT_APPLICATION_LOG_JSON_JOB_TRIES', 5),
@@ -180,7 +85,7 @@ return [
         ],
     ],
 
-    // Booking type settings the management endpoints fall back to when no system reference overrides them.
+    // Defaults used when no system reference overrides them.
     'booking_type' => [
         'barber_booking' => [
             'haircut_time' => env('HAIRCUT_TIME', 30),

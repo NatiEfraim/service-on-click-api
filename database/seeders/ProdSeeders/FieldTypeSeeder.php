@@ -7,7 +7,6 @@ use App\Models\FieldType;
 
 class FieldTypeSeeder extends Seeder
 {
-    /** Run the database seeds. */
     public function run(): void
     {
         //

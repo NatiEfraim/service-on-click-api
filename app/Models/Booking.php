@@ -13,7 +13,6 @@ class Booking extends Model
 {
 
 
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'uuid',
         'serial_number',
@@ -41,7 +40,7 @@ class Booking extends Model
         'is_updated_value' => 'boolean',
     ];
 
-    /** Bookings the user may see: own bookings for plain users (a user with no role counts as plain), the whole unit otherwise. @param Builder $query, User $user @return Builder */
+    /** Own bookings for plain users (no role counts as plain), the whole unit otherwise. */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         $isPlainUser = $user->roles->every(
@@ -53,12 +52,7 @@ class Booking extends Model
             : $query->where('unit_id', $user->unit_id);
     }
 
-    /**
-     * The open bookings and those that moved (were closed, say) since the given time. A booking closed before it has nothing left to tell about the
-     * stays of the period that begins there, so the figures need not read the whole history. (A booking saved before status_changed_at existed
-     * counts from its last update, as statusSince() does.)
-     * @param Builder $query, \DateTimeInterface $since @return Builder
-     */
+    /** Open bookings plus those whose status changed since the given time (legacy rows count from updated_at). */
     public function scopeOpenOrMovedSince(Builder $query, \DateTimeInterface $since): Builder
     {
         return $query->where(fn (Builder $where) => $where
@@ -95,43 +89,39 @@ class Booking extends Model
         });
     }
 
-    /** Format a date as Y-m-d. @param ?string $date @return ?string */
     public function formatDate(?string $date): ?string
     {
         return $date ? Carbon::parse($date)->format('Y-m-d') : null;
     }
 
-    /** Get created_at formatted as Y-m-d. @param mixed $value @return ?string */
     public function getCreatedAtAttribute($value): ?string
     {
         return $this->formatDate($value);
     }
 
-    /** Get updated_at formatted as Y-m-d. @param mixed $value @return ?string */
     public function getUpdatedAtAttribute($value): ?string
     {
         return $this->formatDate($value);
     }
 
-    /** The booking's status as the enum. @return StatusBookingEnum */
     public function statusEnum(): StatusBookingEnum
     {
         return StatusBookingEnum::from((int) $this->status_id);
     }
 
-    /** When the booking was opened, time of day included (created_at reads as a date only). @return Carbon */
+    /** Opening time with time of day (created_at reads as a date only). */
     public function openedAt(): Carbon
     {
         return Carbon::parse($this->getRawOriginal('created_at'));
     }
 
-    /** Since when the booking is in its current status; a booking saved before status_changed_at existed counts from its last update. @return Carbon */
+    /** When the current status began; falls back to updated_at for legacy rows. */
     public function statusSince(): Carbon
     {
         return $this->status_changed_at ?? Carbon::parse($this->getRawOriginal('updated_at'));
     }
 
-    /** The booking's timeline: every entry of the application log that moved it into a status, oldest first. */
+    /** Timeline: application log entries that set a status, oldest first. */
     public function statusHistory()
     {
         return $this->hasMany(ApplicationLog::class)->whereNotNull('status_id')->orderBy('created_at')->orderBy('id');
@@ -142,7 +132,7 @@ class Booking extends Model
         return $this->hasMany(SyncConflict::class);
     }
 
-    /** Flag edited values so the next export resends DATE/TIME values; touches updated_at. @param int $bookingId */
+    /** Flags edited values so the next export resends DATE/TIME values. */
     public static function markValuesAsUpdated(int $bookingId): void
     {
         static::query()
@@ -150,7 +140,7 @@ class Booking extends Model
             ->update(['is_updated_value' => true]);
     }
 
-    /** Reset export flags; bookings changed after export start stay pending. @param array $bookingIds, \DateTimeInterface $exportStartedAt */
+    /** Resets export flags; bookings changed after the export started stay pending. */
     public static function markAsExported(array $bookingIds, \DateTimeInterface $exportStartedAt): void
     {
         foreach (array_chunk($bookingIds, 1000) as $chunk) {

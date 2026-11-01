@@ -2,17 +2,16 @@
 
 namespace App\Enums;
 
-/** The b2r json files this project reads from the bucket; the mobile project writes them. */
+/** The b2r json files read from the bucket (written by the mobile project). */
 enum JsonModelTypeEnum: int
 {
-    /** Prefix stamped on every exported json file name. */
+    /** Prefix of every exported json file name. */
     public const EXPORT_FILE_PREFIX = 'SrvOnClick_b2r_';
 
-    //
     case EXPORT_BOOKING = 1;
     case APPLICATION_LOG = 3;
 
-    /** The file name after EXPORT_FILE_PREFIX, up to the date: "export_bookings_" for SrvOnClick_b2r_export_bookings_2026-10-29.json. */
+    /** File name part between the prefix and the date, e.g. "export_bookings_". */
     public function prefixJsonFile(): string
     {
         return match ($this) {
@@ -21,13 +20,13 @@ enum JsonModelTypeEnum: int
         };
     }
 
-    /** What an import matches to find this type's files, e.g. "SrvOnClick_b2r_export_bookings_". */
+    /** Prefix used to find this type's files, e.g. "SrvOnClick_b2r_export_bookings_". */
     public function importFileNamePrefix(): string
     {
         return self::EXPORT_FILE_PREFIX . $this->prefixJsonFile();
     }
 
-    /** The key of the list inside the file: {"bookings": [...]} or {"application_logs": [...]}. */
+    /** Key of the list inside the file. */
     public function payloadKey(): string
     {
         return match ($this) {
@@ -36,7 +35,7 @@ enum JsonModelTypeEnum: int
         };
     }
 
-    /** Bucket folder the mobile side drops this type's files in: import-json/booking-data or import-json/application-log. */
+    /** Bucket folder where this type's files are dropped. */
     public function importRemoteDirectory(): string
     {
         $folder = match ($this) {
@@ -47,7 +46,7 @@ enum JsonModelTypeEnum: int
         return trim((string) config('filesystems.folder_name.import_json.base'), '/') . '/' . $folder;
     }
 
-    /** Bucket folder a file moves to once it was read: loaded-json. */
+    /** Bucket folder a file is moved to once read. */
     public static function loadedRemoteDirectory(): string
     {
         return (string) config('filesystems.folder_name.loaded_json');

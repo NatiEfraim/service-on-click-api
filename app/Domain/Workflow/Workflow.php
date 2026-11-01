@@ -7,27 +7,15 @@ use App\Enums\PermissionEnum;
 use App\Enums\StatusBookingEnum as Status;
 
 /**
- * The rules of the booking route, in one place - the buttons the UI shows (BookingResource::next_actions) and the checks the server makes
- * (BookingWorkflowService) both come from here. No database access: the booking type ids it needs are given to the constructor
- * (the container builds it in AppServiceProvider), so the rules are unit-tested standalone.
- *
- * Turn-based: only the role whose turn it is on the booking's route may act.
- *   control officer stage  -> control officer: 17 / 18 (+ supplier holds in transportation)
- *   vice approver stage    -> vice approver:   15 / 16 (+ supplier holds in transportation)
- *   approver stage / holds -> approver:         3 / 4  (+ other supplier holds in transportation)
- *   approved               -> approver: 5 / 7; in barber the barber (vice approver) marks 11 and the approver may cancel (7)
- *   barber done (11)       -> approver: 5 / 7
- * The admin (camp commander) sees and manages but never acts on a booking. Status ids and their meaning are the mobile app's - never renumber.
+ * The booking route rules, shared by the UI buttons (BookingResource::next_actions) and the server checks (BookingWorkflowService).
+ * Turn-based: only the role whose turn it is may act; the admin never acts. Status ids are the mobile app's - never renumber.
  */
 final class Workflow
 {
     public const COMMENT_MAX_LENGTH = 100;
     public const COMMENT_REGEX = '~^[א-ת ]+$~u';
 
-    /**
-     * @param array<int, int> $controlOfficerBookingTypeIds booking types whose route starts at the control officer: the types that have the
-     *        control officer role in booking_type_has_roles. None by default - a stage nobody can act in would leave the bookings stuck.
-     */
+    /** @param array<int, int> $controlOfficerBookingTypeIds types whose route starts at the control officer (none by default, or nobody could act) */
     public function __construct(
         private readonly array $controlOfficerBookingTypeIds = [],
         private readonly ?int $transportationBookingTypeId = null,
@@ -50,7 +38,6 @@ final class Workflow
         ];
     }
 
-    /** Does the route of this booking type start at the control officer? */
     public function hasControlOfficerStage(int $bookingTypeId): bool
     {
         return in_array($bookingTypeId, $this->controlOfficerBookingTypeIds, true);
@@ -74,7 +61,6 @@ final class Workflow
     }
 
     /**
-     * What a user with these role flags may do with a booking in the current status.
      * @param array{isControlOfficer?: bool, isViceApprover?: bool, isApprover?: bool, isAdmin?: bool} $flags
      * @return array<int, array{status: Status, label: string}>
      */
@@ -157,13 +143,13 @@ final class Workflow
         return $transitions;
     }
 
-    /** Everything the user may do now - the single source for the UI buttons and for the server's check. @param iterable<string> $permissionNames @return array<int, array{status: Status, label: string}> */
+    /** Single source for the UI buttons and the server check. @param iterable<string> $permissionNames @return array<int, array{status: Status, label: string}> */
     public function availableActions(Status $current, iterable $permissionNames, int $bookingTypeId): array
     {
         return $this->allowedTransitions($current, self::roleFlags($permissionNames, $bookingTypeId), $bookingTypeId);
     }
 
-    /** May the user move the booking from $current to $target? @param iterable<string> $permissionNames */
+    /** @param iterable<string> $permissionNames */
     public function canChangeTo(Status $current, Status $target, iterable $permissionNames, int $bookingTypeId): bool
     {
         foreach ($this->availableActions($current, $permissionNames, $bookingTypeId) as $action) {
@@ -176,8 +162,7 @@ final class Workflow
     }
 
     /**
-     * Correction of the editable date/time values: whoever's turn it is, until the final approval.
-     * (The mobile app's rule - "status_id below 3" - let an approver edit only a booking that nobody had passed on yet.)
+     * Date/time value correction: whoever's turn it is, until the final approval.
      * @param iterable<string> $permissionNames
      */
     public function canEditValues(Status $current, iterable $permissionNames, int $bookingTypeId): bool
@@ -189,13 +174,13 @@ final class Workflow
         return $this->availableActions($current, $permissionNames, $bookingTypeId) !== [];
     }
 
-    /** Statuses only the requester may set - done in the mobile app only. */
+    /** Statuses only the requester may set (mobile app only). */
     public static function isRequesterOnly(Status $target): bool
     {
         return $target === Status::CANCELED_BY_USER;
     }
 
-    /** The comment rules of a status change. @return ?string the Hebrew error, or null when the comment is fine */
+    /** @return ?string Hebrew error, or null when the comment is fine */
     public static function validateComment(Status $target, ?string $comment): ?string
     {
         $comment = trim((string) $comment);
@@ -220,7 +205,7 @@ final class Workflow
         return null;
     }
 
-    /** The last moment a food booking can still be canceled: the supply date minus N business days (Sunday to Thursday), end of that day. */
+    /** Supply date minus N business days (Sunday to Thursday), end of that day. */
     public static function lastAllowedCancellation(\DateTimeImmutable $supplyDate, int $businessDays): \DateTimeImmutable
     {
         $day = $supplyDate->setTime(0, 0);

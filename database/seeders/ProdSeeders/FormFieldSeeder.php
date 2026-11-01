@@ -15,10 +15,8 @@ use Illuminate\Support\Facades\Log;
 class FormFieldSeeder extends Seeder
 {
 
-    /** Run the database seeds. */
     public function run(): void
     {
-        //
 
         try {
 
@@ -34,7 +32,6 @@ class FormFieldSeeder extends Seeder
 
     }
 
-    /** Seed form fields for all booking types. */
     private function seedFormFields(): void
     {
         $this->seedCarBookingFields();
@@ -54,20 +51,8 @@ class FormFieldSeeder extends Seeder
         $this->seedConstructionBookingFields();
 
         $this->seedTransportationBookingFields();
-
-
-
-        // $this->seedLectureRoomBookingFields();
-
-        // $this->seedSmallCommandRoomBookingFields();
-
-        // $this->seedTechHamamaFirstBookingFields();
-
-        // $this->seedTechHamamaSecondBookingFields();
     }
 
-
-    /** Seed CAR_BOOKING form fields. */
     private function seedCarBookingFields(): void
     {
         $this->createFormFields(
@@ -76,7 +61,6 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Seed CAR_MAINTENANCE_BOOKING form fields. */
     private function seedCarMaintenanceBookingFields(): void
     {
         $this->createFormFields(
@@ -85,31 +69,24 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Seed EQUIPMENT_BOOKING_MALE form fields. */
     private function seedEquipmentMaleBookingFields(): void
     {
 
         $bookingTypeId = BookingTypeEnum::EQUIPMENT_BOOKING_MALE->getBookingTypeId();
 
-        // Root fields: equipment_male and request_reason_male - siblings, both root-level.
         $this->createFormFields(
             $bookingTypeId,
             $this->equipmentMaleBookingFields()
         );
 
-        // Category child fields: equipment_male -> clothing / footwear / related products.
         $this->createEquipmentMaleCategoryFields($bookingTypeId);
 
-        // Promoted item child fields (sizes still live one level below these as OptionFields).
         $this->createEquipmentMalePromotedItemFields($bookingTypeId);
 
-        // Quantity child fields: clothing / footwear / related products -> quantity.
         $this->createEquipmentMaleQuantityFields($bookingTypeId);
 
-        // Request reason leaf fields under request_reason_male.
         $this->createEquipmentMaleRequestReasonFields($bookingTypeId);
 
-        // Required file child field: request_reason_exemption_male (פטור) -> attached file.
         $this->createEquipmentAttachedFileField(
             bookingTypeId: $bookingTypeId,
             parentFieldName: FormFieldEnum::REQUEST_REASON_EXEMPTION_MALE->getFormFieldName(),
@@ -118,30 +95,23 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Seed EQUIPMENT_BOOKING_FEMALE form fields. */
     private function seedEquipmentFemaleBookingFields(): void
     {
         $bookingTypeId = BookingTypeEnum::EQUIPMENT_BOOKING_FEMALE->getBookingTypeId();
 
-        // Root fields: equipment_female and request_reason_female - siblings, both root-level.
         $this->createFormFields(
             $bookingTypeId,
             $this->equipmentFemaleBookingFields()
         );
 
-        // Category child fields: equipment_female -> clothing / footwear / related products.
         $this->createEquipmentFemaleCategoryFields($bookingTypeId);
 
-        // Promoted item child fields (sizes still live one level below these as OptionFields).
         $this->createEquipmentFemalePromotedItemFields($bookingTypeId);
 
-        // Quantity child fields.
         $this->createEquipmentFemaleQuantityFields($bookingTypeId);
 
-        // Request reason leaf fields under request_reason_female.
         $this->createEquipmentFemaleRequestReasonFields($bookingTypeId);
 
-        // Required file child field: request_reason_exemption_female (פטור) -> attached file.
         $this->createEquipmentAttachedFileField(
             bookingTypeId: $bookingTypeId,
             parentFieldName: FormFieldEnum::REQUEST_REASON_EXEMPTION_FEMALE->getFormFieldName(),
@@ -151,7 +121,6 @@ class FormFieldSeeder extends Seeder
     }
 
 
-    /** Seed IN_UNIT_FOOD_BOOKING form fields. */
     private function seedInUnitFoodBookingFields(): void
     {
 
@@ -163,27 +132,22 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Seed OUT_UNIT_FOOD_BOOKING form fields. */
     private function seedOutUnitFoodBookingFields(): void
     {
 
         $bookingTypeId = BookingTypeEnum::OUT_UNIT_FOOD_BOOKING->getBookingTypeId();
 
-        // First create root form fields.
         $this->createFormFields(
             $bookingTypeId,
             $this->outUnitFoodBookingFields()
         );
 
-        // Then create food type child fields: type_food -> sandwiches / trays.
         $this->createOutUnitFoodTypeFoodFields($bookingTypeId);
 
-        // Then create sensitivity child fields: sensitivities -> dairy / meat / parve.
         $this->createOutUnitFoodSensitivityFields($bookingTypeId);
 
     }
 
-    /** Seed BARBER_BOOKING form fields. */
     private function seedBarberBookingFields(): void
     {
         $this->createFormFields(
@@ -192,18 +156,15 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Seed CONSTRUCTION_BOOKING form fields. */
     private function seedConstructionBookingFields(): void
     {
         $bookingTypeId = BookingTypeEnum::CONSTRUCTION_BOOKING->getBookingTypeId();
 
-        // Root-level fields.
         $this->createFormFields(
             $bookingTypeId,
             $this->constructionBookingFields()
         );
 
-        // Fault category child fields (like type_food -> sandwiches / trays); leaf options live in OptionFieldSeeder.
         $this->createConstructionFaultCategoryFields($bookingTypeId);
     }
 
@@ -216,7 +177,6 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Seed LECTURE_ROOM_BOOKING form fields. */
     private function seedLectureRoomBookingFields(): void
     {
         $this->createFormFields(
@@ -225,7 +185,6 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Seed SMALL_COMMAND_ROOM_BOOKING form fields. */
     private function seedSmallCommandRoomBookingFields(): void
     {
         $this->createFormFields(
@@ -234,7 +193,6 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Seed TECH_HAMAMA_FIRST_BOOKING form fields. */
     private function seedTechHamamaFirstBookingFields(): void
     {
         $this->createFormFields(
@@ -243,7 +201,6 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Seed TECH_HAMAMA_SECOND_BOOKING form fields. */
     private function seedTechHamamaSecondBookingFields(): void
     {
         $this->createFormFields(
@@ -254,7 +211,6 @@ class FormFieldSeeder extends Seeder
 
 
 
-    /** Seed FOOD_BOOKING form fields. */
     private function seedFoodBookingFields(): void
     {
         $this->createFormFields(
@@ -263,7 +219,7 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    // ------------------------ Helper functions ---------------------------- //
+    // Helper functions
     private function createFormFields(int $bookingTypeId, array $formFields): void
     {
         foreach ($formFields as $field) {
@@ -289,8 +245,7 @@ class FormFieldSeeder extends Seeder
 
     }
 
-
-    //----------------------------- CAR-BOOKING -------------------------------------//
+    // CAR-BOOKING
     private function carBookingFields(): array
     {
         return [
@@ -362,8 +317,8 @@ class FormFieldSeeder extends Seeder
         ];
     }
 
-    //-------------------------------------- IN-UNIT-FOOD-BOOKING ------------------------------------------- //
-    /** IN_UNIT_FOOD_BOOKING form fields. @return array */
+    // IN-UNIT-FOOD-BOOKING
+    /** IN_UNIT_FOOD_BOOKING form fields. */
     private function inUnitFoodBookingFields(): array
     {
         return [
@@ -511,9 +466,9 @@ class FormFieldSeeder extends Seeder
     }
 
 
-    //------------------------------------ OUT_UNIT_FOOD_BOOKING ----------------------- //
+    // OUT_UNIT_FOOD_BOOKING
 
-    /** OUT_UNIT_FOOD_BOOKING form fields. @return array */
+    /** OUT_UNIT_FOOD_BOOKING form fields. */
     private function outUnitFoodBookingFields(): array
     {
         return [
@@ -751,7 +706,7 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    /** Create one OUT_UNIT_FOOD child field. @param int $bookingTypeId, string $parentFieldName, string $childFieldName, string $childDisplayName, ?int $payloadSectionId, ?int $fieldTypeId */
+    /** Create one OUT_UNIT_FOOD child field. */
     private function createOutUnitFoodChildFormField(
         int $bookingTypeId,
         string $parentFieldName,
@@ -805,7 +760,7 @@ class FormFieldSeeder extends Seeder
     }
 
 
-    //----------------------------- EQUIMENT-BOOKING-MALE -------------------------------------
+    // EQUIPMENT-BOOKING-MALE
     private function equipmentMaleBookingFields(): array
     {
         return [
@@ -820,7 +775,7 @@ class FormFieldSeeder extends Seeder
                 'is_input' => 0,
                 'payload_section_id' => PayloadSectionEnum::NONE->value,
             ],
-            // Request reason is a root field in its own right - a sibling of equipment_male, not its child.
+            // Root field: a sibling of equipment_male, not its child.
             [
                 'unit_id' => UnitEnum::H->value,
                 'field_name' => FormFieldEnum::REQUEST_REASON_MALE->getFormFieldName(),
@@ -891,7 +846,7 @@ class FormFieldSeeder extends Seeder
             payloadSectionId: PayloadSectionEnum::NONE->value,
         );
 
-        // Cotton uniform lives under clothing; its shirt/pants children + sizes are OptionFields.
+        // Cotton uniform sits under clothing; its children and sizes are OptionFields.
         $this->createEquipmentCategoryChildFormField(
             bookingTypeId: $bookingTypeId,
             parentFieldName: FormFieldEnum::CLOTHING_MALE->getFormFieldName(),
@@ -948,7 +903,7 @@ class FormFieldSeeder extends Seeder
     /** EQUIPMENT_BOOKING_MALE request reason leaf fields; the 5 leaves carry no OptionField of their own. */
     private function createEquipmentMaleRequestReasonFields(int $bookingTypeId): void
     {
-        // request_reason_male is already created as a root field - only the 5 leaves are created here.
+        // request_reason_male is a root field created earlier; only its leaves are created here.
         foreach ($this->equipmentMaleRequestReasonLeafFields() as $leafField) {
             $this->createEquipmentCategoryChildFormField(
                 bookingTypeId: $bookingTypeId,
@@ -985,7 +940,7 @@ class FormFieldSeeder extends Seeder
         ];
     }
 
-    // ------------------------------ EQUIMENT-BOOKING-FEMALE  --------------------------------- //
+    // EQUIPMENT-BOOKING-FEMALE
     private function equipmentFemaleBookingFields(): array
     {
         return [
@@ -1000,7 +955,7 @@ class FormFieldSeeder extends Seeder
                 'is_input' => 0,
                 'payload_section_id' => PayloadSectionEnum::NONE->value,
             ],
-            // Request reason is a root field in its own right - a sibling of equipment_female, not its child.
+            // Root field: a sibling of equipment_female, not its child.
             [
                 'unit_id' => UnitEnum::H->value,
                 'field_name' => FormFieldEnum::REQUEST_REASON_FEMALE->getFormFieldName(),
@@ -1069,7 +1024,7 @@ class FormFieldSeeder extends Seeder
             payloadSectionId: PayloadSectionEnum::NONE->value,
         );
 
-        // Cotton uniform lives under clothing; its shirt/pants children + sizes are OptionFields.
+        // Cotton uniform sits under clothing; its children and sizes are OptionFields.
         $this->createEquipmentCategoryChildFormField(
             bookingTypeId: $bookingTypeId,
             parentFieldName: FormFieldEnum::CLOTHING_FEMALE->getFormFieldName(),
@@ -1136,7 +1091,7 @@ class FormFieldSeeder extends Seeder
     /** EQUIPMENT_BOOKING_FEMALE request reason leaf fields; same idea as the male version - no OptionField. */
     private function createEquipmentFemaleRequestReasonFields(int $bookingTypeId): void
     {
-        // request_reason_female is already created as a root field - only the 5 leaves are created here.
+        // request_reason_female is a root field created earlier; only its leaves are created here.
         foreach ($this->equipmentFemaleRequestReasonLeafFields() as $leafField) {
             $this->createEquipmentCategoryChildFormField(
                 bookingTypeId: $bookingTypeId,
@@ -1149,9 +1104,8 @@ class FormFieldSeeder extends Seeder
         }
     }
 
-    // ---------------------------- Helper function Equipment-Booking-Male | Equipment-Booking-Female
-
-    /** Create one equipment category child field. @param int $bookingTypeId, string $parentFieldName, string $childFieldName, string $childDisplayName, string $childValidationMessage, ?int $payloadSectionId */
+    // Equipment helpers (male and female)
+    /** Create one equipment category child field. */
     private function createEquipmentCategoryChildFormField(
         int $bookingTypeId,
         string $parentFieldName,
@@ -1199,7 +1153,7 @@ class FormFieldSeeder extends Seeder
 
 
 
-    /** Equipment category child form field. @param string $fieldName, string $fieldDisplayName, int $parentFormFieldId, string $validationMessage, ?int $payloadSectionId @return array */
+    /** Equipment category child form field. */
     private function equipmentCategoryChildFormField(
         string $fieldName,
         string $fieldDisplayName,
@@ -1223,7 +1177,7 @@ class FormFieldSeeder extends Seeder
         ];
     }
 
-    /** Create one quantity child field for a parent form field. @param int $bookingTypeId, string $parentFieldName, string $quantityFieldName, ?int $payloadSectionId */
+    /** Create one quantity child field for a parent form field. */
     private function createQuantityChildFormField(
         int $bookingTypeId,
         string $parentFieldName,
@@ -1266,7 +1220,7 @@ class FormFieldSeeder extends Seeder
     }
 
 
-    /** Quantity child form field. @param string $fieldName, int $parentFormFieldId, ?int $payloadSectionId @return array */
+    /** Quantity child form field. */
     private function quantityChildFormField(
         string $fieldName,
         int $parentFormFieldId,
@@ -1291,7 +1245,7 @@ class FormFieldSeeder extends Seeder
         ];
     }
 
-    // --------------- CAR-MAINTANENCE-BOOKING --------------------------- //
+    // CAR-MAINTENANCE-BOOKING
     private function carMaintenanceBookingFields(): array
     {
         return [
@@ -1442,7 +1396,7 @@ class FormFieldSeeder extends Seeder
         ];
     }
 
-    //----------------------------- BARBER-BOOKING -------------------------------------
+    // BARBER-BOOKING
     private function barberBookingFields(): array
     {
         return [
@@ -1477,8 +1431,7 @@ class FormFieldSeeder extends Seeder
         ];
     }
 
-    //----------------------------- CONSTRUCTION-BOOKING -------------------------------------
-
+    // CONSTRUCTION-BOOKING
     /** CONSTRUCTION_BOOKING root-level fields; the fault type select's category children are created below. */
     private function constructionBookingFields(): array
     {
@@ -1613,8 +1566,7 @@ class FormFieldSeeder extends Seeder
         );
     }
 
-    //----------------------------- TRANSPORTATION-BOOKING -------------------------------------
-
+    // TRANSPORTATION-BOOKING
     /** TRANSPORTATION_BOOKING form fields; the 4 selects are flat root fields, leaves live in OptionFieldSeeder. */
     private function transportationBookingFields(): array
     {
@@ -1802,8 +1754,7 @@ class FormFieldSeeder extends Seeder
         ];
     }
 
-    //----------------------------- FOOD-BOOKING -------------------------------------
-
+    // FOOD-BOOKING
     private function foodBookingFields(): array
     {
         return [
@@ -1907,7 +1858,7 @@ class FormFieldSeeder extends Seeder
         ];
     }
 
-    //----------------------------- WORK-SPACE-BOOKING -------------------------------------
+    // WORK-SPACE-BOOKING
     private function lectureRoomBookingFields(): array
     {
         return $this->workSpaceBookingFields(
@@ -2004,9 +1955,8 @@ class FormFieldSeeder extends Seeder
         ];
     }
 
-    //----------------------------- EQUIPMENT_BOOKING_MALE | FEMALE - ATTACHED FILE FIELDS  ---
-
-    /** Create the required exemption-reason FILE child of an equipment FormField (needed for custom shoes). @param int $bookingTypeId, string $parentFieldName, string $fileFieldName, string $requiredMessage */
+    // EQUIPMENT_BOOKING_MALE | FEMALE - ATTACHED FILE FIELDS
+    /** Create the required exemption-reason FILE child of an equipment FormField (needed for custom shoes). */
     private function createEquipmentAttachedFileField(
         int $bookingTypeId,
         string $parentFieldName,

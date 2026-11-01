@@ -4,7 +4,6 @@ namespace App\Enums;
 
 enum GenderEnum: int
 {
-    //
     case NONE = 0;
     case MALE = 1;
     case FEMALE = 2;

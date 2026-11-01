@@ -2,7 +2,7 @@
 
 namespace App\Enums;
 
-/** Every action recorded in application_logs - the single source of truth for the action_types table. */
+/** Actions recorded in application_logs; source of the action_types table. */
 enum ActionTypeEnum: int
 {
     case STORE_BOOKING = 1;
@@ -19,7 +19,6 @@ enum ActionTypeEnum: int
     case DELETE_BOOKING = 12;
     case MOVE_TO_PENDING_BOOKING = 13;
 
-    /** Short english type, stored in action_types.type. */
     public function getType(): string
     {
         return match ($this) {
@@ -39,7 +38,6 @@ enum ActionTypeEnum: int
         };
     }
 
-    /** Hebrew display type, stored in action_types.display_type. */
     public function getDisplayType(): string
     {
         return match ($this) {
@@ -59,7 +57,6 @@ enum ActionTypeEnum: int
         };
     }
 
-    /** Hebrew description of what actually happened, stored in action_types.description. */
     public function getDescription(): string
     {
         return match ($this) {
@@ -79,7 +76,6 @@ enum ActionTypeEnum: int
         };
     }
 
-    /** One action_types row, as stored in the table. */
     public function toRow(): array
     {
         return [
@@ -90,7 +86,6 @@ enum ActionTypeEnum: int
         ];
     }
 
-    /** Every action_types row, ordered by id. */
     public static function rows(): array
     {
         return array_map(

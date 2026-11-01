@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /** Run the migrations. */
     public function up(): void
     {
         // The files this system sends back to the mobile app (the r2b files in the bucket): the decisions made here, the corrected values and the
@@ -55,7 +54,6 @@ return new class extends Migration
         });
     }
 
-    /** Reverse the migrations. */
     public function down(): void
     {
         Schema::dropIfExists('sync_conflicts');

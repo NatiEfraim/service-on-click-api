@@ -7,12 +7,11 @@ use App\Services\AuditService;
 use App\Services\ConfigOutboxService;
 use Illuminate\Support\Facades\Auth;
 
-/** For the services that change what the booking types are configured with (references, options, statements): an audit row with the values before and after. */
+/** Audit and outbox helpers for services that change booking type configuration. */
 trait AuditsConfigChanges
 {
     /**
-     * Record a change made by the logged-in person - inside the caller's transaction, so the change and its audit row stand or fall together.
-     * Nothing is written when nothing changed.
+     * Audits a change by the logged-in person, inside the caller's transaction. Skipped when nothing changed.
      * @param array<string, mixed> $before
      * @param array<string, mixed> $after
      */
@@ -41,9 +40,9 @@ trait AuditsConfigChanges
     }
 
     /**
-     * Tell the mobile app about a change of the configuration: queued in the caller's transaction (see ConfigOutboxService for the entities).
+     * Queues a configuration change for the mobile app, inside the caller's transaction.
      * @param array<string, mixed> $payload
-     * @throws DomainError 422 when the change would carry the name of a unit or a department - the caller must let it through to roll back
+     * @throws DomainError 422 when the payload would carry a unit or department name; let it roll back
      */
     protected function queueConfigChange(string $entity, string $op, array $payload): void
     {
@@ -51,7 +50,7 @@ trait AuditsConfigChanges
     }
 
     /**
-     * The changes of one request, as one file.
+     * Queues the changes of one request as one file.
      * @param array<int, array<string, mixed>> $changes each with entity and op
      * @throws DomainError 422
      */

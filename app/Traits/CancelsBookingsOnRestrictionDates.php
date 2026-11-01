@@ -16,16 +16,15 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * Cancel bookings on dates newly added to a booking type's restriction list (the type's cancel status; the web system sends no SMS).
- * Finding the bookings is separate from cancelling them, so the screen can show what a block would cancel before it is saved.
- * A cancellation is a decision made here like any other: it goes through BookingStatusRecorder (timeline, version, sent back to the
- * mobile app) and is audited.
+ * Cancels bookings on dates newly added to a booking type's restriction list.
+ * Finding is separate from cancelling so the screen can preview what a block would cancel.
  */
 trait CancelsBookingsOnRestrictionDates
 {
     /**
-     * The ids of the bookings of the type that sit on one of the Y-m-d dates and are not closed yet - the ones a block on these dates cancels.
-     * @param int $bookingTypeId, array<int, string> $dates @return array<int, int>
+     * Ids of the type's open bookings that fall on one of the Y-m-d dates.
+     * @param array<int, string> $dates
+     * @return array<int, int>
      */
     protected function findBookingIdsOnRestrictedDates(int $bookingTypeId, array $dates): array
     {
@@ -59,7 +58,6 @@ trait CancelsBookingsOnRestrictionDates
             return [];
         }
 
-        // A booking that is closed already is left as it is.
         return Booking::query()
             ->whereIn('id', array_values(array_unique($bookingIds)))
             ->where('booking_type_id', $bookingTypeId)
@@ -69,7 +67,7 @@ trait CancelsBookingsOnRestrictionDates
             ->all();
     }
 
-    /** Cancel the booking type's bookings on the newly restricted Y-m-d dates. @param int $bookingTypeId, array<int, string> $dates */
+    /** @param array<int, string> $dates Y-m-d dates */
     protected function cancelBookingsOnNewlyRestrictedDates(int $bookingTypeId, array $dates): void
     {
         $bookingIds = $this->findBookingIdsOnRestrictedDates($bookingTypeId, $dates);
@@ -103,7 +101,7 @@ trait CancelsBookingsOnRestrictionDates
         }
     }
 
-    /** Find bookings whose date fields match one of the given restricted dates. */
+    /** Ids of bookings whose date fields match one of the restricted dates. */
     private function getBookingIdsWithDateValuesInRange(
         int $bookingTypeId,
         array $dateFormFieldIds,
@@ -122,7 +120,6 @@ trait CancelsBookingsOnRestrictionDates
                 continue;
             }
 
-            // Extract the date from the value (could be array or string)
             $dateValue = $this->extractDateFromValue($bookingValue->value);
 
             if ($dateValue && in_array($dateValue, $restrictedDates)) {
@@ -133,35 +130,31 @@ trait CancelsBookingsOnRestrictionDates
         return array_unique($bookingIds);
     }
 
-    /** Extract date string from a BookingValue's value field (array, JSON string, or plain string). */
+    /** Reads the date from a value stored as array, JSON string or plain string. */
     private function extractDateFromValue($value): ?string
     {
         if (is_null($value)) {
             return null;
         }
 
-        // If it's already an array (cast by model)
         if (is_array($value) && count($value) > 0) {
-            // For date ranges, the first element is the start date
+            // For date ranges the first element is the start date.
             $firstElement = $value[0] ?? null;
             return $this->formatDateString($firstElement);
         }
 
-        // If it's a string (JSON string or plain string)
         if (is_string($value)) {
-            // Try to parse as JSON array first
             $decoded = json_decode($value, true);
             if (is_array($decoded) && count($decoded) > 0) {
                 return $this->formatDateString($decoded[0] ?? null);
             }
-            // If not an array, treat as plain date string
             return $this->formatDateString($value);
         }
 
         return null;
     }
 
-    /** Format and validate a date string to Y-m-d format. */
+    /** Formats a date as Y-m-d, or null when invalid. */
     private function formatDateString($date): ?string
     {
         if (is_null($date) || (is_string($date) && trim($date) === '')) {
@@ -169,7 +162,6 @@ trait CancelsBookingsOnRestrictionDates
         }
 
         try {
-            // Attempt to parse and format the date
             return Carbon::parse($date)->format('Y-m-d');
         } catch (\Exception $e) {
             Log::warning(

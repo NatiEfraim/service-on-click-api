@@ -17,10 +17,8 @@ use Illuminate\Support\Facades\Log;
 
 class OptionFieldSeeder extends Seeder
 {
-    /** Run the database seeds. */
     public function run(): void
     {
-        //
         try {
             DB::beginTransaction();
 
@@ -67,7 +65,7 @@ class OptionFieldSeeder extends Seeder
         ];
     }
 
-    // --------------------------- Hekper function -------------------- //
+    // Helpers
     private function shouldCreateOptionFieldRecursive(int $bookingTypeId): bool
     {
         return in_array(
@@ -173,7 +171,7 @@ class OptionFieldSeeder extends Seeder
         ]);
     }
 
-    //-------------------------------------- CAR-MAINTANCE-BOOKING --------------------------- //
+    // CAR-MAINTENANCE-BOOKING
     private function carMaintenanceBookingOptionFields(): array
     {
         return [
@@ -225,7 +223,7 @@ class OptionFieldSeeder extends Seeder
         ];
     }
 
-    //-------------------------------------- CONSTRUCTION-BOOKING --------------------------- //
+    // CONSTRUCTION-BOOKING
 
     /** CONSTRUCTION_BOOKING option fields - flat leaf lists under each of the 4 fault category FormFields. */
     private function constructionBookingOptionFields(): array
@@ -290,7 +288,7 @@ class OptionFieldSeeder extends Seeder
         ]);
     }
 
-    /** Build flat construction fault leaf options (plain SELECTS, no quantity). @param array $names, int $formFieldId @return array */
+    /** Build flat construction fault leaf options (plain SELECTS, no quantity). */
     private function constructionFaultOptions(array $names, int $formFieldId): array
     {
         return array_map(
@@ -303,7 +301,7 @@ class OptionFieldSeeder extends Seeder
         );
     }
 
-    //-------------------------------------- TRANSPORTATION-BOOKING --------------------------- //
+    // TRANSPORTATION-BOOKING
 
     /** TRANSPORTATION_BOOKING option fields - flat leaf lists under each of the 4 root select FormFields. */
     private function transportationBookingOptionFields(): array
@@ -474,7 +472,7 @@ class OptionFieldSeeder extends Seeder
         ]);
     }
 
-    /** Build flat transportation leaf options (plain SELECTS, no quantity). @param array $names, int $formFieldId @return array */
+    /** Build flat transportation leaf options (plain SELECTS, no quantity). */
     private function transportationOptions(array $names, int $formFieldId): array
     {
         return array_map(
@@ -487,7 +485,7 @@ class OptionFieldSeeder extends Seeder
         );
     }
 
-    //------------------------  CAR-BOOKING -------------------------- //
+    // CAR-BOOKING
     private function carBookingOptionFields(): array
     {
         return [
@@ -506,7 +504,7 @@ class OptionFieldSeeder extends Seeder
         ];
     }
 
-    //-----------------------IN_UNIT_FOOD_BOOKING ----------------------//
+    // IN_UNIT_FOOD_BOOKING
 
     /** IN_UNIT_FOOD_BOOKING option fields - same flat shape as CAR_BOOKING's drive_purpose. */
     private function inUnitFoodBookingOptionFields(): array
@@ -527,9 +525,9 @@ class OptionFieldSeeder extends Seeder
         ];
     }
 
-    //-----------------------------OUT_UNIT_FOOD_BOOKING ----------------------//
+    // OUT_UNIT_FOOD_BOOKING
 
-    /** OUT_UNIT_FOOD_BOOKING option fields. @return array */
+    /** OUT_UNIT_FOOD_BOOKING option fields. */
     private function outUnitFoodBookingOptionFields(): array
     {
         $sandwichesFormFieldId = FormFieldEnum::OUT_UNIT_SANDWICHES->getFormFieldId();
@@ -655,7 +653,7 @@ class OptionFieldSeeder extends Seeder
 
 
 
-    //------------------- EQUIPMENT-BOOKING-MALE -------------------------------- //
+    // EQUIPMENT-BOOKING-MALE
 
     /** EQUIPMENT_BOOKING_MALE option fields - clothing_male/footwear_male items are promoted to FormFields. */
     private function equipmentBookingMaleOptionFields(): array
@@ -806,7 +804,7 @@ class OptionFieldSeeder extends Seeder
                 ),
             ],
 
-            // Promoted to its own FormField - its two sub-items keep the same category+sizes shape, re-parented.
+            // Promoted to its own FormField; sub-items keep the category+sizes shape.
             $clothingMaleCottonUniformFormFieldId => $clothingMaleCottonUniformFormFieldId
                 ? [
                     $this->maleCategoryOption(
@@ -860,7 +858,7 @@ class OptionFieldSeeder extends Seeder
         ]);
     }
 
-    //--------------------------------- EQUIPMENT-BOOKING-FEMALE ----------------------------//
+    // EQUIPMENT-BOOKING-FEMALE
     /** EQUIPMENT_BOOKING_FEMALE option fields - same idea as the male version, promoted to FormFields. */
     private function equipmentBookingFemaleOptionFields(): array
     {
@@ -1033,7 +1031,7 @@ class OptionFieldSeeder extends Seeder
                 ),
             ],
 
-            // Promoted to its own FormField - its two sub-items keep the same category+sizes shape, re-parented.
+            // Promoted to its own FormField; sub-items keep the category+sizes shape.
             $clothingFemaleCottonUniformFormFieldId => $clothingFemaleCottonUniformFormFieldId
                 ? [
                     $this->femaleCategoryOption(
@@ -1086,7 +1084,7 @@ class OptionFieldSeeder extends Seeder
         ]);
     }
 
-    //----------------------- Helper Function MALE & FEMALE ----------------------- //
+    // Equipment helpers (male and female)
 
     // MALE
     private function maleTextOptions(
@@ -1301,7 +1299,6 @@ class OptionFieldSeeder extends Seeder
     /** Recursively create OptionField records from a nested $data array. */
     private function seedOptionField(array $node, ?int $parentId = null, $selectedFieldTypeIds = []): OptionField
     {
-        // Basic guard rails + defaults
         $payload = [
             'uuid' => Str::uuid(),
             'name' => Arr::get($node, 'name'),
@@ -1310,7 +1307,7 @@ class OptionFieldSeeder extends Seeder
             'field_type_id' => Arr::get($node, 'field_type_id'),
             'has_category' => (bool) Arr::get($node, 'has_category', false),
             'gender' => Arr::get($node, 'gender', GenderEnum::NONE->value),
-            'option_field_id' => $parentId, // parent link
+            'option_field_id' => $parentId,
         ];
 
         /** @var OptionField $created */
@@ -1323,7 +1320,6 @@ class OptionFieldSeeder extends Seeder
             return $created;
         }
 
-        // Recurse for children
         foreach ($children as $child) {
             $this->seedOptionField($child, $created->id);
         }

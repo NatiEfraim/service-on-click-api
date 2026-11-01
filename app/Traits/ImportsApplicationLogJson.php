@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Log;
 
 trait ImportsApplicationLogJson
 {
-    /** Queue the application log files waiting in import-json/application-log if enabled; with $sync the chunk jobs run right now instead (see ReadsImportJsonFiles::importFromBucket). @param bool $sync @return array */
+    /** Imports waiting application log files when enabled; $sync runs the chunk jobs inline. */
     protected function importApplicationLogJson(bool $sync = false): array
     {
         if (!config('app.import_json.enabled', true)) {

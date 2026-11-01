@@ -22,7 +22,6 @@ use Illuminate\Database\Seeder;
  */
 class ProdSeeder extends Seeder
 {
-    /** Run the database seeds. */
     public function run(): void
     {
         // The order matters: booking types first (the enums resolve booking type ids from the database).

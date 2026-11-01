@@ -2,7 +2,7 @@
 
 namespace App\Domain\Audit;
 
-/** Tamper-evidence for the audit log: each entry hashes its own content together with the hash of the entry before it. No database access. */
+/** Tamper-evidence for the audit log: each entry hashes its content together with the previous entry's hash. */
 final class HashChain
 {
     /** The columns the hash covers, in this order. */
@@ -11,10 +11,10 @@ final class HashChain
         'booking_serial', 'unit_id', 'booking_type_id', 'before', 'after', 'reason', 'result', 'correlation_id',
     ];
 
-    /** Columns that are numbers: a driver may hand them back as text, which must not change the hash. */
+    /** Numeric columns: a driver may return them as text, which must not change the hash. */
     private const NUMERIC_FIELDS = ['booking_serial', 'unit_id', 'booking_type_id'];
 
-    /** The hash of an entry that follows the entry with $prevHash (null for the first one). @param array<string, mixed> $entry */
+    /** Chains $entry to $prevHash (null for the first entry). @param array<string, mixed> $entry */
     public static function hash(array $entry, ?string $prevHash): string
     {
         $canonical = [];
@@ -35,9 +35,9 @@ final class HashChain
     }
 
     /**
-     * Walk the entries oldest first and check that each one points at the one before and hashes to what it says.
-     * @param iterable<array<string, mixed>> $entriesInOrder rows as the database holds them (before/after as JSON text or arrays)
-     * @return array{valid: bool, checked: int, broken_at: ?int} broken_at is the id of the first entry that does not fit
+     * Checks that each entry points at the one before and hashes to what it says.
+     * @param iterable<array<string, mixed>> $entriesInOrder rows as stored (before/after as JSON text or arrays)
+     * @return array{valid: bool, checked: int, broken_at: ?int} broken_at is the id of the first bad entry
      */
     public static function verify(iterable $entriesInOrder): array
     {
@@ -62,7 +62,7 @@ final class HashChain
         return ['valid' => true, 'checked' => $checked, 'broken_at' => null];
     }
 
-    /** Values that never reach the audit log: whatever looks like a password, secret, token or key. @param array<mixed> $data @return array<mixed> */
+    /** Masks password, secret, token and key values. @param array<mixed> $data @return array<mixed> */
     public static function redact(array $data): array
     {
         foreach ($data as $key => $value) {

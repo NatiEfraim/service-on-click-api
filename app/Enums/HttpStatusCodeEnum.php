@@ -15,10 +15,9 @@ enum HttpStatusCodeEnum: int
     case FORBIDDEN = 403;
     case NO_CONTENT = 204;
 
-    /** One vague message for every refused request (403/404/405), hiding whether a record exists or why. */
+    /** Shared vague message for refused requests (403/404/405). */
     public const DENIED_MESSAGE = 'הבקשה לא ניתנת לביצוע.';
 
-    /** Get the Hebrew message for this status code. @return string */
     public function getMessage(): string
     {
         return match ($this) {

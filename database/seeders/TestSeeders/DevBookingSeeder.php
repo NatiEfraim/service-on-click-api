@@ -26,7 +26,6 @@ class DevBookingSeeder extends Seeder
     /** At most this many bookings per booking type. */
     private const BOOKINGS_PER_TYPE = 6;
 
-    /** Run the database seeds. */
     public function run(): void
     {
         // Whoever has the user role (they log in and see their own bookings) and the people the mobile app knows by ID number.

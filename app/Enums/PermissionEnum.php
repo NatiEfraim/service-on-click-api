@@ -10,7 +10,7 @@ enum PermissionEnum: string
     case VICE_APPROVER = 'vice_approver_';
     case USER = 'user_';
 
-    /** "רמ"ד תו"ב" - only seeded for TRANSPORTATION_BOOKING (see RoleEnum::TRANSPORTATION_CONTROL_OFFICER). */
+    // Only seeded for TRANSPORTATION_BOOKING.
     case TRANSPORTATION_CONTROL_OFFICER = 'transportation_control_officer_';
 
     public function trimSuffix(): string
@@ -18,20 +18,20 @@ enum PermissionEnum: string
         return rtrim(string: $this->value, characters: '_');
     }
 
-    /** Build "admin_17", "approver_3", etc. from a booking-type ID */
+    /** Builds "admin_17", "approver_3", etc. */
     public function keyForId(int $bookingTypeId): ?string
     {
         return $this->value . $bookingTypeId;
     }
 
-    /** Build key from a BookingTypeEnum, or null if that booking type has no DB id */
+    /** Same as keyForId(), or null when the booking type has no DB id. */
     public function keyForBooking(BookingTypeEnum $bookingType): ?string
     {
         $id = $bookingType->getBookingTypeId();
         return $id ? $this->keyForId($id) : null;
     }
 
-    /** @return array<int, self> Every prefix, longest first - so "vice_approver_" is tested before "approver_". */
+    /** @return array<int, self> Longest prefix first, so "vice_approver_" is tried before "approver_". */
     public static function casesByPrefixLength(): array
     {
         $cases = self::cases();
@@ -44,7 +44,7 @@ enum PermissionEnum: string
         return $cases;
     }
 
-    /** @return array{permission: self, booking_type_id: int}|null Split "admin_1" into [ADMIN, 1]. */
+    /** @return array{permission: self, booking_type_id: int}|null Splits "admin_1" into [ADMIN, 1]. */
     public static function parsePermissionName(string $permissionName): ?array
     {
         $permissionName = trim($permissionName);
@@ -69,7 +69,6 @@ enum PermissionEnum: string
         return null;
     }
 
-    /** The matching RoleEnum for this permission prefix. */
     public function toRoleEnum(): RoleEnum
     {
         return match ($this) {
@@ -82,7 +81,7 @@ enum PermissionEnum: string
         };
     }
 
-    /** Hebrew display name of a permission name - the seeded permissions.display_name is authoritative. */
+    /** Hebrew display name; the seeded permissions.display_name wins. */
     public static function displayNameFromPermissionName(string $permissionName): ?string
     {
         $parsed = self::parsePermissionName($permissionName);
@@ -105,7 +104,7 @@ enum PermissionEnum: string
         );
     }
 
-    /** Rebuild "<role display name> <booking type display name>", the same shape the seeder writes. */
+    /** Builds "<role name> <booking type name>", as the seeder does. */
     public static function buildDisplayName(self $permission, int $bookingTypeId): ?string
     {
         $bookingTypeDisplayName = \App\Models\BookingType::query()

@@ -8,9 +8,6 @@ use Illuminate\Support\Str;
 
 class FormField extends Model
 {
-    //
-
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'unit_id',
         'booking_type_id',
@@ -21,22 +18,19 @@ class FormField extends Model
         'is_required',
         'payload_section_id',
         'editable',
-        // Optimistic locking, the place in the form, and archived (see FormFieldService).
+        // Optimistic locking, form position, archived flag.
         'version',
         'position',
         'is_active',
-        // Self relation fields
         'form_field_id',
         'is_input',
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'created_at',
         'updated_at',
     ];
 
-    /** Attribute casts. @var array<string, string> */
     protected $casts = [
         'field_validations' => 'array',
         'editable' => 'boolean',
@@ -48,10 +42,9 @@ class FormField extends Model
         'is_active' => 'boolean',
     ];
 
-    /** The prefix of the field_name of a field made in this system - the seeded ones are named after the mobile app's FormFieldEnum. */
+    /** field_name prefix of fields created in this system (seeded ones follow the mobile FormFieldEnum). */
     public const CUSTOM_PREFIX = 'int_';
 
-    /** Was this field made here (and not seeded)? */
     public function isCustom(): bool
     {
         return str_starts_with((string) $this->field_name, self::CUSTOM_PREFIX);
@@ -86,7 +79,7 @@ class FormField extends Model
         return $this->hasMany(SystemReferenceHasFormField::class);
     }
 
-    /** The options in the form: archived ones are not (a booking that chose one keeps it through BookingValue::optionField). */
+    /** Active options only; archived ones stay reachable through BookingValue::optionField. */
     public function optionField()
     {
         return $this->hasMany(OptionField::class)->where('option_fields.is_active', true);
@@ -97,7 +90,6 @@ class FormField extends Model
         return $this->belongsToMany(SystemReference::class, 'system_reference_has_form_fields', 'form_field_id', 'system_reference_id');
     }
 
-    //--Add self relation
     protected static function booted()
     {
         parent::boot();

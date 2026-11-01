@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Log;
 
 trait ImportsBookingJson
 {
-    /** Queue the booking files waiting in import-json/booking-data if enabled; with $sync the chunk jobs run right now instead (see ReadsImportJsonFiles::importFromBucket). @param bool $sync @return array */
+    /** Imports waiting booking files when enabled; $sync runs the chunk jobs inline. */
     protected function importBookingJson(bool $sync = false): array
     {
         if (!config('app.import_json.enabled', true)) {

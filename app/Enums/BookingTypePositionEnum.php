@@ -4,7 +4,6 @@ namespace App\Enums;
 
 enum BookingTypePositionEnum:string
 {
-    //
     case EQUIPMENT_BOOKING = '2';
     case EQUIPMENT_BOOKING_MALE = '3';
     case EQUIPMENT_BOOKING_FEMALE = '4';
@@ -15,7 +14,7 @@ enum BookingTypePositionEnum:string
     case OUT_UNIT_FOOD_BOOKING = '9'; 
     case IN_UNIT_FOOD_BOOKING = '10'; 
     case BARBER_BOOKING = '11';
-    // NEW - Work Spaces
+    // Work spaces
     case WORK_SPACES = '12';
     case LARGE_COMMAND_ROOM_BOOKING = '13';
     case SMALL_COMMAND_ROOM_BOOKING = '14';

@@ -95,7 +95,7 @@ class BookingSuperAdminManagementService
         }
     }
 
-    /** Paginate admin users, optionally searched by personal number or full name prefix. @param ?string $identifier @return mixed */
+    /** Admin users paginated, searched by personal number or full-name prefix. */
     public function getAdmins(?string $identifier = null): mixed
     {
         try {
@@ -134,7 +134,7 @@ class BookingSuperAdminManagementService
         }
     }
 
-    /** List in-house booking types with the user's is_admin flag for each. @param string $userUuid @return array|HttpStatusCodeEnum */
+    /** In-house booking types with the user's is_admin flag for each. @return array|HttpStatusCodeEnum */
     public function getAdminPermissions(string $userUuid): array|HttpStatusCodeEnum
     {
         try {
@@ -181,7 +181,7 @@ class BookingSuperAdminManagementService
         }
     }
 
-    /** Get the unit's selectable form fields (with options) for a booking type route name. @param int $unitId, string $bookingType @return array|HttpStatusCodeEnum */
+    /** The unit's selectable form fields (with options) for a booking type route name. @return array|HttpStatusCodeEnum */
     public function indexSelects(int $unitId, string $bookingType): array|HttpStatusCodeEnum
     {
         try {
@@ -232,7 +232,7 @@ class BookingSuperAdminManagementService
         }
     }
 
-    /** Retrieve list of formField records with field_options by received formFieldId. */
+    /** The form field with its options. */
     public function getSelectOptions(int $formFieldId): array|HttpStatusCodeEnum
     {
         try {
@@ -270,7 +270,7 @@ class BookingSuperAdminManagementService
     }
 
 
-    /** Retrieve list of option_field records for a given formFieldId, optionally filtered by parent. */
+    /** Options of a form field, optionally filtered by parent. */
     public function getOptions(int $formFieldId=null,int $optionFieldId=null): array|HttpStatusCodeEnum
     {
         try {
@@ -335,7 +335,6 @@ class BookingSuperAdminManagementService
         }
     }
 
-    /** Retrieve statement of a booking type by received bookingTypeId. */
     public function getStatement(int $bookingTypeId): mixed
     {
         try {
@@ -349,7 +348,6 @@ class BookingSuperAdminManagementService
     }
 
 
-    /** Retrieve all option_field records that are siblings of the given optionFieldId. */
     public function getSiblingsOptions(int $optionFieldId): array|HttpStatusCodeEnum
     {
         try {
@@ -413,7 +411,6 @@ class BookingSuperAdminManagementService
         }
     }
 
-    /** Update options string value by formFieldId records by id. */
     public function updateSelectOptions(int $formFieldId, array $fieldOptions = []): array|HttpStatusCodeEnum
     {
         try {
@@ -449,7 +446,7 @@ class BookingSuperAdminManagementService
         }
     }
 
-    /** Sync option_fields tree for a formFieldId. */
+    /** Syncs the option tree of a form field. */
     public function updateOptions(int $formFieldId, array $fieldOptions = []): array|HttpStatusCodeEnum
     {
         try {
@@ -481,7 +478,6 @@ class BookingSuperAdminManagementService
     }
 
 
-    /** Update a single option_field record. */
     public function updateOption(int $formFieldId, array $fieldOptions = []): Collection|HttpStatusCodeEnum|OptionField|array
     {
         $transactionLevel = DB::transactionLevel();
@@ -558,7 +554,7 @@ class BookingSuperAdminManagementService
             $isInputProvided = array_key_exists('is_input', $fieldOptions);
             $requestedIsInput = $isInputProvided ? (bool) $fieldOptions['is_input'] : null;
 
-            // An input option carries a typed value, so it can only be a text or a number field.
+            // An input option holds a typed value, so only text or number fields can have it.
             if (
                 $requestedIsInput === true
                 && !in_array((int) $resolvedFieldTypeId, [FieldTypeEnum::TEXT->value, FieldTypeEnum::NUMBER->value], true)
@@ -634,7 +630,7 @@ class BookingSuperAdminManagementService
 
             throw $e;
         } catch (\Exception $e) {
-            // A transaction this method opened and did not close (a failed audit row, say) is rolled back; the caller's own is left alone.
+            // Roll back a transaction this method opened and left open (e.g. a failed audit row); the caller's own stays.
             if (DB::transactionLevel() > $transactionLevel) {
                 DB::rollBack();
             }
@@ -646,7 +642,6 @@ class BookingSuperAdminManagementService
     }
 
 
-    /** Remove options recursively by formFieldId records by id. */
     public function removeSelectOptions(int $formFieldId, array $fieldOptions = []): array|HttpStatusCodeEnum
     {
         try {
@@ -683,7 +678,6 @@ class BookingSuperAdminManagementService
     }
 
 
-    /** Remove a single option record by id. */
     public function removeOption(int $formFieldId, array $fieldOptions = []): array|HttpStatusCodeEnum
     {
         $transactionLevel = DB::transactionLevel();
@@ -726,7 +720,7 @@ class BookingSuperAdminManagementService
         }
     }
 
-    /** Upsert a unit's booking type statement; null $showTime keeps the current value. @param int $unitId, int $bookingTypeId, ?string $statement, bool $isActive, ?StatementShowTimeEnum $showTime @return array|HttpStatusCodeEnum */
+    /** Upserts a unit's booking type statement; a null $showTime keeps the current value. @return array|HttpStatusCodeEnum */
     public function updateStatement(
         int $unitId,
         int $bookingTypeId,
@@ -788,12 +782,10 @@ class BookingSuperAdminManagementService
         }
     }
 
-    //---------------------------- private functions ---------------------------------//
-
-    /** The options of a form field as they are now: id => name and parent, for the audit row. @return array<int, array{name: string, parent_id: ?int}> */
+    /** Options as they are now (id => name and parent), for the audit row. @return array<int, array{name: string, parent_id: ?int}> */
     private function optionSnapshot(int $formFieldId): array
     {
-        // The options in the form: an archived one is out of the list (see discardOption), which is how the mobile app is told it went.
+        // Archived options are out of the list (see discardOption), which tells the mobile app they went.
         return OptionField::query()
             ->where('form_field_id', $formFieldId)
             ->where('is_active', true)
@@ -803,7 +795,10 @@ class BookingSuperAdminManagementService
             ->all();
     }
 
-    /** Record what changed among a form field's options: the options that were added, renamed, moved or removed (before and after), not the whole list. @param array<int, array{name: string, parent_id: ?int}> $before what optionSnapshot() said before the change */
+    /**
+     * Audits the options added, renamed, moved or removed, not the whole list.
+     * @param array<int, array{name: string, parent_id: ?int}> $before optionSnapshot() before the change
+     */
     private function auditOptionChange(string $action, int $formFieldId, array $before): void
     {
         $after = $this->optionSnapshot($formFieldId);
@@ -825,8 +820,7 @@ class BookingSuperAdminManagementService
     }
 
     /**
-     * Tell the mobile app what changed among a form field's options (see OptionChangeSet): one file for the whole request. An option that is out of
-     * the list but still stored was archived, not deleted.
+     * Queues one file for the mobile app with the option changes of the request; an option out of the list but still stored was archived.
      * @param array<int, array{name: string, parent_id: ?int}> $before @param array<int, array{name: string, parent_id: ?int}> $after
      */
     private function queueOptionChanges(FormField $field, array $before, array $after): void
@@ -848,7 +842,7 @@ class BookingSuperAdminManagementService
         $this->queueConfigChanges(array_map(function (array $change) use ($field, $created): array {
             $data = $change['data'];
 
-            // What the mobile app needs to draw a new option the way this system has it.
+            // What the mobile app needs to draw a new option as this system has it.
             if ($change['op'] === 'create' && ($option = $created->get($change['id'])) !== null) {
                 $data += [
                     'category_name' => $option->category_name,
@@ -872,7 +866,7 @@ class BookingSuperAdminManagementService
         }, $changes));
     }
 
-    /** A unit's statement of a booking type as it is now, for the audit row; empty when there is none. @return array<string, mixed> */
+    /** The unit's booking type statement as it is now, for the audit row; empty when none. @return array<string, mixed> */
     private function statementSnapshot(int $unitId, int $bookingTypeId): array
     {
         $statement = BookingTypeHasStatement::query()->where('unit_id', $unitId)->where('booking_type_id', $bookingTypeId)->first();
@@ -884,7 +878,7 @@ class BookingSuperAdminManagementService
         ];
     }
 
-    /** Fetch the user by uuid or personal number, creating one when no uuid is sent and none exists. @param array $validated @return ?User */
+    /** Finds the user by uuid or personal number; creates one when no uuid is sent and none exists. */
     private function resolveAdminUser(array $validated): ?User
     {
         if (!empty($validated['uuid'])) {
@@ -1014,7 +1008,7 @@ class BookingSuperAdminManagementService
 
 
 
-    /** Update parent option field after deleting one of its children (no more children -> becomes a leaf). */
+    /** Turns the parent into a leaf when its last child is deleted. */
     private function updateParentAfterChildDelete(int $parentOptionId=null, int $formFieldId=null): bool
     {
 
@@ -1044,7 +1038,7 @@ class BookingSuperAdminManagementService
     }
 
 
-    /** Remove a leaf option field (only if it has no children); updates the parent afterward. */
+    /** Removes a leaf option (no children) and updates its parent. */
     public function removeLeafOption(int $formFieldId, int $optionId): HttpStatusCodeEnum
     {
         try {
@@ -1061,7 +1055,7 @@ class BookingSuperAdminManagementService
                 ->where('form_field_id', $formFieldId)
                 ->first();
 
-            if (!$parentOptionField) {//remove optionField Root
+            if (!$parentOptionField) {
                 $hasOtherRootOptions = OptionField::where('form_field_id', $formFieldId)
                     ->whereNull('option_field_id')
                     ->exists();
@@ -1090,7 +1084,7 @@ class BookingSuperAdminManagementService
     }
 
 
-    /** Recursively create or update option fields (and their children). */
+    /** Recursively creates or updates options and their children. */
     public function syncOptionRecursively(array $options, ?int $formFieldId = null, ?int $parentId = null): void
     {
         
@@ -1161,7 +1155,7 @@ class BookingSuperAdminManagementService
         }
     }
 
-    /** Recursively build the tree of option fields with 'category_fields' key. */
+    /** Builds the option tree with a 'category_fields' key. */
     private function buildOptionFieldTreeFromService($option): array
     {
         $optionData = [
@@ -1189,7 +1183,6 @@ class BookingSuperAdminManagementService
     }
 
 
-    /** Recursively handle updating or creating an option. */
     private function saveOrUpdateOptionRecursively(array $data =[], int $formFieldId, ?int $parentId = null,array $SelectedFieldTypes=[]): void
     {
 
@@ -1200,7 +1193,6 @@ class BookingSuperAdminManagementService
     
 
         if (is_null($option)) {
-            //create new option
           $option=OptionField::create([
                 'uuid' => Str::uuid(),
                 'name' => $data['option_name'],
@@ -1241,7 +1233,6 @@ class BookingSuperAdminManagementService
     }
 
 
-    /** Recursively handle removing an option. */
     private function removeOptionRecursively(array $data = [], int $formFieldId, array $SelectedFieldTypes = [], ?int $parentId = null): mixed
     {
 
@@ -1287,8 +1278,7 @@ class BookingSuperAdminManagementService
     }
 
     /**
-     * Take an option out of the form. An option that a booking chose is ARCHIVED (out of the lists, still there for the bookings), not deleted:
-     * deleting it would delete the value of every booking that chose it, and a booking's history is never altered. One nobody chose is deleted.
+     * Archives the option when a booking chose it (deleting would delete those bookings' values; history is never altered), else deletes it.
      */
     private function discardOption(OptionField $option): void
     {
@@ -1301,7 +1291,6 @@ class BookingSuperAdminManagementService
         $option->delete();
     }
 
-    /** Retrieve all admin users with their related admin permissions. */
     private function getAdminsWithPermission(?string $identifier = null): HttpStatusCodeEnum|\Illuminate\Http\Resources\Json\AnonymousResourceCollection|array
     {
         try {

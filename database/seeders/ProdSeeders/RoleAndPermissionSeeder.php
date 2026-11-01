@@ -26,7 +26,6 @@ class RoleAndPermissionSeeder extends Seeder
         RoleEnum::USER,
     ];
 
-    /** Run the database seeds. */
     public function run(): void
     {
         try {

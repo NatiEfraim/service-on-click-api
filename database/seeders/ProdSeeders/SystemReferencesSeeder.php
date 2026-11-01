@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\Log;
 
 class SystemReferencesSeeder extends Seeder
 {
-    /** Run the database seeds. */
     public function run(): void
     {
 
@@ -104,7 +103,7 @@ class SystemReferencesSeeder extends Seeder
     }
 
 
-    // ---------------------------- CAR-BOOKING ---------------------------------------------- //
+    // CAR-BOOKING
 
     private function carBookingReferences(): array
     {
@@ -177,7 +176,7 @@ class SystemReferencesSeeder extends Seeder
     }
 
 
-    //-------------------------------------------------- IN_UNIT_FOOD_BOOKING system references ------------------------------- //
+    // IN_UNIT_FOOD_BOOKING system references
     private function inUnitFoodBookingReferences(): array
     {
         return [
@@ -288,7 +287,7 @@ class SystemReferencesSeeder extends Seeder
 
 
 
-    // --------------------------------------- OUT_UNIT_FOOD_BOOKING system references ------------------------------------------ //
+    // OUT_UNIT_FOOD_BOOKING system references
 
     private function outUnitFoodBookingReferences(): array
     {
@@ -398,7 +397,7 @@ class SystemReferencesSeeder extends Seeder
         ];
     }
 
-    /** Build the food max-advance-days reference (business days when that card is on). @param string $name, ?int $supplyDateFormFieldId, int $maxAdvanceDays @return array */
+    /** Build the food max-advance-days reference (business days when that card is on). */
     private function foodMaxAdvanceDaysReference(string $name, ?int $supplyDateFormFieldId, int $maxAdvanceDays = 30): array
     {
         return [
@@ -419,7 +418,7 @@ class SystemReferencesSeeder extends Seeder
 
 
 
-    //---------------------------- EQUIPMENT-BOOKING-Male  -------------------------- //
+    // EQUIPMENT-BOOKING-Male
 
     private function equipmentBookingMaleReferences(): array
     {
@@ -463,7 +462,7 @@ class SystemReferencesSeeder extends Seeder
         ];
     }
 
-//--------------------------------- Equipment-Booking-Female --------------------------//
+// Equipment-Booking-Female
 
     private function equipmentBookingFemaleReferences(): array
     {
@@ -531,7 +530,7 @@ class SystemReferencesSeeder extends Seeder
         ];
     }
 
-    //---------------------------- BARBER-BOOKING ------------------------------------------------ //
+    // BARBER-BOOKING
     private function barberBookingReferences(): array
     {
         return [
@@ -642,7 +641,7 @@ class SystemReferencesSeeder extends Seeder
         ];
     }
 
-    //---------------------------- TRANSPORTATION-BOOKING ------------------------------------------------ //
+    // TRANSPORTATION-BOOKING
 
     private function transportationBookingReferences(): array
     {
@@ -707,7 +706,7 @@ class SystemReferencesSeeder extends Seeder
         ];
     }
 
-    //---------------------------- CONSTRUCTION-BOOKING ------------------------------------------------ //
+    // CONSTRUCTION-BOOKING
 
     private function constructionBookingReferences(): array
     {
@@ -727,7 +726,7 @@ class SystemReferencesSeeder extends Seeder
         ];
     }
 
-    //---------------------------- CAR-MAINTENANCE-BOOKING ------------------------------------------------ //
+    // CAR-MAINTENANCE-BOOKING
 
     private function carMaintenanceBookingReferences(): array
     {
@@ -773,7 +772,7 @@ class SystemReferencesSeeder extends Seeder
         ];
     }
 
-    //------------------------------WORK-SPACE-BOOKING ------------------------------------------------ //
+    // WORK-SPACE-BOOKING
 
     private function lectureRoomBookingReferences(): array
     {

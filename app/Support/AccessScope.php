@@ -10,17 +10,14 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Everything the current user may see and do, derived from the same "{role}_{booking type id}" permissions (and the unit) the rest of the
- * system uses, plus a few capabilities that separate managing the system from handling bookings:
- *   audit.view, sync.view, sync.operate, sla.manage, config.global - super admin
- *   users.manage, reports.view, targets.manage - super admin, or an admin (camp commander) of any booking type
- *   dashboard.view - super admin, admin, or approver (domain commander)
- * A handler (a control officer or vice approver) sees and acts on the bookings at their own stage, nothing else - on each booking type where
- * that is all they are: the same person may be a vice approver of one type and the approver of another.
+ * What the current user may see and do, derived from their "{role}_{booking type id}" permissions and unit.
+ * Capabilities: audit.view, sync.view, sync.operate, sla.manage, config.global (super admin);
+ * users.manage, reports.view, targets.manage (super admin or any admin); dashboard.view (also approvers).
+ * A handler (control officer or vice approver) only sees bookings at their own stage, per booking type.
  */
 final class AccessScope
 {
-    /** @var array<int, string> the user's permission names, from the user and from the user's roles */
+    /** @var array<int, string> */
     public readonly array $permissions;
 
     /** @var ?array<int, array<int, int>> */
@@ -46,7 +43,7 @@ final class AccessScope
         return $this->adminOfBookingTypeIds() !== [];
     }
 
-    /** Booking types where the user holds any managing permission (admin, approver, vice approver, control officer). @return array<int, int> */
+    /** @return array<int, int> Booking types where the user holds any managing permission. */
     public function managedBookingTypeIds(): array
     {
         return $this->bookingTypeIdsOf(['admin_', 'approver_', 'vice_approver_', 'transportation_control_officer_']);
@@ -64,7 +61,7 @@ final class AccessScope
         return $this->bookingTypeIdsOf(['approver_']);
     }
 
-    /** A control officer or vice approver on every booking type they manage (the screen then shows the queue only, no dashboards or settings). */
+    /** Control officer or vice approver on every type they manage (queue only, no dashboards or settings). */
     public function isHandlerOnly(): bool
     {
         return !$this->isSuperAdmin()
@@ -73,7 +70,7 @@ final class AccessScope
             && $this->managedBookingTypeIds() !== [];
     }
 
-    /** A control officer or vice approver of this booking type, and neither its admin nor its approver: sees and acts on the bookings at the stage they handle. */
+    /** Handler of this type, and neither its admin nor its approver. */
     public function isHandlerOnlyFor(int $bookingTypeId): bool
     {
         return !$this->isSuperAdmin()
@@ -82,7 +79,7 @@ final class AccessScope
             && !in_array($bookingTypeId, $this->approverOfBookingTypeIds(), true);
     }
 
-    /** Booking types whose dashboard the user may open: the super admin all, the camp commander his, the domain commander his own. @return array<int, int> */
+    /** @return array<int, int> Booking types whose dashboard the user may open. */
     public function dashboardBookingTypeIds(): array
     {
         if ($this->isSuperAdmin()) {
@@ -92,13 +89,13 @@ final class AccessScope
         return $this->isAdmin() ? $this->adminOfBookingTypeIds() : $this->approverOfBookingTypeIds();
     }
 
-    /** Every booking type that has bookings (the link-only "outsource" types have none). @return array<int, int> */
+    /** @return array<int, int> Every booking type that has bookings (outsource types have none). */
     public function allManageableBookingTypeIds(): array
     {
         return BookingType::query()->where('is_outsource', false)->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all();
     }
 
-    /** The statuses where this user has an action, per managed booking type - the handler's "own stage". @return array<int, array<int, int>> */
+    /** @return array<int, array<int, int>> Statuses where the user has an action, per managed type. */
     public function actionableStatusesByType(): array
     {
         if ($this->actionableStatuses !== null) {
@@ -128,10 +125,7 @@ final class AccessScope
         };
     }
 
-    /**
-     * The bookings the user may see: the booking types they manage, in their own unit; on a type where they are only a handler, just the
-     * bookings at the stage they handle. The super admin sees every unit and type.
-     */
+    /** Limits a bookings query to the user's unit and managed types; handlers see only their own stage. */
     public function applyToBookings(Builder $query): Builder
     {
         if ($this->isSuperAdmin()) {
@@ -167,14 +161,14 @@ final class AccessScope
         return $query;
     }
 
-    /** Is the booking in the user's unit and of a booking type they manage - at whatever stage it is in. (The super admin: every booking.) */
+    /** In the user's unit and of a managed type, at any stage. Super admin: always. */
     public function managesBooking(?int $unitId, int $bookingTypeId): bool
     {
         return $this->isSuperAdmin()
             || ($unitId !== null && $unitId === $this->user->unit_id && in_array($bookingTypeId, $this->managedBookingTypeIds(), true));
     }
 
-    /** May the user see the booking now: it is theirs to manage, and - for a handler - it is at a stage they act on. */
+    /** Managed by the user and, for a handler, at a stage they act on. */
     public function canSeeBooking(?int $unitId, int $bookingTypeId, ?int $statusId = null): bool
     {
         if (!$this->managesBooking($unitId, $bookingTypeId)) {
@@ -184,20 +178,23 @@ final class AccessScope
         return !$this->isHandlerOnlyFor($bookingTypeId) || in_array($statusId, $this->actionableStatusesByType()[$bookingTypeId] ?? [], true);
     }
 
-    /** Does the user work with this booking type at all: the super admin with every one, anyone else with the types they hold a managing permission on. */
+    /** Super admin, or holds a managing permission on the type. */
     public function managesBookingType(int $bookingTypeId): bool
     {
         return $this->isSuperAdmin() || in_array($bookingTypeId, $this->managedBookingTypeIds(), true);
     }
 
-    /** May edit the dynamic settings of (unit, booking type): the super admin anywhere; whoever manages the type, in their own unit (not a handler of it). */
+    /** Super admin anywhere; otherwise a non-handler who manages the type in their own unit. */
     public function canManageSettings(int $unitId, int $bookingTypeId): bool
     {
         return $this->isSuperAdmin()
             || (!$this->isHandlerOnlyFor($bookingTypeId) && $this->managesBooking($unitId, $bookingTypeId));
     }
 
-    /** @param array<int, string> $prefixes permission prefixes such as "admin_" @return array<int, int> */
+    /**
+     * @param array<int, string> $prefixes permission prefixes such as "admin_"
+     * @return array<int, int>
+     */
     private function bookingTypeIdsOf(array $prefixes): array
     {
         $ids = [];
@@ -206,7 +203,7 @@ final class AccessScope
             foreach ($prefixes as $prefix) {
                 $rest = substr($permission, strlen($prefix));
 
-                // "approver_" must not claim "vice_approver_3": the prefix has to be the whole name before the id.
+                // "approver_" must not match "vice_approver_3".
                 if (str_starts_with($permission, $prefix) && $rest !== '' && ctype_digit($rest)) {
                     $ids[] = (int) $rest;
                 }

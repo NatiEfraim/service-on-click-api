@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /** Run the migrations. */
     public function up(): void
     {
         // One handling target per booking type: the total time from the booking's opening to its closing. A booking is overdue once it is older.
@@ -26,7 +25,6 @@ return new class extends Migration
         });
     }
 
-    /** Reverse the migrations. */
     public function down(): void
     {
         Schema::dropIfExists('sla_targets');

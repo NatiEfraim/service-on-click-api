@@ -30,24 +30,22 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Save the bookings of the exported booking files (SrvOnClick_b2r_export_bookings_<date>.json): the booking, its values and comments
- * and, for a barber booking, its slot. A booking is found by its serial number, so reading a file again changes nothing.
- * A full record (booking_type_id set) creates the booking; the record of a booking that was exported before (booking_type_id null)
- * brings only the new status, the DATE/TIME values and the comments.
+ * Saves exported booking files, matching by serial number so a re-read changes nothing.
+ * A record without booking_type_id only brings the new status, DATE/TIME values and comments.
  */
 class ImportBookingService
 {
     use ReadsImportJsonFiles, ResolvesBarberSchedule;
 
-    /** @var array<int, ?int> unit id by booking type id, from unit_has_booking_types */
+    /** @var array<int, ?int> unit id by booking type id */
     private array $unitIdByBookingType = [];
 
     private ?int $barberSlotMinutes = null;
 
-    /** @var array<string, int> field_name => id of the fields made in this system that the chunk being saved names (see loadFormFields) */
+    /** @var array<string, int> field_name => id of the custom fields in the current chunk */
     private array $customFieldIds = [];
 
-    /** @var array<string, int> "<form field id>|<option name>" => option id, for those fields */
+    /** @var array<string, int> "<form field id>|<option name>" => option id */
     private array $customOptionIds = [];
 
     public function __construct(
@@ -73,9 +71,8 @@ class ImportBookingService
     }
 
     /**
-     * Save one chunk of the file. A row that cannot be a booking is logged and skipped; a row that fails while it is saved is logged,
-     * and once the other rows are done the chunk throws so the job is tried again (what is saved stays as it is, so nothing is saved twice).
-     * @param array $bookingsChunk, int $chunkIndex @return array<string, int> created, updated, unchanged, skipped, failed, values_skipped, comments_added, attachments_added
+     * Saves one chunk. Failed rows are logged and the chunk throws at the end so the job retries (saving is idempotent).
+     * @return array<string, int> counters: created, updated, unchanged, skipped, failed, values_skipped, comments_added, attachments_added
      */
     public function importChunk(array $bookingsChunk, int $chunkIndex): array
     {
@@ -108,7 +105,7 @@ class ImportBookingService
             $prepared[$index] = $row;
         }
 
-        // Everybody a row names - the owner and the authors of the comments - gets a user row before the bookings are saved.
+        // Owners and comment authors need user rows before the bookings are saved.
         $unitIdByPersonalId = [];
 
         foreach ($prepared as $row) {
@@ -146,10 +143,7 @@ class ImportBookingService
         return $stats;
     }
 
-    /**
-     * What the import saved, to look at: the totals, the bookings per type and status, and one page of bookings with their values, comments and logs.
-     * @param int $perPage, ?int $bookingTypeId, ?string $serialNumber a serial number or the start of one @return array
-     */
+    /** Imported data for review: totals, counts per type and status, and one page of bookings. */
     public function importedData(int $perPage = 10, ?int $bookingTypeId = null, ?string $serialNumber = null): array
     {
         $page = Booking::query()
@@ -214,9 +208,7 @@ class ImportBookingService
         ];
     }
 
-    //----------------------------- Private Methods ------------------------//
-
-    /** Why a row cannot be saved (a string), or the row ready to save. @return array|string */
+    /** @return array|string the reason a row is unusable, or the row ready to save */
     private function prepareRow(mixed $bookingData, array $existingBookings, array $bookingTypeIds, array $formFields, array $optionFields): array|string
     {
         if (!is_array($bookingData)) {
@@ -238,7 +230,7 @@ class ImportBookingService
         $ownerPersonalId = null;
 
         if ($booking === null) {
-            // Only the full record can create a booking; the record of an exported booking carries no type and no owner.
+            // Only a full record can create a booking.
             if ($bookingTypeId === null) {
                 return "booking {$serialNumber} is not saved here and the row is only a change record";
             }
@@ -304,8 +296,7 @@ class ImportBookingService
     }
 
     /**
-     * The stored names of the files (or images) a row lists: [{"file_id": 7, "path": "SrvOnClickFiles_6adf01_j0iNc8"}] - the name has no extension and
-     * the mobile app's id means nothing here. A name that is not a plain name is skipped and logged: it is never used to find anything in the bucket.
+     * Stored names of the files/images a row lists; names that are not plain are logged and skipped, never used for bucket lookups.
      * @return array<int, string>
      */
     private function attachmentNames(mixed $list, int $serialNumber): array
@@ -327,13 +318,9 @@ class ImportBookingService
     }
 
     /**
-     * The booking_values rows of an exported booking. The export lists a node for every form field the booking has something for
-     * (a node under a category names that category in form_field_id), while the table keeps only the leaves:
-     *  - a node with options: one row for each selected option that no other selected option hangs under,
-     *  - a node with a value: one row holding the value,
-     *  - a node that is no other node's category (a plain choice such as "soldier assignment"): one row with just the field,
-     *  - a category node: no row - the web builds the tree from the leaves.
-     * A node that is not a field of the booking's type is skipped and logged. @return array{0: array<int, array>, 1: int} the rows and how many nodes were skipped
+     * Maps export nodes to booking_values leaves: one row per selected option without a selected child, per value, or per plain choice;
+     * category nodes get no row and nodes outside the booking type are skipped.
+     * @return array{0: array<int, array>, 1: int} rows and skipped count
      */
     private function mapValues(mixed $nodes, int $bookingTypeId, int $serialNumber, array $formFields, array $optionFields): array
     {
@@ -357,7 +344,7 @@ class ImportBookingService
         foreach ($nodes as $node) {
             $fieldId = (int) ($node['field_id'] ?? 0);
 
-            // A field made in this system: the mobile app's id means nothing here, its field_name does.
+            // Custom fields are matched by field_name; the mobile app's id means nothing here.
             $isCustom = is_string($node['field_name'] ?? null) && isset($this->customFieldIds[$node['field_name']]);
 
             if ($isCustom) {
@@ -371,7 +358,7 @@ class ImportBookingService
                 continue;
             }
 
-            // Uploads live in booking_has_files / booking_has_images, never in booking_values.
+            // Uploads live in booking_has_files / booking_has_images, not in booking_values.
             if (FieldTypeEnum::isUploadFieldTypeId((int) $formField->field_type_id)) {
                 $skip("form field {$fieldId} is an upload field");
                 continue;
@@ -391,12 +378,12 @@ class ImportBookingService
                 foreach ($options as $option) {
                     $optionId = (int) ($option['option_id'] ?? 0);
 
-                    // An option of a field made here is found by its name (the option ids of the two systems differ).
+                    // Options of custom fields are matched by name (ids differ between systems).
                     if ($isCustom && is_string($option['display_name'] ?? null)) {
                         $optionId = $this->customOptionIds[$fieldId . '|' . trim($option['display_name'])] ?? 0;
                     }
 
-                    // An option that another selected option hangs under is not saved - the web finds it through that child.
+                    // An option with a selected child is not saved; the web finds it through the child.
                     if (isset($parentOptionIds[$optionId])) {
                         continue;
                     }
@@ -432,7 +419,7 @@ class ImportBookingService
         return [array_values($rows), $skipped];
     }
 
-    /** A value as the JSON column keeps it: a number or text as a JSON string (how the mobile app saves it), a list as a JSON list, nothing as NULL. @param mixed $value @return ?string */
+    /** Encodes a value for the JSON column: scalars as JSON strings, lists as JSON lists, none as NULL. */
     private function encodeValue(mixed $value): ?string
     {
         if ($value === null) {
@@ -443,8 +430,7 @@ class ImportBookingService
     }
 
     /**
-     * The form fields and options a chunk mentions, in a few queries. A field made in this system (field_name "int_...") has another id in the mobile
-     * app: when the node of a value carries its field_name, the field is found by that name, and its options by the display_name of each option.
+     * Loads the form fields and options a chunk mentions; custom fields (field_name "int_...") are found by name, their options by display_name.
      * @return array{0: array<int, FormField>, 1: array<int, OptionField>} by id
      */
     private function loadFormFields(array $bookingsChunk): array
@@ -498,7 +484,7 @@ class ImportBookingService
         return [$formFields->all(), $optionFields->all()];
     }
 
-    /** The unit a new booking belongs to: the unit of its form fields (the unit that offers the booking type), else the unit that has the type. */
+    /** Unit of the form fields of the new booking, else the unit offering its booking type. */
     private function unitIdOfNewBooking(int $bookingTypeId, array $values, array $formFields): ?int
     {
         foreach ($values as $value) {
@@ -517,13 +503,13 @@ class ImportBookingService
         return $this->unitIdByBookingType[$bookingTypeId];
     }
 
-    /** Save one prepared row in one transaction. @return array{outcome: string, comments_added: int, attachments_added: int} outcome is created, updated or unchanged */
+    /** Saves one prepared row in a transaction. @return array{outcome: string, comments_added: int, attachments_added: int} */
     private function saveRow(array $row, array $userIds): array
     {
         try {
             return DB::transaction(fn () => $this->saveBooking($row, $this->lockedBooking($row['booking']), $userIds));
         } catch (UniqueConstraintViolationException $e) {
-            // Another job saved this booking a moment ago: save the row again as an update of it.
+            // Another job saved this booking meanwhile: update it instead.
             $booking = Booking::where('serial_number', $row['serial_number'])->first();
 
             if ($booking === null) {
@@ -534,10 +520,7 @@ class ImportBookingService
         }
     }
 
-    /**
-     * The booking as it is right now, locked for the transaction. The chunk read its bookings a while ago, and a person may have decided on one
-     * since: the merge of the status must see that decision, and a decision being made waits for this row to finish. A new booking stays null.
-     */
+    /** Reloads the booking locked, so the status merge sees decisions made since the chunk was read. */
     private function lockedBooking(?Booking $booking): ?Booking
     {
         return $booking === null ? null : (Booking::query()->whereKey($booking->id)->lockForUpdate()->first() ?? $booking);
@@ -560,7 +543,7 @@ class ImportBookingService
                 'ext_status_id' => $row['status_id'],
                 'status_source' => 'external',
                 'status_changed_at' => $row['updated_at'],
-                // The mobile app has these already - nothing here is sent back to it.
+                // Nothing is sent back to the mobile app.
                 'is_exported' => true,
                 'is_status_exported' => true,
                 'is_updated_value' => false,
@@ -573,7 +556,7 @@ class ImportBookingService
 
         $valuesWritten = $this->saveValues($booking, $row['values'], $isNew, $row['updated_at']);
 
-        // What the mobile app changed in a saved booking's values is a change of the booking: whoever has it open must see the version move.
+        // Changed values count as a booking change, so open editors see the version move.
         if (!$isNew && $valuesWritten > 0) {
             $this->saveWithoutTouchingTimestamps($booking, ['version' => (int) $booking->version + 1]);
         }
@@ -592,14 +575,12 @@ class ImportBookingService
     }
 
     /**
-     * Take the status and time of the row, unless what is saved is newer - a late or repeated file must not take a booking back.
-     * While a decision made here is waiting for the mobile app to confirm it, the status is merged three ways instead (StatusConflictResolver):
-     * a change that crosses the decision is never applied over it silently - it opens a sync conflict for a person to settle.
-     * @return bool whether the booking changed
+     * Takes the row's status and time unless the saved one is newer. While a decision awaits mobile confirmation the status is
+     * merged three-way (StatusConflictResolver) and a crossing change opens a sync conflict instead of being applied.
      */
     private function updateStatus(Booking $booking, int $statusId, Carbon $updatedAt): bool
     {
-        // status_changed_at, not updated_at: a corrected value touches updated_at without the status moving.
+        // status_changed_at, not updated_at, which a value correction also touches.
         $storedAt = $booking->statusSince();
 
         $decisionWaiting = $booking->status_source !== 'external'
@@ -612,7 +593,7 @@ class ImportBookingService
 
         switch ($outcome) {
             case StatusConflictResolver::CONFIRM:
-                // The mobile app shows what we decided: nothing is waiting any more - and no conflict, if one was open.
+                // The mobile app shows our decision: nothing waits any more and any open conflict is closed.
                 $this->saveWithoutTouchingTimestamps($booking, ['ext_status_id' => $statusId, 'status_source' => 'external', 'is_status_exported' => true]);
                 $this->settleOpenConflict($booking, SyncConflict::CONFIRMED_BY_MOBILE, 'האפליקציה הציגה את הסטטוס שנקבע כאן', $statusId);
 
@@ -627,15 +608,14 @@ class ImportBookingService
                 return $this->applyIncomingStatus($booking, $statusId, $updatedAt, $storedAt, $decisionWaiting);
 
             default:
-                // noop (the mobile app has not moved) or stale (the file is older than our decision): our decision stands.
+                // noop or stale: our decision stands.
                 return false;
         }
     }
 
     /**
-     * The status of the row becomes the status here. A record older than what is saved is ignored (a late or repeated file) - but not when it
-     * overrides a decision waiting to be sent (the requester canceled before the decision was made): that one stands whatever its time.
-     * A newer record with the same status moves nothing: the stage keeps counting from when it began.
+     * Applies the row's status unless it is older than the saved one, except when it overrides a decision waiting to be sent.
+     * A newer record with the same status does not restart the stage clock.
      */
     private function applyIncomingStatus(Booking $booking, int $statusId, Carbon $updatedAt, Carbon $storedAt, bool $decisionWaiting): bool
     {
@@ -670,15 +650,12 @@ class ImportBookingService
         return true;
     }
 
-    /**
-     * Nothing is left to decide about the booking - the mobile app confirmed our decision or overrode it - so an open conflict is closed, and a
-     * decision that was overridden is written to the audit log. The booking is never left waiting for a person who has nothing to choose.
-     */
+    /** Closes the open conflict once nothing is left to decide and audits an overridden decision. */
     private function settleOpenConflict(Booking $booking, string $resolution, string $reason, int $statusId, ?int $overriddenStatusId = null): void
     {
         $conflict = SyncConflict::query()->where('booking_id', $booking->id)->where('state', SyncConflict::STATE_OPEN)->first();
 
-        // A decision that was confirmed, with no conflict, is the normal case and needs no row.
+        // A confirmed decision without a conflict is the normal case and needs no row.
         if ($conflict === null && $overriddenStatusId === null) {
             return;
         }
@@ -707,7 +684,7 @@ class ImportBookingService
         ]);
     }
 
-    /** Both sides moved: hold our decision back and ask a person. The status here stays; the base moves to what the mobile app has, so the same row opens nothing twice. */
+    /** Holds our decision back and asks a person; the base moves to the mobile status so the same row opens nothing twice. */
     private function openConflict(Booking $booking, int $externalStatusId, Carbon $changedAt): void
     {
         $conflict = SyncConflict::query()->firstOrCreate(
@@ -744,7 +721,6 @@ class ImportBookingService
         ]);
     }
 
-    /** @param array<string, mixed> $attributes */
     private function saveWithoutTouchingTimestamps(Booking $booking, array $attributes): void
     {
         $booking->timestamps = false;
@@ -752,7 +728,7 @@ class ImportBookingService
         $booking->timestamps = true;
     }
 
-    /** Add the values a new booking has; for a saved booking add the missing ones and change the ones whose value is different. @return int rows written */
+    /** Adds missing values and updates changed ones. @return int rows written */
     private function saveValues(Booking $booking, array $values, bool $isNew, Carbon $at): int
     {
         if ($values === []) {
@@ -767,7 +743,7 @@ class ImportBookingService
             }
         }
 
-        // A correction made here that is still waiting to go out is not taken back by a record the mobile app wrote before it had seen it.
+        // A pending local correction is not overwritten by an older mobile record.
         $corrected = [];
 
         if (!$isNew && $booking->is_updated_value) {
@@ -810,8 +786,8 @@ class ImportBookingService
     }
 
     /**
-     * The comments carry no id, so what is saved is counted by author and text and only the surplus is added: a comment is never saved twice.
-     * They carry no time either - the time of the row is used. @return int comments added
+     * Comments carry no id or time: they are matched by author and text, only the surplus is added, and the row's time is used.
+     * @return int comments added
      */
     private function saveComments(Booking $booking, array $comments, array $userIds, bool $isNew, Carbon $at): int
     {
@@ -856,7 +832,7 @@ class ImportBookingService
         return count($inserts);
     }
 
-    /** The date and time of a barber booking, from its DATE and TIME values. @return array{date: ?string, time: ?string} */
+    /** @return array{date: ?string, time: ?string} from the DATE and TIME values */
     private function barberDateAndTime(array $values, array $formFields): array
     {
         $dateAndTime = ['date' => null, 'time' => null];
@@ -879,11 +855,7 @@ class ImportBookingService
         return $dateAndTime;
     }
 
-    /**
-     * The slot the barber page reads: date, start and end (a haircut plus the cleaning after it), and is_deleted once the status frees the slot -
-     * the statuses the mobile app frees, plus the one a changed barber time sets.
-     * @param array{date: ?string, time: ?string} $dateAndTime what the row brought; nothing of it leaves the saved date or time as they are
-     */
+    /** Saves the barber slot: date, start and end (haircut plus cleaning); is_deleted once the status frees it. */
     private function saveBarberSlot(Booking $booking, array $dateAndTime): void
     {
         $freed = StatusBookingEnum::from((int) $booking->status_id)->freesBarberSlot();
@@ -920,7 +892,7 @@ class ImportBookingService
         BarberBooking::create($changes + ['booking_id' => $booking->id, 'user_id' => $booking->user_id]);
     }
 
-    /** A list of objects: the export writes one entry as that entry's object, many as a list, none as null. */
+    /** Normalizes the export's single-object, list or null form to a list. */
     private function listOf(mixed $value): array
     {
         if (!is_array($value) || $value === []) {
@@ -930,7 +902,7 @@ class ImportBookingService
         return array_values(array_filter(array_is_list($value) ? $value : [$value], 'is_array'));
     }
 
-    /** A unix time from the export (a number or a numeric string) in the app's time zone; null when it is not one. @param mixed $value @return ?Carbon */
+    /** Unix time (number or numeric string) in the app's time zone, or null. */
     private function timeFromUnix(mixed $value): ?Carbon
     {
         if ((!is_int($value) && !is_string($value)) || !is_numeric($value) || (int) $value <= 0) {

@@ -11,7 +11,6 @@ use Illuminate\Database\Seeder;
 /** Users for local development: the team (log in with the personal number) and a few people who place bookings. */
 class UserSeeder extends Seeder
 {
-    /** Run the database seeds. */
     public function run(): void
     {
         $managers = [

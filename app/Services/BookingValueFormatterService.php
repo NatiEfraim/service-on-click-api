@@ -20,15 +20,13 @@ use Illuminate\Support\Facades\Log;
 
 class BookingValueFormatterService
 {
-    /** Create a new class instance. */
     public function __construct(
         private readonly StorageService $storageService,
         private readonly AttachmentService $attachmentService,
     ) {
-        //
     }
 
-    /** Format a booking's values (plus uploads) for display, merging nested form field trees. @param Booking $booking @return ?array */
+    /** Formats a booking's values and uploads for display, merging nested form field trees. @return ?array */
     public function format(Booking $booking)
     {
 
@@ -92,7 +90,7 @@ class BookingValueFormatterService
 
     }
 
-    /** Append one entry per upload form field holding files/images; untagged uploads go to root upload fields. @param Booking $booking, array $formattedValues @return array */
+    /** Appends one entry per upload field holding files/images; untagged uploads go to the root upload fields. */
     private function appendUploadFormFieldValues(Booking $booking, array $formattedValues): array
     {
         $files = $booking->files;
@@ -140,7 +138,6 @@ class BookingValueFormatterService
         return $formattedValues;
     }
 
-    /** Format uploaded documents (File models) into a flat payload array. */
     private function formatFilesPayload(mixed $files): array
     {
         return $files
@@ -149,7 +146,7 @@ class BookingValueFormatterService
                 'type' => 'file',
                 'name' => $file->file_name,
                 'display_name' => $file->display_name,
-                // A file the mobile app's json named but whose bytes have not arrived has no url yet (resolve() looks for the extension too).
+                // A file named by the mobile app's json whose bytes have not arrived has no url yet (resolve() also tries the extension).
                 'url' => ($path = $this->attachmentService->resolve($file)) ? $this->storageService->generateFileTemporaryUrl($path) : null,
                 'size' => $file->size ?? null,
             ]))
@@ -157,7 +154,6 @@ class BookingValueFormatterService
             ->all();
     }
 
-    /** Format uploaded images (Image models) into a flat payload array. */
     private function formatImagesPayload(mixed $images): array
     {
         return $images
@@ -171,7 +167,7 @@ class BookingValueFormatterService
             ->all();
     }
 
-    /** Same field restrictions as the create form; null unless systemReferences is eager-loaded. @param FormField $formField @return ?array */
+    /** Same field restrictions as the create form; null unless systemReferences is eager-loaded. */
     private function resolveFieldRestrictions(FormField $formField): ?array
     {
         if (!$formField->relationLoaded('systemReferences')) {
@@ -181,7 +177,7 @@ class BookingValueFormatterService
         return (new FormFieldResource($formField))->resolveFieldRestrictions();
     }
 
-    /** Check if the form field is editable for the current user and booking status. @param Booking $booking, mixed $formField @return bool */
+    /** Whether the current user may correct this field's value at the booking's status. */
     private function isEditable(Booking $booking, mixed $formField): bool
     {
         $user = Auth::user();
@@ -201,8 +197,8 @@ class BookingValueFormatterService
             return false;
         }
 
-        // The same rule the server applies when the correction is sent (Workflow::canEditValues): whoever's turn it is, until the final approval.
-        // Checked against the user's own permission names - hasPermissionTo() throws for a permission that doesn't exist.
+        // Same rule the server applies on submit (Workflow::canEditValues): whoever's turn it is, until the final approval.
+        // Uses the user's own permission names: hasPermissionTo() throws for a permission that does not exist.
         return app(Workflow::class)->canEditValues(
             $status,
             $user->getAllPermissions()->pluck('name'),
@@ -210,7 +206,6 @@ class BookingValueFormatterService
         );
     }
 
-    /** Merge nested form field trees only with other nested form field trees. @param array $items @return array */
     private function mergeNestedFormFieldTrees(array $items): array
     {
         $merged = [];
@@ -241,7 +236,7 @@ class BookingValueFormatterService
         return array_values($merged);
     }
 
-    /** Whether the item is a nested form field tree node (uuid + field_name, no field_uuid). @param array $item @return bool */
+    /** A tree node has uuid + field_name and no field_uuid. */
     private function isFormFieldTreeNode(array $item): bool
     {
         return isset($item['uuid'])
@@ -249,7 +244,6 @@ class BookingValueFormatterService
             && !isset($item['field_uuid']);
     }
 
-    /** Find an existing tree node by form field uuid. @param array $items, array $item @return ?int */
     private function findFormFieldTreeNodeIndex(array $items, array $item): ?int
     {
         foreach ($items as $index => $existingItem) {
@@ -265,20 +259,17 @@ class BookingValueFormatterService
         return null;
     }
 
-    /** Merge one form field node into another (option_fields, value, child form_fields recursively). @param array $existing, array $incoming @return array */
+    /** Merges option_fields, value and child form_fields recursively. */
     private function mergeFormFieldNode(array $existing, array $incoming): array
     {
-        // Merge option_fields.
         if (isset($incoming['option_fields'])) {
             $existing['option_fields'] = $incoming['option_fields'];
         }
 
-        // Merge value.
         if (array_key_exists('value', $incoming)) {
             $existing['value'] = $incoming['value'];
         }
 
-        // Merge form_fields recursively.
         if (isset($incoming['form_fields']) && is_array($incoming['form_fields'])) {
             $existing['form_fields'] ??= [];
 
@@ -308,7 +299,6 @@ class BookingValueFormatterService
         return $existing;
     }
 
-    /** Find child form field node index by form field id, inside nested form field trees. */
     private function findItemIndexById(array $items, int $id): ?int
     {
         foreach ($items as $index => $item) {
@@ -324,7 +314,7 @@ class BookingValueFormatterService
         return null;
     }
 
-    /** Format option based booking values - depth comes from option_field_id, not the booking type. */
+    /** Formats option-based values; depth comes from option_field_id, not the booking type. */
     private function formatOptionBookingValues(
         Booking $booking,
         mixed $bookingValues,
@@ -352,7 +342,6 @@ class BookingValueFormatterService
         );
     }
 
-    /** Merge every selected option of one form field into a single option tree. */
     private function buildOptionFieldsPayload(mixed $bookingValues, FormField $formField): array
     {
         $nodes = [];
@@ -380,7 +369,7 @@ class BookingValueFormatterService
         );
     }
 
-    /** Add one option path to the merged list, joining it with the same option when already there. */
+    /** Adds an option path to the list, joining it with the same option when already there. */
     private function mergeOptionFieldNodes(array $nodes, array $incoming): array
     {
         foreach ($nodes as $index => $node) {
@@ -401,7 +390,6 @@ class BookingValueFormatterService
         return $nodes;
     }
 
-    /** Merge one option node into another, recursively merging their nested options. */
     private function mergeOptionFieldNode(array $existing, array $incoming): array
     {
         if (array_key_exists('value', $incoming)) {
@@ -423,7 +411,7 @@ class BookingValueFormatterService
         return $existing;
     }
 
-    /** option_fields may hold a single option node or a list of them - always work with a list. */
+    /** option_fields holds one option node or a list; always returns a list. */
     private function normalizeOptionFieldNodes(mixed $optionFields): array
     {
         if (!is_array($optionFields) || empty($optionFields)) {
@@ -435,7 +423,7 @@ class BookingValueFormatterService
             : [$optionFields];
     }
 
-    /** Collapse each tree level: one choice under a single-value field type is an object, else a list. @param array $nodes @return array */
+    /** One choice under a single-value field type is an object at each level, else a list. */
     private function collapseOptionFieldTree(array $nodes): array
     {
         foreach ($nodes as $index => $node) {
@@ -474,7 +462,6 @@ class BookingValueFormatterService
         ], true);
     }
 
-    /** Field types that may hold more than one selected option at once. */
     private function isMultiValueFieldTypeId(?int $fieldTypeId): bool
     {
         return in_array($fieldTypeId, [
@@ -483,7 +470,7 @@ class BookingValueFormatterService
         ], true);
     }
 
-    /** An option opens another level when it is flagged as a category or typed as one. */
+    /** An option opens another level when flagged or typed as a category. */
     private function isCategoryOptionField(?OptionField $optionField): bool
     {
         return $optionField
@@ -493,13 +480,12 @@ class BookingValueFormatterService
             );
     }
 
-    /** A form field opens another level when it is typed as a category. */
     private function isCategoryFormField(?FormField $formField): bool
     {
         return $formField
             && $this->isCategoryFieldTypeId((int) $formField->field_type_id);
     }
-    /** Return the form field tree if needed, else the regular flat payload. @param Booking $booking, FormField $formField, array $regularPayload, mixed $value, mixed $optionFields @return array */
+    /** Returns the form field tree when needed, else the regular flat payload. */
     private function resolveBookingValuePayload(
         Booking $booking,
         FormField $formField,
@@ -522,7 +508,6 @@ class BookingValueFormatterService
     }
 
 
-    /** Build the field tree if needed. @param Booking $booking, FormField $formField, mixed $value, mixed $optionFields @return ?array */
     private function getFormFieldTreeIfNeeded(
         Booking $booking,
         FormField $formField,
@@ -552,7 +537,6 @@ class BookingValueFormatterService
         return $this->isCategoryFormField($formField->parentFormField)
             || $this->isCategoryFormField($formField);
     }
-    /** Build the selected form field tree from root to the selected leaf. @param Booking $booking, FormField $leafFormField, mixed $value, mixed $optionFields @return array */
     private function buildSelectedFormFieldTree(
         Booking $booking,
         FormField $leafFormField,
@@ -579,7 +563,7 @@ class BookingValueFormatterService
     }
 
 
-    /** Recursively build the nested form field path; the leaf gets the value or option_fields. @param Booking $booking, array $path, int $index, mixed $value, mixed $optionFields @return array */
+    /** Builds the nested path recursively; the leaf gets the value or option_fields. */
     private function buildNestedFormFieldPath(
         Booking $booking,
         array $path,
@@ -620,7 +604,6 @@ class BookingValueFormatterService
         return $this->removeNullValues($node);
     }
 
-    /** Format a form field node without null keys. @param Booking $booking, FormField $formField @return array */
     private function formatFormFieldNode(Booking $booking, FormField $formField): array
     {
         return $this->removeNullValues([
@@ -637,7 +620,7 @@ class BookingValueFormatterService
         ]);
     }
 
-    /** Build the ancestor chain of one selected option, from its root category down to itself. */
+    /** Ancestor chain of a selected option, from its root category down to itself. */
     private function buildOptionFieldPath(?OptionField $optionField, mixed $value = null): ?array
     {
         if (!$optionField) {
@@ -647,7 +630,7 @@ class BookingValueFormatterService
         $node = $this->formatOptionFieldNode($optionField);
 
         if (!is_null($value) && !$this->isCategoryOptionField($optionField)) {
-            // A free-text option holds what the user typed - shown by its field type, like a plain input.
+            // A free-text option holds what the user typed, shown by its field type like a plain input.
             $typedValue = $optionField->is_input
                 ? FieldTypeEnum::normalize(fieldTypeValue: (int) $optionField->field_type_id, value: $value)
                 : $value;
@@ -675,7 +658,6 @@ class BookingValueFormatterService
 
         return $parentPath;
     }
-    /** Format an option field node without null keys. @param OptionField $optionField @return array */
     private function formatOptionFieldNode(OptionField $optionField): array
     {
         return $this->removeNullValues([
@@ -696,7 +678,6 @@ class BookingValueFormatterService
 
 
 
-    /** Decode a booking value from JSON when possible. @param mixed $value @return mixed */
     private function decodeBookingValue(mixed $value): mixed
     {
         if (is_array($value)) {
@@ -714,7 +695,7 @@ class BookingValueFormatterService
             : $value;
     }
 
-    /** Get the field type [id, name]; room time multi-selects are reported as TIME. @param Booking $booking, mixed $formField @return ?array */
+    /** Field type [id, name]; room time multi-selects are reported as TIME. */
     private function retreiveFieldTypeObject(Booking $booking, mixed $formField): ?array
     {
         $formFieldIdByBookingType = match ((int) $booking->booking_type_id) {
@@ -742,7 +723,6 @@ class BookingValueFormatterService
         ];
     }
 
-    /** Remove null values from an array. @param array $data @return array */
     private function removeNullValues(array $data): array
     {
         return array_filter($data, fn($value) => !is_null($value));

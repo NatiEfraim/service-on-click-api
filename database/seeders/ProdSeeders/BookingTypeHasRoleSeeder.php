@@ -17,7 +17,6 @@ class BookingTypeHasRoleSeeder extends Seeder
         RoleEnum::USER->value,
     ];
 
-    /** Run the database seeds. */
     public function run(): void
     {
         $bookingTypes = BookingType::query()->get(['id']);
