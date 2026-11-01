@@ -139,6 +139,29 @@ return [
         'application_log_chunk_size' => (int) env('IMPORT_APPLICATION_LOG_JSON_CHUNK_SIZE', 500),
     ],
 
+    // The r2b files this system writes into the bucket for the mobile side (export-json/...): the decisions made here and the corrected values.
+    'export_json' => [
+        // EXPORT_JSON_ENABLED=false stops the schedule and POST /sync/run from writing to the bucket; the decisions wait here until it is on.
+        'enabled' => filter_var(env('EXPORT_JSON_ENABLED', true), FILTER_VALIDATE_BOOL),
+
+        // The mobile side's importer reads ONE status file per day by its exact name. Its configuration says r2b, its importer looks for b2r:
+        // set this to the prefix it really reads (EXPORT_BOOKING_STATUS_PREFIX=SrvOnClick_b2r_booking_status_).
+        'booking_status_prefix' => (string) env('EXPORT_BOOKING_STATUS_PREFIX', 'SrvOnClick_r2b_booking_status_'),
+
+        // The day in that file name is the day in this timezone. Empty = the application's timezone (UTC). Set it (e.g. Asia/Jerusalem) to the
+        // timezone the mobile importer uses to name the file it reads "today", or decisions made around midnight go into a file it no longer reads.
+        'timezone' => env('EXPORT_JSON_TIMEZONE') ?: null,
+
+        // The changes of the configuration (form structure, options, statements, settings) are sent to the mobile app as r2b "system_config" files.
+        // The mobile side needs an importer for them (see docs/admin-api.md); with the channel off they are kept, and go out when it is switched on.
+        'config_channel_enabled' => filter_var(env('SYNC_CONFIG_CHANNEL_ENABLED', true), FILTER_VALIDATE_BOOL),
+
+        // A file that cannot be written is tried again with a growing wait (up to an hour); after this many attempts a person sends it again.
+        'max_attempts' => (int) env('EXPORT_JSON_MAX_ATTEMPTS', 8),
+
+        'cron' => env('EXPORT_JSON_CRON', '*/2 * * * *'),
+    ],
+
     // Queue job retry/timeout settings and schedule times; each block is read by a job in app/Jobs.
     'jobs' => [
         'import_booking_json' => [

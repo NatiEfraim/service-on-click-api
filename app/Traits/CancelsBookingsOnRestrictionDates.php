@@ -8,144 +8,99 @@ use App\Enums\StatusBookingEnum;
 use App\Models\BarberBooking;
 use App\Models\Booking;
 use App\Models\BookingValue;
+use App\Services\AuditService;
+use App\Services\BookingStatusRecorder;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
-/** Cancel bookings on dates newly added to a booking type's restriction list (the type's cancel status; the web system sends no SMS). */
+/**
+ * Cancel bookings on dates newly added to a booking type's restriction list (the type's cancel status; the web system sends no SMS).
+ * Finding the bookings is separate from cancelling them, so the screen can show what a block would cancel before it is saved.
+ * A cancellation is a decision made here like any other: it goes through BookingStatusRecorder (timeline, version, sent back to the
+ * mobile app) and is audited.
+ */
 trait CancelsBookingsOnRestrictionDates
 {
+    /**
+     * The ids of the bookings of the type that sit on one of the Y-m-d dates and are not closed yet - the ones a block on these dates cancels.
+     * @param int $bookingTypeId, array<int, string> $dates @return array<int, int>
+     */
+    protected function findBookingIdsOnRestrictedDates(int $bookingTypeId, array $dates): array
+    {
+        if (empty($dates)) {
+            return [];
+        }
+
+        $bookingIds = match ($bookingTypeId) {
+            BookingTypeEnum::BARBER_BOOKING->getBookingTypeId() =>
+                BarberBooking::query()->whereIn('date', $dates)->where('is_deleted', false)->pluck('booking_id')->all(),
+            BookingTypeEnum::CAR_BOOKING->getBookingTypeId() =>
+                $this->getBookingIdsWithDateValuesInRange($bookingTypeId, [
+                    FormFieldEnum::CAR_BOOKING_START_DATE->getFormFieldId(),
+                    FormFieldEnum::CAR_BOOKING_END_DATE->getFormFieldId(),
+                ], $dates),
+            BookingTypeEnum::IN_UNIT_FOOD_BOOKING->getBookingTypeId() =>
+                $this->getBookingIdsWithDateValuesInRange($bookingTypeId, [FormFieldEnum::IN_UNIT_SUPPLY_DATE->getFormFieldId()], $dates),
+            BookingTypeEnum::OUT_UNIT_FOOD_BOOKING->getBookingTypeId() =>
+                $this->getBookingIdsWithDateValuesInRange($bookingTypeId, [FormFieldEnum::OUT_UNIT_SUPPLY_DATE->getFormFieldId()], $dates),
+            BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId() =>
+                $this->getBookingIdsWithDateValuesInRange($bookingTypeId, [
+                    FormFieldEnum::TRANSPORTATION_START_DATE->getFormFieldId(),
+                    FormFieldEnum::TRANSPORTATION_END_DATE->getFormFieldId(),
+                ], $dates),
+            BookingTypeEnum::CAR_MAINTENANCE_BOOKING->getBookingTypeId() =>
+                $this->getBookingIdsWithDateValuesInRange($bookingTypeId, [FormFieldEnum::CAR_MAINTANENCE_DATE_SET->getFormFieldId()], $dates),
+            default => [],
+        };
+
+        if ($bookingIds === []) {
+            return [];
+        }
+
+        // A booking that is closed already is left as it is.
+        return Booking::query()
+            ->whereIn('id', array_values(array_unique($bookingIds)))
+            ->where('booking_type_id', $bookingTypeId)
+            ->whereNotIn('status_id', StatusBookingEnum::terminalIds())
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
     /** Cancel the booking type's bookings on the newly restricted Y-m-d dates. @param int $bookingTypeId, array<int, string> $dates */
     protected function cancelBookingsOnNewlyRestrictedDates(int $bookingTypeId, array $dates): void
     {
-        if (empty($dates)) {
+        $bookingIds = $this->findBookingIdsOnRestrictedDates($bookingTypeId, $dates);
+
+        if ($bookingIds === []) {
             return;
         }
 
-        match ($bookingTypeId) {
-            BookingTypeEnum::BARBER_BOOKING->getBookingTypeId() =>
-                $this->cancelBarberBookingsOnDates($dates),
-            BookingTypeEnum::CAR_BOOKING->getBookingTypeId() =>
-                $this->cancelCarBookingsOnDates($dates),
-            BookingTypeEnum::IN_UNIT_FOOD_BOOKING->getBookingTypeId() =>
-                $this->cancelFoodBookingsOnDates(
-                    $bookingTypeId,
-                    $dates,
-                    FormFieldEnum::IN_UNIT_SUPPLY_DATE->getFormFieldId()
-                ),
-            BookingTypeEnum::OUT_UNIT_FOOD_BOOKING->getBookingTypeId() =>
-                $this->cancelFoodBookingsOnDates(
-                    $bookingTypeId,
-                    $dates,
-                    FormFieldEnum::OUT_UNIT_SUPPLY_DATE->getFormFieldId()
-                ),
-            BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId() =>
-                $this->cancelTransportationBookingsOnDates($dates),
-            BookingTypeEnum::CAR_MAINTENANCE_BOOKING->getBookingTypeId() =>
-                $this->cancelCarMaintenanceBookingsOnDates($dates),
-            default => null,
-        };
-    }
+        $actor = Auth::user() ?? throw new \LogicException('Bookings are canceled on behalf of a logged in person.');
+        $recorder = app(BookingStatusRecorder::class);
+        $audit = app(AuditService::class);
+        $cancelStatus = BookingTypeEnum::getCancelStatusForRestrictionDates($bookingTypeId);
 
-    /** @param array<int, string> $dates */
-    private function cancelBarberBookingsOnDates(array $dates): void
-    {
-        $activeCancelStatusIds = collect([
-            StatusBookingEnum::RECEIVED,
-            StatusBookingEnum::PROCESSING,
-            StatusBookingEnum::VICE_APPROVER_APPROVED,
-            StatusBookingEnum::VICE_APPROVER_REJECTED,
-            StatusBookingEnum::APPROVED,
-            StatusBookingEnum::APPROVED_BY_BARBER,
-        ])
-            ->map(fn($status) => $status->value)
-            ->toArray();
+        foreach (Booking::query()->whereIn('id', $bookingIds)->lockForUpdate()->get() as $booking) {
+            $before = ['status_id' => (int) $booking->status_id, 'version' => (int) $booking->version];
+            $correlationId = $recorder->apply($booking, $cancelStatus, $actor, 'system', (string) Str::uuid());
 
-        $barberBookings = BarberBooking::with(['user', 'booking.bookingType'])
-            ->whereIn('date', $dates)
-            ->where('is_deleted', false)
-            ->whereHas('booking', fn($q) => $q->whereIn('status_id', $activeCancelStatusIds))
-            ->get();
-
-        foreach ($barberBookings as $barberBooking) {
-            $this->cancelBarberBookingForChangingTime($barberBooking);
+            $audit->record([
+                'action' => 'booking.canceled_by_restriction',
+                'entity_type' => 'booking',
+                'entity_id' => $booking->serial_number,
+                'booking_serial' => $booking->serial_number,
+                'unit_id' => $booking->unit_id,
+                'booking_type_id' => $booking->booking_type_id,
+                'source' => 'automation',
+                'before' => $before,
+                'after' => ['status_id' => $cancelStatus->value, 'version' => (int) $booking->version],
+                'reason' => 'התאריך נחסם להזמנות: ' . implode(', ', $dates),
+                'correlation_id' => $correlationId,
+            ], $actor);
         }
-    }
-
-    private function cancelBarberBookingForChangingTime(BarberBooking $barberBooking): void
-    {
-        if (!$barberBooking->booking || !$barberBooking->user) {
-            return;
-        }
-
-        $cancelStatus = BookingTypeEnum::getCancelStatusForRestrictionDates(
-            (int) $barberBooking->booking->booking_type_id
-        );
-
-        $barberBooking->booking->update([
-            'status_id' => $cancelStatus->value,
-            'updated_at' => now(),
-        ]);
-
-        $barberBooking->update(['is_deleted' => true]);
-    }
-
-    /** Cancel CAR_BOOKING bookings whose date range covers a newly restricted date. */
-    private function cancelCarBookingsOnDates(array $dates): void
-    {
-        $startDateFieldId = FormFieldEnum::CAR_BOOKING_START_DATE->getFormFieldId();
-        $endDateFieldId = FormFieldEnum::CAR_BOOKING_END_DATE->getFormFieldId();
-
-        $bookingIds = $this->getBookingIdsWithDateValuesInRange(
-            BookingTypeEnum::CAR_BOOKING->getBookingTypeId(),
-            [$startDateFieldId, $endDateFieldId],
-            $dates
-        );
-
-        $this->cancelBookingsByIds($bookingIds);
-    }
-
-    /** Cancel FOOD_BOOKING (IN_UNIT or OUT_UNIT) bookings on newly restricted dates. */
-    private function cancelFoodBookingsOnDates(
-        int $bookingTypeId,
-        array $dates,
-        int $dateFormFieldId
-    ): void {
-        $bookingIds = $this->getBookingIdsWithDateValuesInRange(
-            $bookingTypeId,
-            [$dateFormFieldId],
-            $dates
-        );
-
-        $this->cancelBookingsByIds($bookingIds);
-    }
-
-    /** Cancel TRANSPORTATION_BOOKING bookings whose date range covers a newly restricted date. */
-    private function cancelTransportationBookingsOnDates(array $dates): void
-    {
-        $startDateFieldId = FormFieldEnum::TRANSPORTATION_START_DATE->getFormFieldId();
-        $endDateFieldId = FormFieldEnum::TRANSPORTATION_END_DATE->getFormFieldId();
-
-        $bookingIds = $this->getBookingIdsWithDateValuesInRange(
-            BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId(),
-            [$startDateFieldId, $endDateFieldId],
-            $dates
-        );
-
-        $this->cancelBookingsByIds($bookingIds);
-    }
-
-    /** Cancel CAR_MAINTENANCE_BOOKING bookings on newly restricted dates. */
-    private function cancelCarMaintenanceBookingsOnDates(array $dates): void
-    {
-        $dateSetFieldId = FormFieldEnum::CAR_MAINTANENCE_DATE_SET->getFormFieldId();
-
-        $bookingIds = $this->getBookingIdsWithDateValuesInRange(
-            BookingTypeEnum::CAR_MAINTENANCE_BOOKING->getBookingTypeId(),
-            [$dateSetFieldId],
-            $dates
-        );
-
-        $this->cancelBookingsByIds($bookingIds);
     }
 
     /** Find bookings whose date fields match one of the given restricted dates. */
@@ -222,38 +177,6 @@ trait CancelsBookingsOnRestrictionDates
                 ['value' => $date, 'error' => $e->getMessage()]
             );
             return null;
-        }
-    }
-
-    /** Cancel bookings by ID; skips bookings in a terminal status. */
-    private function cancelBookingsByIds(array $bookingIds): void
-    {
-        if (empty($bookingIds)) {
-            return;
-        }
-
-        $bookings = Booking::with(['user', 'bookingType'])
-            ->whereIn('id', $bookingIds)
-            ->get();
-
-        foreach ($bookings as $booking) {
-            if (!$booking->user) {
-                continue;
-            }
-
-            $status = StatusBookingEnum::tryFrom($booking->status_id);
-            if (!$status || !$status->canBeCanceledByRestrictionDates()) {
-                continue;
-            }
-
-            $cancelStatus = BookingTypeEnum::getCancelStatusForRestrictionDates(
-                (int) $booking->booking_type_id
-            );
-
-            $booking->update([
-                'status_id' => $cancelStatus->value,
-                'updated_at' => now(),
-            ]);
         }
     }
 }

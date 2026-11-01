@@ -177,7 +177,7 @@ class ImportBookingJsonTest extends ImportJsonTestCase
         ]);
         $second = $this->import();
 
-        $this->assertSame(['created' => 0, 'updated' => 0, 'unchanged' => 2, 'skipped' => 0, 'failed' => 0, 'values_skipped' => 0, 'comments_added' => 0], $second['files'][0]['stats']);
+        $this->assertSame(['created' => 0, 'updated' => 0, 'unchanged' => 2, 'skipped' => 0, 'failed' => 0, 'values_skipped' => 0, 'comments_added' => 0, 'attachments_added' => 0], $second['files'][0]['stats']);
         $this->assertSame($counts, [Booking::count(), BookingValue::count(), Comment::count(), BarberBooking::count(), User::count()]);
 
         // The first copy is not overwritten: the second one keeps its name plus the time it was loaded.

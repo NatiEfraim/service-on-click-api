@@ -32,6 +32,12 @@ return new class extends Migration
             $table->json('field_validations')->nullable();
             $table->boolean('editable')->default(1);
             $table->boolean('is_required')->default(1);
+            // Optimistic locking for what this system changes about a field (its name, required, editable, type, place, removal).
+            $table->unsignedInteger('version')->default(1);
+            // The place of the field in its form: the fields are laid out by position, then id (the seeded ones all start at 0, so id order).
+            $table->unsignedInteger('position')->default(0);
+            // false = archived: out of the form and the settings while the values bookings hold for it stay - a field with values is never deleted.
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }

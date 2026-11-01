@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class StoreUserRequest extends FormRequest
 {
@@ -33,6 +34,12 @@ class StoreUserRequest extends FormRequest
             'full_name' => ['required', 'max:30', "regex:/^[א-ת'\-\s]+$/u"],
             'phone' => ['nullable', 'regex:/^05\d{8}$/'],
             'unit_id' => ['required', 'integer', 'exists:units,id'],
+            // Optional: an active department of the unit the person is created in.
+            'department_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('departments', 'id')->where(fn ($query) => $query->where('unit_id', $this->input('unit_id'))->where('is_active', true)),
+            ],
         ];
     }
 
@@ -49,6 +56,8 @@ class StoreUserRequest extends FormRequest
             'unit_id.required' => 'יש לבחור יחידה',
             'unit_id.integer' => 'יש לבחור יחידה',
             'unit_id.exists' => 'היחידה שנבחרה אינה קיימת',
+            'department_id.integer' => 'המחלקה אינה שייכת ליחידה שנבחרה',
+            'department_id.exists' => 'המחלקה אינה שייכת ליחידה שנבחרה',
         ];
     }
 }

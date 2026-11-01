@@ -18,6 +18,8 @@ return new class extends Migration {
             $table->string('personal_id')->nullable()->unique();
             $table->string('phone')->nullable();
             $table->foreignId('unit_id')->nullable()->constrained('units')->onDelete('cascade');
+            // Internal only (the mobile app has no departments): the department inside the unit.
+            $table->foreignId('department_id')->nullable()->constrained('departments')->nullOnDelete();
             $table->boolean('is_deleted')->default(false);
             $table->timestamps();
         });

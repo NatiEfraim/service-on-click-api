@@ -7,6 +7,21 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Service On Click - web API
+
+This is the web side of Service On Click: it imports the bookings the mobile app exports, lets admins / approvers / vice approvers decide on them,
+and sends the decisions back. The database is `srvonclick-db`.
+
+- **Frontend guide for the admin / approver / super-admin screens:** [docs/admin-api.md](docs/admin-api.md) - roles, every endpoint, the rules the
+  server enforces, error handling, jobs and configuration.
+- **Postman collection:** [docs/postman/service-on-click-admin.postman_collection.json](docs/postman/service-on-click-admin.postman_collection.json)
+- **The files between this system and the mobile app** (what is read, what is written, what the mobile side has to import):
+  [docs/mobile-sync-contract.md](docs/mobile-sync-contract.md)
+- Set up: `composer install`, copy `.env.example` to `.env`, `php artisan key:generate`, then `php artisan run:all` (it rebuilds the database with
+  `migrate:fresh --seed` and starts the server - the management columns are part of the original migrations while the project is in development);
+  run `php artisan schedule:work` (imports every 5 minutes, exports every 2) and `php artisan queue:work` (the import chunks).
+- Tests: `php vendor/bin/phpunit` (SQLite in memory; the bucket is faked).
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

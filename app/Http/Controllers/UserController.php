@@ -70,6 +70,7 @@ class UserController extends Controller
             'full_name',
             'phone',
             'unit_id',
+            'department_id',
         ]));
 
         if ($result instanceof HttpStatusCodeEnum) {

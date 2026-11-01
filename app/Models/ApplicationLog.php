@@ -13,6 +13,9 @@ class ApplicationLog extends Model
     protected $fillable = [
         'booking_id',
         'action_type_id',
+        'status_id',
+        'source',
+        'correlation_id',
         'user_id',
         'is_exported',
     ];

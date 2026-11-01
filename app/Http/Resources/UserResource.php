@@ -16,6 +16,11 @@ class UserResource extends JsonResource
             'personal_number' => $this->personal_number,
             'personal_id' => $this->personal_id,
             'phone' => $this->phone,
+            'unit_id' => $this->unit_id,
+            // Only when the unit / department were loaded with the user - the resource asks the database for nothing.
+            'unit_name' => $this->relationLoaded('unit') ? $this->unit?->displayName() : null,
+            'department_id' => $this->department_id,
+            'department_name' => $this->relationLoaded('department') ? $this->department?->name : null,
             'roles' => $this->formatRoles(),
             'permissions' => $this->formatPermissions(),
         ];

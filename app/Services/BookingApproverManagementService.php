@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Traits\AuditsConfigChanges;
 use App\Traits\InterpolatesStatement;
 use App\Traits\CancelsBookingsOnRestrictionDates;
 use App\Traits\ResolvesBarberSchedule;
@@ -10,6 +11,7 @@ use App\Enums\HttpStatusCodeEnum;
 use App\Enums\PermissionEnum;
 use App\Enums\PaginationEnum;
 use App\Enums\SystemReferenceEnum;
+use App\Exceptions\DomainError;
 use App\Http\Resources\DashboardStatusResource;
 use App\Http\Resources\GetSystemReferencesResource;
 use App\Models\BarberBooking;
@@ -34,6 +36,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class BookingApproverManagementService
 {
+    use AuditsConfigChanges;
     use InterpolatesStatement;
     use CancelsBookingsOnRestrictionDates;
     use ResolvesBarberSchedule;
@@ -452,6 +455,8 @@ class BookingApproverManagementService
                 $record = SystemReference::where('id', $id)->where('unit_id', Auth::user()->unit_id)->first();
 
                 $currentDetails = $record->decodedValue();
+                $before = [];
+                $after = [];
 
                 foreach ($fields as $key => $value) {
 
@@ -463,13 +468,18 @@ class BookingApproverManagementService
                             )
                             && is_array($value)
                         ) {
-                    
-                            $this->syncBookingRestrictionDates(
+
+                            $synced = $this->syncBookingRestrictionDates(
                                 bookingTypeId: (int) $record->booking_type_id,
                                 dates: $value,
                             );
+
+                            $before[$key] = $synced['before'];
+                            $after[$key] = $synced['after'];
                         } else {
+                            $before[$key] = $currentDetails[$key];
                             $currentDetails[$key] = $value;
+                            $after[$key] = $value;
                         }
                     }
                 }
@@ -477,10 +487,33 @@ class BookingApproverManagementService
                 $record->update([
                     'value' => json_encode($currentDetails),
                 ]);
+
+                $this->auditConfigChange(
+                    action: 'config.system_reference.update',
+                    entityType: 'system_reference',
+                    entityId: $record->id,
+                    before: $before,
+                    after: $after,
+                    unitId: (int) $record->unit_id,
+                    bookingTypeId: (int) $record->booking_type_id,
+                );
+
+                // The mobile app is told the whole value of the setting (a list of blocked dates lives in its own table here, so it is taken from $after).
+                if ($before !== $after) {
+                    $this->queueConfigChange('system_reference', 'update', [
+                        'unit_id' => (int) $record->unit_id,
+                        'booking_type_id' => (int) $record->booking_type_id,
+                        'key' => $record->name,
+                        'data' => array_merge($currentDetails, $after),
+                    ]);
+                }
             }
 
             DB::commit();
             return HttpStatusCodeEnum::OK;
+        } catch (DomainError $e) {
+            DB::rollBack();
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error($e->getMessage());
@@ -501,8 +534,11 @@ class BookingApproverManagementService
             ->toArray();
     }
 
-    /** Sync booking restriction dates to match the frontend's final dates array. */
-    private function syncBookingRestrictionDates(int $bookingTypeId, array $dates): void
+    /**
+     * Sync booking restriction dates to match the frontend's final dates array.
+     * @return array{before: array<int, string>, after: array<int, string>} the blocked Y-m-d dates before and after, sorted (for the audit row)
+     */
+    private function syncBookingRestrictionDates(int $bookingTypeId, array $dates): array
     {
 
         $dates = collect($dates)
@@ -519,6 +555,8 @@ class BookingApproverManagementService
             ->where('booking_type_id', $bookingTypeId)
             ->pluck('date')
             ->map(fn($date) => Carbon::parse($date)->toDateString())
+            ->sort()
+            ->values()
             ->toArray();
 
         if (empty($dates)) {
@@ -526,7 +564,7 @@ class BookingApproverManagementService
                 ->where('booking_type_id', $bookingTypeId)
                 ->delete();
 
-            return;
+            return ['before' => $existingDates, 'after' => []];
         }
 
         // Delete dates no longer in the submitted final array.
@@ -549,6 +587,10 @@ class BookingApproverManagementService
             bookingTypeId: $bookingTypeId,
             dates: $newlyBlockedDates,
         );
+
+        sort($dates);
+
+        return ['before' => $existingDates, 'after' => $dates];
     }
 
 

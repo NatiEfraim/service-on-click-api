@@ -3,6 +3,8 @@
 namespace App\Services;
 
 
+use App\Domain\Config\FormFieldRules;
+use App\Domain\Workflow\Workflow;
 use App\Enums\BookingTypeEnum;
 use App\Enums\FieldTypeEnum;
 use App\Enums\FormFieldEnum;
@@ -11,7 +13,6 @@ use App\Models\File;
 use App\Models\FormField;
 use App\Models\Image;
 use App\Models\OptionField;
-use App\Enums\PermissionEnum;
 use App\Enums\StatusBookingEnum;
 use App\Http\Resources\FormFieldResource;
 use Illuminate\Support\Facades\Auth;
@@ -20,8 +21,10 @@ use Illuminate\Support\Facades\Log;
 class BookingValueFormatterService
 {
     /** Create a new class instance. */
-    public function __construct(private readonly StorageService $storageService)
-    {
+    public function __construct(
+        private readonly StorageService $storageService,
+        private readonly AttachmentService $attachmentService,
+    ) {
         //
     }
 
@@ -146,7 +149,8 @@ class BookingValueFormatterService
                 'type' => 'file',
                 'name' => $file->file_name,
                 'display_name' => $file->display_name,
-                'url' => $file->path ? $this->storageService->generateFileTemporaryUrl($file->path) : null,
+                // A file the mobile app's json named but whose bytes have not arrived has no url yet (resolve() looks for the extension too).
+                'url' => ($path = $this->attachmentService->resolve($file)) ? $this->storageService->generateFileTemporaryUrl($path) : null,
                 'size' => $file->size ?? null,
             ]))
             ->values()
@@ -161,7 +165,7 @@ class BookingValueFormatterService
                 'id' => $image->id,
                 'type' => 'image',
                 'name' => $image->file_name,
-                'url' => $image->path ? $this->storageService->generateImageTemporaryUrl($image->path) : null,
+                'url' => ($path = $this->attachmentService->resolve($image)) ? $this->storageService->generateImageTemporaryUrl($path) : null,
             ]))
             ->values()
             ->all();
@@ -186,37 +190,24 @@ class BookingValueFormatterService
             return false;
         }
 
-        if (!(bool) $formField->editable) {
+        // Only a date and a time can be corrected.
+        if (!(bool) $formField->editable || !in_array((int) $formField->field_type_id, FormFieldRules::EDITABLE_TYPES, true)) {
             return false;
         }
 
-        $bookingTypeId = (int) $booking->booking_type_id;
-        $statusId = (int) $booking->status_id;
+        $status = StatusBookingEnum::tryFrom((int) $booking->status_id);
 
-        $viceApproverPermission = PermissionEnum::VICE_APPROVER->value . $bookingTypeId;
-        $transportationControlOfficerPermission = PermissionEnum::TRANSPORTATION_CONTROL_OFFICER->value . $bookingTypeId;
-        $approverPermission = PermissionEnum::APPROVER->value . $bookingTypeId;
-        $adminPermission = PermissionEnum::ADMIN->value . $bookingTypeId;
+        if ($status === null) {
+            return false;
+        }
 
-        // Checked against the user's own permissions directly - hasPermissionTo() throws for a permission that doesn't exist.
-        $userPermissionNames = $user->getAllPermissions()->pluck('name');
-
-        $canViceApproverEdit =
-            (
-                $userPermissionNames->contains($viceApproverPermission)
-                || $userPermissionNames->contains($transportationControlOfficerPermission)
-            ) &&
-            $statusId === StatusBookingEnum::RECEIVED->value;
-
-        $hasApproverOrAdminPermission =
-            $userPermissionNames->contains($approverPermission) ||
-            $userPermissionNames->contains($adminPermission);
-
-        $canApproverOrAdminEdit =
-            $hasApproverOrAdminPermission &&
-            $statusId < StatusBookingEnum::APPROVED->value;
-
-        return $canViceApproverEdit || $canApproverOrAdminEdit;
+        // The same rule the server applies when the correction is sent (Workflow::canEditValues): whoever's turn it is, until the final approval.
+        // Checked against the user's own permission names - hasPermissionTo() throws for a permission that doesn't exist.
+        return app(Workflow::class)->canEditValues(
+            $status,
+            $user->getAllPermissions()->pluck('name'),
+            (int) $booking->booking_type_id,
+        );
     }
 
     /** Merge nested form field trees only with other nested form field trees. @param array $items @return array */

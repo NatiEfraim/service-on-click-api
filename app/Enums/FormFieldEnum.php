@@ -658,8 +658,11 @@ enum FormFieldEnum
             ->with($relations)
             ->where('booking_type_id', $bookingTypeId)
             ->where('unit_id', $unitId)
+            ->where('is_active', true)
             ->whereNull('form_field_id')
             ->whereIn('field_type_id', FieldTypeEnum::selectedFieldTypeIds())
+            ->orderBy('position')
+            ->orderBy('id')
             ->get();
     }
 

@@ -12,6 +12,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ResponseException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class UserService
@@ -25,7 +26,7 @@ class UserService
     public function user(): mixed
     {
         try {
-            $user = User::where('id', Auth::id())->where('is_deleted', false)->with('roles', 'permissions', 'unit')->first();
+            $user = User::where('id', Auth::id())->where('is_deleted', false)->with('roles', 'permissions', 'unit', 'department')->first();
 
             if (is_null($user)) {
                 return HttpStatusCodeEnum::NOT_FOUND;
@@ -43,7 +44,12 @@ class UserService
     public function index(?string $identifier = null): mixed
     {
         try {
-            $query = User::with(['roles', 'permissions'])->where('is_deleted', false);
+            $query = User::with(['roles', 'permissions', 'unit', 'department'])->where('is_deleted', false);
+
+            // An admin deals with the people of their own unit (see BookingAdminManagementService::assertMayManage); the super admin with everybody.
+            if (!Auth::user()->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName())) {
+                $query->where('unit_id', Auth::user()->unit_id);
+            }
 
             if (!is_null($identifier)) {
                 $identifier = str_replace(' ', '', $identifier);
@@ -70,19 +76,32 @@ class UserService
         }
     }
 
-    /** Create a user. @param array $data personal_number, full_name, phone, unit_id @return mixed */
+    /** Create a user. @param array $data personal_number, full_name, phone, unit_id, department_id (optional) @return mixed */
     public function store(array $data): mixed
     {
         try {
-            $user = User::create([
-                'personal_number' => $data['personal_number'],
-                'full_name' => $data['full_name'],
-                'phone' => $data['phone'] ?? null,
-                'unit_id' => $data['unit_id'] ?? null,
-                'is_deleted' => false,
-            ]);
+            $user = DB::transaction(function () use ($data): User {
+                $user = User::create([
+                    'personal_number' => $data['personal_number'],
+                    'full_name' => $data['full_name'],
+                    'phone' => $data['phone'] ?? null,
+                    'unit_id' => $data['unit_id'] ?? null,
+                    'department_id' => $data['department_id'] ?? null,
+                    'is_deleted' => false,
+                ]);
 
-            $user->load(['roles', 'permissions']);
+                app(AuditService::class)->record([
+                    'action' => 'user.create',
+                    'entity_type' => 'user',
+                    'entity_id' => $user->actorId(),
+                    'unit_id' => $user->unit_id,
+                    'after' => $user->only(['personal_number', 'full_name', 'unit_id', 'department_id']),
+                ], Auth::user());
+
+                return $user;
+            });
+
+            $user->load(['roles', 'permissions', 'unit', 'department']);
 
             return new UserResource($user);
         } catch (\Exception $e) {

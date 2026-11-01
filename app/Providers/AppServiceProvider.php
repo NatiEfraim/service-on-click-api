@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Domain\Workflow\Workflow;
+use App\Enums\BookingTypeEnum;
+use App\Enums\RoleEnum;
+use App\Models\BookingTypeHasRole;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -13,7 +17,16 @@ class AppServiceProvider extends ServiceProvider
     /** Register any application services. */
     public function register(): void
     {
-        //
+        // The booking route's rules. Built once per request (or test), on first use - the database is read then, not at boot.
+        $this->app->singleton(Workflow::class, fn (): Workflow => new Workflow(
+            controlOfficerBookingTypeIds: BookingTypeHasRole::query()
+                ->where('role_id', RoleEnum::TRANSPORTATION_CONTROL_OFFICER->value)
+                ->pluck('booking_type_id')
+                ->map(fn ($id): int => (int) $id)
+                ->all(),
+            transportationBookingTypeId: BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId(),
+            barberBookingTypeId: BookingTypeEnum::BARBER_BOOKING->getBookingTypeId(),
+        ));
     }
 
     /** Bootstrap services: rate limiting. */

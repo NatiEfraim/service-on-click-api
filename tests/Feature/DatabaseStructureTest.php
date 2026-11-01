@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\RoleEnum;
 use Database\Seeders\ProdSeeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DatabaseStructureTest extends ManagementTestCase
 {
@@ -95,6 +96,27 @@ class DatabaseStructureTest extends ManagementTestCase
                 DB::table('booking_type_has_statuses')->where('booking_type_id', $bookingTypeId)->count(),
                 'booking type ' . $bookingTypeId
             );
+        }
+    }
+
+    /** The management layer's columns are part of the create-table migrations (the development database is rebuilt with run:all), and its tables exist. */
+    public function test_the_management_columns_and_tables_exist(): void
+    {
+        $columns = [
+            'bookings' => ['version', 'ext_status_id', 'status_source', 'status_changed_at'],
+            'application_logs' => ['status_id', 'source', 'correlation_id'],
+            'units' => ['internal_name'],
+            'users' => ['department_id'],
+            'form_fields' => ['version', 'position', 'is_active'],
+            'option_fields' => ['is_active'],
+        ];
+
+        foreach ($columns as $table => $names) {
+            $this->assertTrue(Schema::hasColumns($table, $names), "{$table} lacks one of: " . implode(', ', $names));
+        }
+
+        foreach (['departments', 'sla_targets', 'audit_log', 'audit_log_head', 'idempotency_keys', 'sync_files', 'sync_conflicts'] as $table) {
+            $this->assertTrue(Schema::hasTable($table), "table {$table} is missing");
         }
     }
 

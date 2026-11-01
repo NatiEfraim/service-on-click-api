@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\ActionTypeEnum;
 use App\Enums\JsonModelTypeEnum;
+use App\Enums\StatusBookingEnum;
 use App\Jobs\ImportApplicationLogJsonChunkJob;
 use App\Models\ApplicationLog;
 use App\Models\Booking;
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Log;
  * Save the logs of the exported application log files (SrvOnClick_b2r_application_logs_<date>.json): what was done to a booking
  * (action_type_id), by whom (personal_id) and when. A log belongs to the booking with its serial number, so the booking must be saved
  * first - ImportBookingService. A log that is saved already is recognised by booking, action, person and time, so reading a file again adds nothing.
- * The file also carries the booking's status at that time; the table has no column for it, so it is left out.
+ * The file also carries the booking's status at that time: it is saved too (status_id), which makes the log the booking's timeline - how long each stage took.
  */
 class ImportApplicationLogService
 {
@@ -106,6 +107,8 @@ class ImportApplicationLogService
             $inserts[] = [
                 'booking_id' => $booking->id,
                 'action_type_id' => $row['action_type_id'],
+                'status_id' => $row['status_id'],
+                'source' => 'external',
                 'user_id' => $userId,
                 // The mobile app has these already - nothing here is sent back to it.
                 'is_exported' => true,
@@ -155,9 +158,15 @@ class ImportApplicationLogService
             return 'missing or invalid created_at';
         }
 
+        // A status the file names that this system does not know is left out; the log is saved all the same.
+        $statusId = is_numeric($logData['status_id'] ?? null) && StatusBookingEnum::tryFrom((int) $logData['status_id']) !== null
+            ? (int) $logData['status_id']
+            : null;
+
         return [
             'serial_number' => (int) $logData['serial_number'],
             'action_type_id' => (int) $logData['action_type_id'],
+            'status_id' => $statusId,
             'personal_id' => $personalId,
             'created_at' => Carbon::createFromTimestamp((int) $createdAt, config('app.timezone')),
         ];

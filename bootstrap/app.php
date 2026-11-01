@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\HttpStatusCodeEnum;
+use App\Exceptions\DomainError;
 use App\Http\Middleware\VerifyCookie;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -34,6 +35,9 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
 
+        // A refusal by a business rule is an answer, not an error: it is not written to the log (the audit log records the ones that matter).
+        $exceptions->dontReport(DomainError::class);
+
         // One vague answer for every refused request (403 - also a missing role -, 404 and 405): it does not say whether a record exists or why.
         $exceptions->render(function (HttpExceptionInterface $e, Request $request) {
             $deniedStatusCodes = [
@@ -47,6 +51,18 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json(['message' => HttpStatusCodeEnum::DENIED_MESSAGE], $e->getStatusCode());
+        });
+
+        // A business rule said no. A refusal for lack of permission or of a visible record (403/404/405) gets the same vague answer as above;
+        // every other one (409 the booking changed meanwhile, 422 the value is not valid...) says what is wrong. The audit log keeps the real reason.
+        $exceptions->render(function (DomainError $e, Request $request) {
+            $denied = in_array($e->status, [
+                SymfonyResponse::HTTP_FORBIDDEN,
+                SymfonyResponse::HTTP_NOT_FOUND,
+                SymfonyResponse::HTTP_METHOD_NOT_ALLOWED,
+            ], true);
+
+            return response()->json(['message' => $denied ? HttpStatusCodeEnum::DENIED_MESSAGE : $e->getMessage()], $e->status);
         });
 
         $exceptions->render(function (AuthenticationException $e, Request $request) {

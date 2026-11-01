@@ -12,6 +12,7 @@ class Unit extends Model
     /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'name',
+        'internal_name',
         'is_deleted',
         'created_at',
         'updated_at'
@@ -23,6 +24,17 @@ class Unit extends Model
         'created_at',
         'updated_at',
     ];
+
+    /** The name people see in this system: the internal name, else the unit's letter. @return string */
+    public function displayName(): string
+    {
+        return $this->internal_name ?: $this->name;
+    }
+
+    public function departments()
+    {
+        return $this->hasMany(Department::class);
+    }
 
     public function user()
     {

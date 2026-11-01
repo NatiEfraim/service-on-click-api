@@ -2,6 +2,7 @@
 
 namespace App\Enums;
 
+use App\Domain\Workflow\Workflow;
 use App\Models\Status;
 
 enum StatusBookingEnum: int
@@ -111,38 +112,58 @@ enum StatusBookingEnum: int
             || $this->isWaitingForApprover();
     }
 
-    /** Check if a control officer can still edit the booking's fields in this status. */
-    public function isEditableByControlOfficer(): bool
+    /** The booking is closed: nothing more happens to it (rejected, completed or canceled). */
+    public function isTerminal(): bool
     {
-        return $this === self::RECEIVED || $this->isPendingForSupplier();
+        return !$this->canBeCanceledByRestrictionDates();
     }
 
-    /** Check if a vice approver can still edit the booking's fields in this status. */
-    public function isEditableByViceApprover(): bool
+    /** The ids of the closed statuses (rejected, completed, canceled). @return array<int, int> */
+    public static function terminalIds(): array
     {
-        return $this === self::RECEIVED || $this->isWaitingForViceApprover() || $this->isPendingForSupplier();
+        return array_values(array_map(
+            fn (self $status): int => $status->value,
+            array_filter(self::cases(), fn (self $status): bool => $status->isTerminal())
+        ));
     }
 
-    /** Check if an approver or admin can still edit the booking's fields in this status. */
-    public function isEditableByApprover(): bool
+    /** The action_types row written to application_logs when a booking moves into this status. */
+    public function getActionType(): ActionTypeEnum
     {
-        return $this === self::RECEIVED
-            || $this->isWaitingForViceApprover()
-            || $this->isWaitingForApprover()
-            || $this->isPendingForSupplier();
+        return match ($this) {
+            self::RECEIVED => ActionTypeEnum::RETURN_TO_RECEIVED,
+            self::PROCESSING, self::VICE_APPROVER_APPROVED, self::VICE_APPROVER_REJECTED => ActionTypeEnum::VICE_APPROVER_PROCESSING_BOOKING,
+            self::PROCESSING_BY_CONTROL_OFFICER, self::CONTROL_OFFICER_APPROVED, self::CONTROL_OFFICER_REJECTED => ActionTypeEnum::CONTROL_OFFICER_PROCESSING_BOOKING,
+            self::APPROVED => ActionTypeEnum::APPROVE_BOOKING,
+            self::REJECTED => ActionTypeEnum::REJECT_BOOKING,
+            self::COMPLETED => ActionTypeEnum::COMPLETE_BOOKING,
+            self::CANCELED_BY_USER => ActionTypeEnum::CANCEL_BOOKING_BY_USER,
+            self::CANCELED_BY_APPROVER, self::CANCELED_BY_BARBER, self::CANCELED_BY_CHANGING_TIME => ActionTypeEnum::CANCEL_BOOKING_BY_APPROVER,
+            self::APPROVED_BY_BARBER => ActionTypeEnum::APPROVE_BOOKING_BY_BARBER,
+            self::PENDING_FILE, self::PENDING_PROCESSING, self::PENDING_APPROVED => ActionTypeEnum::MOVE_TO_PENDING_BOOKING,
+        };
+    }
+
+    /**
+     * A barber booking in this status no longer holds its slot (the statuses the mobile app frees, plus the one a changed barber time sets).
+     * Rejected and canceled-by-the-barber are deliberately not in the list: the mobile app keeps those slots, and this system mirrors it. (A
+     * correction of a time still treats every closed booking as not holding its time - see BookingValueService.)
+     */
+    public function freesBarberSlot(): bool
+    {
+        return in_array($this, [
+            self::COMPLETED,
+            self::CANCELED_BY_USER,
+            self::CANCELED_BY_APPROVER,
+            self::APPROVED_BY_BARBER,
+            self::CANCELED_BY_CHANGING_TIME,
+        ], true);
     }
 
     /** Get role flags by permission names (hasPermissionTo may throw). @param iterable $permissionNames, int $bookingTypeId @return array */
     public static function resolveRoleFlags(iterable $permissionNames, int $bookingTypeId): array
     {
-        $permissionNames = collect($permissionNames);
-
-        return [
-            'isControlOfficer' => $permissionNames->contains(PermissionEnum::TRANSPORTATION_CONTROL_OFFICER->value . $bookingTypeId),
-            'isViceApprover' => $permissionNames->contains(PermissionEnum::VICE_APPROVER->value . $bookingTypeId),
-            'isApproverOrAdmin' => $permissionNames->contains(PermissionEnum::APPROVER->value . $bookingTypeId)
-                || $permissionNames->contains(PermissionEnum::ADMIN->value . $bookingTypeId),
-        ];
+        return Workflow::roleFlags($permissionNames, $bookingTypeId);
     }
 
     /** Get the status_id options the user may move this booking to. @param array $roleFlags, ?int $bookingTypeId @return array */
@@ -184,64 +205,10 @@ enum StatusBookingEnum: int
         return false;
     }
 
-    /** Role-based transitions from this status; higher roles may act for lower. @param array $roleFlags, ?int $bookingTypeId @return array */
+    /** The transitions the roles allow from this status - turn-based, see App\Domain\Workflow\Workflow. @param array $roleFlags, ?int $bookingTypeId @return array */
     private function getAllowedTransitions(array $roleFlags, ?int $bookingTypeId = null): array
     {
-        $transitions = [];
-        $isTransportationBooking = $bookingTypeId === BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId();
-
-        $isApproverOrAdmin = (bool) ($roleFlags['isApproverOrAdmin'] ?? false);
-        $isControlOfficer = (bool) ($roleFlags['isControlOfficer'] ?? false) && !$isApproverOrAdmin;
-        $isViceApprover = (bool) ($roleFlags['isViceApprover'] ?? false) && !$isApproverOrAdmin;
-
-        if ($isControlOfficer && $isTransportationBooking && $this === self::RECEIVED) {
-            $transitions[] = ['status' => self::CONTROL_OFFICER_APPROVED, 'label' => 'מעביר לאישור'];
-            $transitions[] = ['status' => self::CONTROL_OFFICER_REJECTED, 'label' => 'מעביר לביטול'];
-        }
-
-        // Vice approver answers first except on TRANSPORTATION_BOOKING (control officer first), where it may still answer early.
-        $isViceApproverTurn = $this === self::RECEIVED
-            || ($isTransportationBooking && $this->isWaitingForViceApprover());
-
-        if ($isViceApprover && $isViceApproverTurn) {
-            $transitions[] = ['status' => self::VICE_APPROVER_APPROVED, 'label' => 'מעביר לאישור סופי'];
-            $transitions[] = ['status' => self::VICE_APPROVER_REJECTED, 'label' => 'מעביר לביטול סופי'];
-        }
-
-        if ($isApproverOrAdmin) {
-            if ($this === self::RECEIVED || $this->isWaitingForViceApprover() || $this->isWaitingForApprover() || $this->isPendingForSupplier()) {
-                $transitions[] = ['status' => self::APPROVED, 'label' => 'אשר סופית'];
-                $transitions[] = ['status' => self::REJECTED, 'label' => 'בטל סופית'];
-            }
-
-            if ($this === self::APPROVED || $this === self::APPROVED_BY_BARBER) {
-                $transitions[] = ['status' => self::COMPLETED, 'label' => 'סיום בקשה'];
-                $transitions[] = ['status' => self::CANCELED_BY_APPROVER, 'label' => 'ביטול בקשה'];
-            }
-        }
-
-        $canPutOnHold = $isTransportationBooking && (
-            ($isApproverOrAdmin && ($this === self::RECEIVED || $this->isWaitingForViceApprover() || $this->isWaitingForApprover()))
-            || ($isViceApprover && $isViceApproverTurn)
-            || ($isControlOfficer && $this === self::RECEIVED)
-            || (($isControlOfficer || $isViceApprover || $isApproverOrAdmin) && $this->isPendingForSupplier())
-        );
-
-        if ($canPutOnHold) {
-            $holdLabels = [
-                self::PENDING_FILE->value => 'העבר לממתין לקבצים מהלקוח',
-                self::PENDING_PROCESSING->value => 'העבר לממתין לאישור ספק',
-                self::PENDING_APPROVED->value => 'העבר לממתין למספר ספק',
-            ];
-
-            foreach ([self::PENDING_FILE, self::PENDING_PROCESSING, self::PENDING_APPROVED] as $holdStatus) {
-                if ($holdStatus !== $this) {
-                    $transitions[] = ['status' => $holdStatus, 'label' => $holdLabels[$holdStatus->value]];
-                }
-            }
-        }
-
-        return $transitions;
+        return app(Workflow::class)->allowedTransitions($this, $roleFlags, (int) $bookingTypeId);
     }
 
     /** Get the Hebrew dashboard display name for this status. @return string */

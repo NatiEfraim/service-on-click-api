@@ -1,0 +1,1341 @@
+{
+    "info": {
+        "name": "Service On Click - admin / approver / super admin API",
+        "description": "The management endpoints added with the admin side. See docs/admin-api.md. Set {{baseUrl}} and paste a personal access token into {{token}} (the browser sends it in the ServOnClickAccessToken cookie; here it travels as a Bearer token).",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "string"
+            }
+        ]
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:8000/api"
+        },
+        {
+            "key": "token",
+            "value": ""
+        },
+        {
+            "key": "serial",
+            "value": "1001"
+        },
+        {
+            "key": "referenceId",
+            "value": "1"
+        },
+        {
+            "key": "userUuid",
+            "value": ""
+        },
+        {
+            "key": "fileId",
+            "value": "1"
+        },
+        {
+            "key": "conflictId",
+            "value": "1"
+        },
+        {
+            "key": "attachmentKind",
+            "value": "file"
+        },
+        {
+            "key": "attachmentId",
+            "value": "1"
+        },
+        {
+            "key": "bookingTypeId",
+            "value": "11"
+        },
+        {
+            "key": "fieldId",
+            "value": "1"
+        }
+    ],
+    "item": [
+        {
+            "name": "1. Start-up",
+            "item": [
+                {
+                    "name": "Me (user, capabilities)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/me",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "me"
+                            ]
+                        },
+                        "description": "Who: any manager"
+                    }
+                },
+                {
+                    "name": "Catalog (dropdown lists)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/catalog",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "catalog"
+                            ]
+                        },
+                        "description": "Who: any manager"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "2. Bookings",
+            "item": [
+                {
+                    "name": "List (filters: q, statuses, types, stage, mine, overdue, sync, sort...)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/bookings?open_only=1&sort=status_changed_at&dir=desc&per_page=25",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "bookings"
+                            ],
+                            "query": [
+                                {
+                                    "key": "open_only",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "status_changed_at"
+                                },
+                                {
+                                    "key": "dir",
+                                    "value": "desc"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "25"
+                                }
+                            ]
+                        },
+                        "description": "Who: any manager"
+                    }
+                },
+                {
+                    "name": "My queue (actions open to me)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/bookings?mine=1&open_only=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "bookings"
+                            ],
+                            "query": [
+                                {
+                                    "key": "mine",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "open_only",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Who: any manager"
+                    }
+                },
+                {
+                    "name": "Detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/bookings/{{serial}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "bookings",
+                                "{{serial}}"
+                            ]
+                        },
+                        "description": "Who: any manager (own unit / types)"
+                    }
+                },
+                {
+                    "name": "Attachment - bytes of a file or image (kind: file | image)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/bookings/{{serial}}/attachments/{{attachmentKind}}/{{attachmentId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "bookings",
+                                "{{serial}}",
+                                "attachments",
+                                "{{attachmentKind}}",
+                                "{{attachmentId}}"
+                            ]
+                        },
+                        "description": "Who: any manager who may see the booking. Take kind and id from `attachments[]` of the detail; 404 until the bytes have arrived"
+                    }
+                },
+                {
+                    "name": "Change status",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Idempotency-Key",
+                                "value": "{{$guid}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/bookings/{{serial}}/status",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "bookings",
+                                "{{serial}}",
+                                "status"
+                            ]
+                        },
+                        "description": "Who: the role whose turn it is",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status_id\": 15,\n    \"version\": 1,\n    \"comment\": \"\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Correct date / time values",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/bookings/{{serial}}/values",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "bookings",
+                                "{{serial}}",
+                                "values"
+                            ]
+                        },
+                        "description": "Who: the role whose turn it is",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"values\": {\n        \"2\": \"2026-12-05\",\n        \"3\": \"11:30\"\n    },\n    \"version\": 1,\n    \"reason\": \"תיאום מחדש\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Create (always 405 + audited)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/bookings",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "bookings"
+                            ]
+                        },
+                        "description": "Who: any manager",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"booking_type_id\": 1\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Create by booking type (always 405 + audited)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/bookings/{{bookingTypeId}}/create",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "bookings",
+                                "{{bookingTypeId}}",
+                                "create"
+                            ]
+                        },
+                        "description": "Who: any manager. Bookings are opened in the mobile app only",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "3. Dashboards",
+            "item": [
+                {
+                    "name": "Overview (my dashboard)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/overview",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "overview"
+                            ]
+                        },
+                        "description": "Who: any manager"
+                    }
+                },
+                {
+                    "name": "Home tiles",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-admin-management/home",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-admin-management",
+                                "home"
+                            ]
+                        },
+                        "description": "Who: admin, super admin"
+                    }
+                },
+                {
+                    "name": "Domain dashboard",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/domain-dashboard?types=1&days=30",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "domain-dashboard"
+                            ],
+                            "query": [
+                                {
+                                    "key": "types",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "days",
+                                    "value": "30"
+                                }
+                            ]
+                        },
+                        "description": "Who: approver, admin, super admin"
+                    }
+                },
+                {
+                    "name": "Bottlenecks",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/bottlenecks?days=30&types=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "bottlenecks"
+                            ],
+                            "query": [
+                                {
+                                    "key": "days",
+                                    "value": "30"
+                                },
+                                {
+                                    "key": "types",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Who: any manager"
+                    }
+                },
+                {
+                    "name": "Reports",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-admin-management/reports?types=1&opened_from=2026-10-01&overdue=yes",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-admin-management",
+                                "reports"
+                            ],
+                            "query": [
+                                {
+                                    "key": "types",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "opened_from",
+                                    "value": "2026-10-01"
+                                },
+                                {
+                                    "key": "overdue",
+                                    "value": "yes"
+                                }
+                            ]
+                        },
+                        "description": "Who: admin, super admin"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "4. Targets & settings",
+            "item": [
+                {
+                    "name": "Targets - list",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-admin-management/targets",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-admin-management",
+                                "targets"
+                            ]
+                        },
+                        "description": "Who: admin, super admin"
+                    }
+                },
+                {
+                    "name": "Targets - set (target_hours null removes)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-admin-management/targets",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-admin-management",
+                                "targets"
+                            ]
+                        },
+                        "description": "Who: admin (own types), super admin",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"booking_type_id\": 1,\n    \"target_hours\": 48,\n    \"warn_ratio\": 0.8\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Settings of a booking type",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/settings/1/1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "settings",
+                                "1",
+                                "1"
+                            ]
+                        },
+                        "description": "Who: whoever manages the type in the unit"
+                    }
+                },
+                {
+                    "name": "Impact of blocking dates (saves nothing)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-approver-management/settings/references/{{referenceId}}/impact",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-approver-management",
+                                "settings",
+                                "references",
+                                "{{referenceId}}",
+                                "impact"
+                            ]
+                        },
+                        "description": "Who: whoever manages the type in the unit",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"dates\": [\n        \"2026-12-01\",\n        \"2026-12-02\"\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Field editable flag",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/form-fields/2/editable",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "form-fields",
+                                "2",
+                                "editable"
+                            ]
+                        },
+                        "description": "Who: super admin",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"editable\": true,\n    \"version\": 1\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Form field - add (choice: send options)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/form-fields/1/11",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "form-fields",
+                                "1",
+                                "11"
+                            ]
+                        },
+                        "description": "Who: super admin. Returns 201 and the field; it is queued for the mobile app",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"field_display_name\": \"העדפת ישיבה\",\n    \"field_type_id\": 5,\n    \"is_required\": false,\n    \"options\": [\n        \"ליד החלון\",\n        \"במעבר\"\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Form field - change (send the version and only what changes)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/form-fields/{{fieldId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "form-fields",
+                                "{{fieldId}}"
+                            ]
+                        },
+                        "description": "Who: super admin. 409 on a stale version; a field of the mobile app is never retyped",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"version\": 1,\n    \"field_display_name\": \"העדפת ישיבה בחדר\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Form field - new order (ids of ALL the stand-alone fields)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/form-fields/1/11/order",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "form-fields",
+                                "1",
+                                "11",
+                                "order"
+                            ]
+                        },
+                        "description": "Who: super admin. 409 when the list is not the form as it is now",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"ids\": [\n        6,\n        7,\n        8,\n        9,\n        10\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Form field - remove (archived when bookings hold values)",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/form-fields/{{fieldId}}?version=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "form-fields",
+                                "{{fieldId}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "version",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Who: super admin. Returns { mode: delete | archive, used_by }; a field of the mobile app is refused (422)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "5. People & organisation",
+            "item": [
+                {
+                    "name": "Set a person's department",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-admin-management/users/{{userUuid}}/department",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-admin-management",
+                                "users",
+                                "{{userUuid}}",
+                                "department"
+                            ]
+                        },
+                        "description": "Who: admin (own unit), super admin",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"department_id\": 1\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Org - units and departments",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/org",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "org"
+                            ]
+                        },
+                        "description": "Who: super admin"
+                    }
+                },
+                {
+                    "name": "Org - add unit",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/org/units",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "org",
+                                "units"
+                            ]
+                        },
+                        "description": "Who: super admin",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"K\",\n    \"name\": \"כנף צפון\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Org - rename unit (code stays)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/org/units/2",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "org",
+                                "units",
+                                "2"
+                            ]
+                        },
+                        "description": "Who: super admin",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"N\",\n    \"name\": \"נשר\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Org - add department",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/org/units/1/departments",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "org",
+                                "units",
+                                "1",
+                                "departments"
+                            ]
+                        },
+                        "description": "Who: super admin",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"לוגיסטיקה\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Org - update department",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/org/departments/1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "org",
+                                "departments",
+                                "1"
+                            ]
+                        },
+                        "description": "Who: super admin",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"חינוך\",\n    \"is_active\": true\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Grant approver roles (existing, now audited + scoped)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-admin-management/assign-approver-role",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-admin-management",
+                                "assign-approver-role"
+                            ]
+                        },
+                        "description": "Who: admin, super admin",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"personal_number\": \"2000009\",\n    \"full_name\": \"גורם חדש\",\n    \"reason\": \"מינוי חדש\",\n    \"role_assignments\": [\n        {\n            \"booking_type_id\": 1,\n            \"is_approver\": true,\n            \"is_vice_approver\": false\n        }\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "6. Audit & sync",
+            "item": [
+                {
+                    "name": "Audit - search",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/audit?action=booking.&from=2026-11-01",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "audit"
+                            ],
+                            "query": [
+                                {
+                                    "key": "action",
+                                    "value": "booking."
+                                },
+                                {
+                                    "key": "from",
+                                    "value": "2026-11-01"
+                                }
+                            ]
+                        },
+                        "description": "Who: super admin"
+                    }
+                },
+                {
+                    "name": "Audit - verify the hash chain",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/audit/verify",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "audit",
+                                "verify"
+                            ]
+                        },
+                        "description": "Who: super admin"
+                    }
+                },
+                {
+                    "name": "Audit - try to change a row (405)",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/audit/1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "audit",
+                                "1"
+                            ]
+                        },
+                        "description": "Who: super admin"
+                    }
+                },
+                {
+                    "name": "Sync - overview",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/sync",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "sync"
+                            ]
+                        },
+                        "description": "Who: super admin"
+                    }
+                },
+                {
+                    "name": "Sync - file detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/sync/files/{{fileId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "sync",
+                                "files",
+                                "{{fileId}}"
+                            ]
+                        },
+                        "description": "Who: super admin"
+                    }
+                },
+                {
+                    "name": "Sync - retry a failed file",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/sync/files/{{fileId}}/retry",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "sync",
+                                "files",
+                                "{{fileId}}",
+                                "retry"
+                            ]
+                        },
+                        "description": "Who: super admin"
+                    }
+                },
+                {
+                    "name": "Sync - send now",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/sync/run",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "sync",
+                                "run"
+                            ]
+                        },
+                        "description": "Who: super admin"
+                    }
+                },
+                {
+                    "name": "Sync - resolve a conflict",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-super-admin-management/sync/conflicts/{{conflictId}}/resolve",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-super-admin-management",
+                                "sync",
+                                "conflicts",
+                                "{{conflictId}}",
+                                "resolve"
+                            ]
+                        },
+                        "description": "Who: super admin",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"resolution\": \"accept_external\",\n    \"reason\": \"המזמין ביטל\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

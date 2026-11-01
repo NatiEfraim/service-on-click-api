@@ -158,6 +158,18 @@ class StorageService
         return $decoded;
     }
 
+    /** Write a JSON file into a bucket folder, replacing the one with that name. Throws when the disk refuses. @param string $fileName, string $remoteDirectory, string $contents @return string the object key written */
+    public function putJsonToBucket(string $fileName, string $remoteDirectory, string $contents): string
+    {
+        $fileKey = $this->buildBucketKey($remoteDirectory, $fileName);
+
+        if (!Storage::disk(config('filesystems.storage_service'))->put($fileKey, $contents)) {
+            throw new \RuntimeException("Could not write {$fileKey} to the bucket");
+        }
+
+        return $fileKey;
+    }
+
     /** Move a file to another bucket folder (copy, then delete the original). A file with that name already there stays: the moved one gets the date and time before ".json". @param string $fileName, string $fromDirectory, string $toDirectory @return string the name the file has in $toDirectory */
     public function moveBucketFile(string $fileName, string $fromDirectory, string $toDirectory): string
     {

@@ -25,6 +25,7 @@ class User extends Authenticatable
         'personal_id',
         'phone',
         'unit_id',
+        'department_id',
         'is_deleted',
     ];
 
@@ -64,6 +65,18 @@ class User extends Authenticatable
     public function unit()
     {
         return $this->belongsTo(Unit::class, 'unit_id');
+    }
+
+    /** Get the user's department (internal only). @return BelongsTo */
+    public function department()
+    {
+        return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    /** How the user is named in the audit log and in the files sent to the mobile app: the personal number, else the ID number. @return ?string */
+    public function actorId(): ?string
+    {
+        return $this->personal_number ?? $this->personal_id;
     }
 
     public function viceApproverHasBooking()

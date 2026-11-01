@@ -28,6 +28,8 @@ class AssignApproverRoleRequest extends FormRequest
             'full_name' => 'required_without:uuid|nullable|string|max:255',
             'personal_number' => ['required_without:uuid', 'nullable', 'string', 'regex:' . self::PERSONAL_NUMBER_REGEX],
             'phone' => ['nullable', 'string', 'regex:' . self::PHONE_REGEX],
+            // Why the roles change - kept in the audit log. Optional.
+            'reason' => 'nullable|string|max:500',
             'role_assignments' => 'required|array|min:1',
             'role_assignments.*.booking_type_id' => 'required|integer|exists:booking_types,id',
             'role_assignments.*.is_approver' => 'required|boolean',

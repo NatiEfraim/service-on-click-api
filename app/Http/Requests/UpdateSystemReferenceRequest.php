@@ -6,7 +6,9 @@ use App\Enums\HttpStatusCodeEnum;
 use App\Enums\FieldTypeEnum;
 use App\Enums\SystemReferenceEnum;
 use App\Models\SystemReference;
+use App\Services\AuditService;
 use App\Services\StorageService;
+use App\Support\AccessScope;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\ValidationException;
@@ -15,10 +17,24 @@ use Symfony\Component\HttpFoundation\Response;
 
 class UpdateSystemReferenceRequest extends FormRequest
 {
-    /** Determine if the user is authorized to make this request. @return bool */
+    /**
+     * The route is open to every managing role, but a role holds its permission for one booking type: whoever edits the references of a booking
+     * type (and blocks dates on it, which cancels bookings) must manage that type. A refusal is audited and answered like every other (403).
+     * @return bool
+     */
     public function authorize(): bool
     {
-        return true;
+        $user = Auth::user();
+        $bookingTypeId = (int) $this->input('booking_type_id');
+
+        // No booking type yet: the validation says so.
+        if ($user === null || $bookingTypeId <= 0 || (new AccessScope($user))->managesBookingType($bookingTypeId)) {
+            return true;
+        }
+
+        app(AuditService::class)->denied('config.system_reference.update', 'booking_type', $bookingTypeId, 'no_permission', $user, ['booking_type_id' => $bookingTypeId, 'unit_id' => $user->unit_id]);
+
+        return false;
     }
 
     /** Get the validation rules that apply to the request. @return array */

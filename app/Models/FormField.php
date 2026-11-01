@@ -21,6 +21,10 @@ class FormField extends Model
         'is_required',
         'payload_section_id',
         'editable',
+        // Optimistic locking, the place in the form, and archived (see FormFieldService).
+        'version',
+        'position',
+        'is_active',
         // Self relation fields
         'form_field_id',
         'is_input',
@@ -39,10 +43,19 @@ class FormField extends Model
         'is_required' => 'boolean',
         'is_input' => 'boolean',
         'payload_section_id' => 'integer',
-       
+        'version' => 'integer',
+        'position' => 'integer',
+        'is_active' => 'boolean',
     ];
 
+    /** The prefix of the field_name of a field made in this system - the seeded ones are named after the mobile app's FormFieldEnum. */
+    public const CUSTOM_PREFIX = 'int_';
 
+    /** Was this field made here (and not seeded)? */
+    public function isCustom(): bool
+    {
+        return str_starts_with((string) $this->field_name, self::CUSTOM_PREFIX);
+    }
 
     public function unit()
     {
@@ -73,9 +86,10 @@ class FormField extends Model
         return $this->hasMany(SystemReferenceHasFormField::class);
     }
 
+    /** The options in the form: archived ones are not (a booking that chose one keeps it through BookingValue::optionField). */
     public function optionField()
     {
-        return $this->hasMany(OptionField::class);
+        return $this->hasMany(OptionField::class)->where('option_fields.is_active', true);
     }
 
     public function systemReferences()
@@ -102,6 +116,6 @@ class FormField extends Model
 
     public function childFormFields()
     {
-        return $this->hasMany(FormField::class, 'form_field_id');
+        return $this->hasMany(FormField::class, 'form_field_id')->where('form_fields.is_active', true);
     }
 }

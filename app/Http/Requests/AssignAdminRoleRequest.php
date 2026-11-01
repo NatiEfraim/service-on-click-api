@@ -34,6 +34,8 @@ class AssignAdminRoleRequest extends FormRequest
                 Rule::in(array_column(UnitEnum::cases(), 'value')),
                 'exists:units,id',
             ],
+            // Why the roles change - kept in the audit log. Optional.
+            'reason' => 'nullable|string|max:500',
             'role_assignments' => 'required|array|min:1',
             'role_assignments.*.booking_type_id' => 'required|integer|exists:booking_types,id',
             'role_assignments.*.is_admin' => 'required|boolean',

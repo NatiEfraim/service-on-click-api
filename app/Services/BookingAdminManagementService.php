@@ -5,10 +5,13 @@ namespace App\Services;
 use App\Enums\BookingTypeEnum;
 use App\Enums\HttpStatusCodeEnum;
 use App\Enums\PaginationEnum;
+use App\Enums\PermissionEnum;
 use App\Enums\RoleEnum;
 use App\Enums\UnitEnum;
 use App\Models\BookingType;
+use App\Exceptions\DomainError;
 use App\Models\BookingTypeHasRole;
+use App\Traits\AuditsPermissionChanges;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -23,6 +26,8 @@ use App\Models\User;
 
 class BookingAdminManagementService
 {
+    use AuditsPermissionChanges;
+
     const MIN_LEN = 1;
     const MAX_LEN = 9;
 
@@ -40,9 +45,11 @@ class BookingAdminManagementService
             $roleIds = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->value)->all();
             $permissionPrefixes = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->toPermissionEnum()->value)->all();
 
+            // An admin deals with the people of their own unit (assertMayManage); the super admin with everybody.
             $users = User::whereHas('roles', function ($query) use ($roleIds) {
                 $query->whereIn('id', $roleIds);
             })
+                ->when(!$this->isSuperAdmin(), fn ($query) => $query->where('unit_id', Auth::user()->unit_id))
                 ->when($identifier, function ($query, $identifier) {
                     $query->where(function ($q) use ($identifier) {
                         $q->where('personal_number', 'like', $identifier . '%')
@@ -83,7 +90,8 @@ class BookingAdminManagementService
             $user = User::where('uuid', $userUuid)->with(['roles', 'permissions'])
                 ->where('is_deleted', false)->first();
 
-            if (!$user) {
+            // (A person of another unit is not one an admin deals with.)
+            if (!$user || (!$this->isSuperAdmin() && (int) $user->unit_id !== (int) Auth::user()->unit_id)) {
                 return HttpStatusCodeEnum::BAD_REQUEST;
             }
 
@@ -151,6 +159,9 @@ class BookingAdminManagementService
 
             $approverManagementRoles = $this->getApproverManagementRoles();
 
+            // Before the transaction: a refusal is audited, and a row written inside a transaction that the refusal rolls back would go with it.
+            $this->assertMayManage($validated);
+
             DB::beginTransaction();
 
             $user = $this->resolveApproverUser(validated: $validated);
@@ -159,6 +170,8 @@ class BookingAdminManagementService
                 DB::rollBack();
                 return HttpStatusCodeEnum::BAD_REQUEST;
             }
+
+            $permissionsBefore = $this->permissionNamesOf($user);
 
             foreach ($validated['role_assignments'] as $assignment) {
                 $bookingTypeId = $assignment['booking_type_id'];
@@ -205,15 +218,65 @@ class BookingAdminManagementService
                 $this->cleanupRolePermissions(user: $user, rolePrefix: $roleEnum->toPermissionEnum()->trimSuffix());
             }
 
+            $this->auditPermissionChange($user, $permissionsBefore, $validated['reason'] ?? null);
+
             DB::commit();
             return $this->getApprovers(identifier: $user->personal_number);
 
+        } catch (DomainError $e) {
+            // A refusal, not a failure: nothing was changed, and the answer is the rule's own.
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error($e->getMessage());
             $this->storageService->logToS3();
             return HttpStatusCodeEnum::INTERNAL_SERVER_ERROR;
         }
+    }
+
+    /**
+     * An admin grants roles only on the booking types they administer, and only to the people of their own unit; the super admin may do both
+     * anywhere. A person who does not exist yet is created in the admin's unit, so only the booking types count for them.
+     * @param array<string, mixed> $validated the request: uuid or personal_number, and role_assignments @throws DomainError 403
+     */
+    private function assertMayManage(array $validated): void
+    {
+        $admin = Auth::user();
+
+        if ($this->isSuperAdmin()) {
+            return;
+        }
+
+        $administered = $admin->getAllPermissions()
+            ->map(fn ($permission) => PermissionEnum::parsePermissionName($permission->name))
+            ->filter(fn ($parsed) => $parsed !== null && $parsed['permission'] === PermissionEnum::ADMIN)
+            ->map(fn ($parsed): int => $parsed['booking_type_id'])
+            ->all();
+
+        $target = !empty($validated['uuid'])
+            ? User::query()->where('uuid', $validated['uuid'])->first()
+            : User::query()->where('personal_number', $validated['personal_number'] ?? null)->first();
+
+        $outsideTypes = collect($validated['role_assignments'] ?? [])
+            ->contains(fn (array $assignment): bool => !in_array((int) $assignment['booking_type_id'], $administered, true));
+
+        if ($outsideTypes || ($target !== null && (int) $target->unit_id !== (int) $admin->unit_id)) {
+            app(AuditService::class)->denied('user.permissions.change', 'user', $target?->actorId() ?? ($validated['personal_number'] ?? null), 'outside_admin_scope', $admin, ['unit_id' => $target?->unit_id]);
+
+            throw new DomainError('ניתן להקצות הרשאות רק בתחומים שבניהולך ולמשתמשי היחידה שלך', 403);
+        }
+
+        // The admin only views and manages: a role they gave themselves would let them take the approver's decisions as well.
+        if ($target !== null && (int) $target->id === (int) $admin->id) {
+            app(AuditService::class)->denied('user.permissions.change', 'user', $admin->actorId(), 'self_grant', $admin, ['unit_id' => $admin->unit_id]);
+
+            throw new DomainError('לא ניתן לשנות את ההרשאות של עצמך', 403);
+        }
+    }
+
+    private function isSuperAdmin(): bool
+    {
+        return Auth::user()->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName());
     }
 
     /** Fetch the user by uuid or personal number, creating one when no uuid is sent and none exists. @param array $validated @return ?User */

@@ -20,12 +20,14 @@ class OptionField extends Model
         'option_field_id',
         'is_input',
         'gender',
+        'is_active',
     ];
 
 
     protected $casts = [
         'has_category' => 'boolean',
         'is_input' => 'boolean',
+        'is_active' => 'boolean',
         'payload_section_id' => 'integer',
     ];
 
@@ -61,9 +63,10 @@ class OptionField extends Model
         return $this->belongsTo(OptionField::class, 'option_field_id');
     }
 
+    /** The options below this one that are in the form (archived ones are not). */
     public function childOptionField()
     {
-        return $this->hasMany(OptionField::class, 'option_field_id');
+        return $this->hasMany(OptionField::class, 'option_field_id')->where('option_fields.is_active', true);
     }
     public function bookingValue()
     {

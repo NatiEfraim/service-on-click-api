@@ -31,6 +31,8 @@ return new class extends Migration
             ->nullable()
             ->constrained('option_fields')
             ->nullOnDelete();
+            // false = archived: out of the lists while the bookings that chose it keep it (deleting an option would delete their values with it).
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
 
         });

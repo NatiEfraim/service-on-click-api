@@ -115,6 +115,20 @@ return [
 
         // A file that was read moves here (both kinds of files, side by side).
         'loaded_json' => (string) env('LOADED_JSON_FOLDER_NAME', 'loaded-json'),
+
+        // The files and images of the bookings (the bytes - the booking json only names them, SrvOnClickFiles_<stored name>, without the extension).
+        // The mobile side's own backup folder is export-files: set ATTACHMENTS_FOLDER_NAME=export-files to read it directly when the bucket is shared.
+        'attachments' => (string) env('ATTACHMENTS_FOLDER_NAME', 'import-files'),
+
+        // The r2b files this system writes for the mobile side - the decisions made here, the corrected values and the changes of the
+        // configuration (BookingStatusExportService).
+        'export_json' => [
+            'base' => (string) env('EXPORT_JSON', 'export-json'),
+
+            'booking_status' => (string) env('BOOKING_STATUS_JSON_FOLDER_NAME', 'booking-status'),
+            'booking_values' => (string) env('BOOKING_VALUES_JSON_FOLDER_NAME', 'booking-values'),
+            'system_config' => (string) env('SYSTEM_CONFIG_JSON_FOLDER_NAME', 'system-config'),
+        ],
     ],
 
 ];
