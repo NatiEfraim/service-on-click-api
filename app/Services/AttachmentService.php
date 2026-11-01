@@ -13,18 +13,16 @@ use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * The files and images of the bookings. The booking json (SrvOnClick_b2r_export_bookings_*.json) only NAMES them - "SrvOnClickFiles_<stored name>",
- * without the extension - and the bytes arrive by their own way, into one folder of the bucket (filesystems.folder_name.attachments), later than the
- * json or earlier. So a booking is linked to its attachments when the json is read (register), and the object is looked up in the folder when it
- * is wanted (resolve): the first time it is found, the full key is kept on the row.
- * Served only through the API, to a person who may see the booking, and only the types below (anything else is never read, whatever it is called).
+ * Files and images of bookings. The booking json only names them ("SrvOnClickFiles_<stored name>", no extension) and the bytes arrive
+ * separately in one bucket folder, so register() links them when the json is read and resolve() finds the object when it is wanted.
+ * Served only through the API, to users who may see the booking, and only the types below.
  */
 class AttachmentService
 {
     public const KIND_FILE = 'file';
     public const KIND_IMAGE = 'image';
 
-    /** @var array<string, array{0: string, 1: bool}> extension => [type it is served as, whether a browser may show it in the page (the rest is downloaded)] */
+    /** @var array<string, array{0: string, 1: bool}> extension => [served type, whether a browser may show it inline (else downloaded)] */
     public const TYPES = [
         'jpg' => ['image/jpeg', true],
         'jpeg' => ['image/jpeg', true],
@@ -37,7 +35,7 @@ class AttachmentService
         'pptx' => ['application/vnd.openxmlformats-officedocument.presentationml.presentation', false],
     ];
 
-    /** The extensions to look for, by kind, most likely first. */
+    /** Extensions to look for by kind, most likely first. */
     private const EXTENSIONS = [
         self::KIND_IMAGE => ['jpg', 'jpeg', 'png', 'webp', 'gif'],
         self::KIND_FILE => ['pdf', 'docx', 'xlsx', 'pptx', 'jpg', 'jpeg', 'png'],
@@ -47,7 +45,7 @@ class AttachmentService
     {
     }
 
-    /** May this be the stored name of an attachment? (Letters, digits, "_", "-" and "." inside - never a path.) */
+    /** Whether this can be a stored attachment name (letters, digits, "_", "-" and "." inside; never a path). */
     public static function isValidName(mixed $name): bool
     {
         return is_string($name)
@@ -56,8 +54,7 @@ class AttachmentService
     }
 
     /**
-     * Link a booking to the files and images its json names. A name that is saved already is not saved again, and a link that exists stays - reading
-     * the same file twice changes nothing.
+     * Links a booking to the files and images its json names; names and links already saved are kept, so a re-read changes nothing.
      * @param array<int, string> $files stored names (without extension) @param array<int, string> $images
      * @return int the links added
      */
@@ -84,8 +81,8 @@ class AttachmentService
     }
 
     /**
-     * The key of the object in the bucket, when its bytes are there. The row is kept with the key found (with its extension), so later calls
-     * look at that one key. Null while the bytes have not arrived (or the bucket cannot be read - the caller shows it as "not available yet").
+     * The bucket key of the object when its bytes are there (kept on the row, with extension, for later calls);
+     * null while they have not arrived or the bucket cannot be read.
      */
     public function resolve(File|Image $attachment): ?string
     {
@@ -122,7 +119,7 @@ class AttachmentService
     }
 
     /**
-     * The attachments of a booking as a screen shows them. A booking whose relations are loaded costs no query for the list itself.
+     * The attachments of a booking as a screen shows them; loaded relations cost no extra query.
      * @return array<int, array{kind: string, id: int, name: string, mime: ?string, inline: bool, available: bool, url: ?string}>
      */
     public function describe(Booking $booking): array
@@ -152,7 +149,7 @@ class AttachmentService
 
     /**
      * The stream of one attachment of a booking the user may see.
-     * @throws DomainError 404 when the booking, the attachment or its bytes are not there - or the user may not see the booking (one answer for all)
+     * @throws DomainError 404 for every miss, including a booking the user may not see (one answer for all)
      */
     public function open(AccessScope $scope, int $serial, string $kind, int $id): StreamedResponse
     {
@@ -188,14 +185,12 @@ class AttachmentService
             }
         }, 200, [
             'Content-Type' => $type[0],
-            // The name only goes in the header after it was checked above (letters, digits, "_", "-" and "."), so it cannot break out of it.
+            // The name was validated above, so it cannot break out of the header.
             'Content-Disposition' => ($type[1] ? 'inline' : 'attachment') . '; filename="' . $fileName . '"',
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, max-age=300',
         ]);
     }
-
-    //----------------------------- Private Methods ------------------------//
 
     /** @return class-string<File>|class-string<Image> */
     private function model(string $kind): string
@@ -205,7 +200,7 @@ class AttachmentService
 
     private function create(string $kind, string $name): File|Image
     {
-        // The key without the extension: the bytes may not be there yet, and the extension is not in the json.
+        // Key without extension: the bytes may not be there yet and the json carries no extension.
         $path = $this->storage->buildBucketKey((string) config('filesystems.folder_name.attachments'), $name);
 
         return $kind === self::KIND_FILE
@@ -213,7 +208,7 @@ class AttachmentService
             : Image::query()->create(['name' => $name, 'path' => $path, 'file_name' => $name]);
     }
 
-    /** The extension of a key when it is one of the types served; otherwise null. */
+    /** The extension of a key when it is a served type, else null. */
     private function extensionOf(string $key): ?string
     {
         $extension = strtolower(pathinfo($key, PATHINFO_EXTENSION));

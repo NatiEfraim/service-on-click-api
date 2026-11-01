@@ -21,7 +21,6 @@ class FormFieldResource extends JsonResource
         $this->gender = $this->additional['gender'] ?? null;
         return [];
     }
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         return $this->removeNullValues([
@@ -41,14 +40,12 @@ class FormFieldResource extends JsonResource
 
     }
 
-    /** Remove only null values from array. @param array $data @return array */
     private function removeNullValues(array $data): array
     {
         return array_filter($data, fn($value) => !is_null($value));
     }
 
 
-    /** Get child form fields recursively. */
     private function getFormFieldRecursive(?FormField $formField=null): ?array
     {
         if (!$formField->relationLoaded('childFormFields') || $formField->childFormFields->isEmpty()) {
@@ -81,7 +78,7 @@ class FormFieldResource extends JsonResource
 
 
 
-    /** Resolve the field type name, with special handling for workspace time fields. */
+    /** Field type name, with special handling for workspace time fields. */
     private function retrieveFieldTypeObject(): ?array
     {
 
@@ -112,7 +109,7 @@ class FormFieldResource extends JsonResource
 
 
 
-    /** Resolve the sub display_name for a form_field record, defaulting to the resource's own root field. */
+    /** Defaults to the resource's own root field. */
     private function retrieveFormFieldSubDisplayName(?FormField $formField = null): ?string
     {
         $formField ??= $this->resource;
@@ -136,7 +133,6 @@ class FormFieldResource extends JsonResource
         };
     }
 
-    /** Resolve IN_UNIT_FOOD_BOOKING restrictions for child form fields. */
     private function resolveInUnitFoodBookingRestrictionsByFormField(
         FormField $formField,
         SystemReferenceEnum $enum,
@@ -156,13 +152,12 @@ class FormFieldResource extends JsonResource
 
 
 
-    /** Public entry to the restriction resolving, reused e.g. by BookingValueFormatterService; needs systemReferences loaded. @return ?array */
+    /** Public for reuse, e.g. by BookingValueFormatterService; needs systemReferences loaded. @return ?array */
     public function resolveFieldRestrictions(): ?array
     {
         return $this->retrieveFieldRestrictionsByFormField($this->resource);
     }
 
-    /** Retrieve field restrictions for any FormField model - used mainly for child form fields. */
     private function retrieveFieldRestrictionsByFormField(FormField $formField): ?array
     {
         if (!$formField->relationLoaded('systemReferences') || $formField->systemReferences->isEmpty()) {
@@ -178,7 +173,6 @@ class FormFieldResource extends JsonResource
                 }
                 $value = $systemReference->decodedValue();
                 return match ($enum) {
-                        // BARBER_BOOKING
                     SystemReferenceEnum::BARBER_SERVICE_HOURS,
                     SystemReferenceEnum::BARBER_BREAK_HOURS,
                     SystemReferenceEnum::BARBER_HAIRCUT_TIME,
@@ -189,7 +183,6 @@ class FormFieldResource extends JsonResource
                         enum: $enum,
                         value: $value
                     ),
-                        // CAR-BOOKING
                     SystemReferenceEnum::CAR_SERVICE_HOURS,
                     SystemReferenceEnum::CAR_RESTRICTIONS
                     => $this->resolveCarBookingRestrictionsByFormField(
@@ -198,19 +191,16 @@ class FormFieldResource extends JsonResource
                         value: $value
                     ),
 
-                        // FOOD-BOOKING
                     SystemReferenceEnum::FOOD_SERVICE_HOURS,
                      SystemReferenceEnum::FOOD_RESTRICTIONS =>
                       $this->resolveFoodBookingRestrictions($enum,$value),
 
-                        // IN-UNIT-FOOD-BOOKING
                     SystemReferenceEnum::IN_UNIT_FOOD_SERVICE_HOURS,
                     SystemReferenceEnum::IN_UNIT_FOOD_RESTRICTIONS,
                     SystemReferenceEnum::IN_UNIT_FOOD_COUNT_BUSINESS_DAYS,
                     SystemReferenceEnum::IN_UNIT_FOOD_MAX_ADVANCE_DAYS,
 
                     => $this->resolveInUnitFoodBookingRestrictions($enum, $value),
-                        // IN-UNIT-FOOD-BOOKING
                     SystemReferenceEnum::IN_UNIT_FOOD_PEOPLE_AMOUNT
                     => $this->resolveInUnitFoodBookingRestrictionsByFormField(
                         formField: $formField,
@@ -218,13 +208,11 @@ class FormFieldResource extends JsonResource
                         value: $value
                     ),
 
-                        // OUT_UNIT_FOOD_BOOKING
                     SystemReferenceEnum::OUT_UNIT_FOOD_SERVICE_HOURS,
                     SystemReferenceEnum::OUT_UNIT_FOOD_RESTRICTIONS,
                     SystemReferenceEnum::OUT_UNIT_FOOD_COUNT_BUSINESS_DAYS,
                     SystemReferenceEnum::OUT_UNIT_FOOD_MAX_ADVANCE_DAYS
                     => $this->resolveOutUnitFoodBookingRestrictions($enum, $value),
-                        // OUT_UNIT_FOOD_BOOKING
                     SystemReferenceEnum::OUT_UNIT_FOOD_MINIMUM_ORDER_AMOUNT
                     => $this->resolveOutUnitFoodBookingRestrictionsByFormField(
                         formField: $formField,
@@ -232,7 +220,6 @@ class FormFieldResource extends JsonResource
                         value: $value
                     ),
 
-                        // EQUIPMENT BOOKING MALE / FEMALE
                     SystemReferenceEnum::EQUIPMENT_MALE_QTY_LIMIT_CLOTHING,
                     SystemReferenceEnum::EQUIPMENT_MALE_QTY_LIMIT_FOOTWEAR,
                     SystemReferenceEnum::EQUIPMENT_MALE_QTY_LIMIT_RELATED_PRODUCTS,
@@ -242,7 +229,6 @@ class FormFieldResource extends JsonResource
                     SystemReferenceEnum::EQUIPMENT_FEMALE_QTY_LIMIT_RELATED_PRODUCTS
                     => $this->resolveEquipmentBookingRestrictions($enum, $value),
 
-                        // TRANSPORTATION_BOOKING
                     SystemReferenceEnum::TRANSPORTATION_SERVICE_HOURS,
                     SystemReferenceEnum::TRANSPORTATION_MINIMUM_ADVANCE_DAYS,
                     SystemReferenceEnum::TRANSPORTATION_RESTRICTION_DATES
@@ -252,15 +238,12 @@ class FormFieldResource extends JsonResource
                         value: $value
                     ),
 
-                        // CAR_MAINTENANCE_BOOKING
                     SystemReferenceEnum::CAR_MAINTENANCE_RESTRICTION_DATES
                     => $this->resolveCarMaintenanceBookingRestrictionsByFormField(
                         formField: $formField,
                         enum: $enum,
                         value: $value
                     ),
-
-                      //WORK-SPACE-BOOKING
 
                     SystemReferenceEnum::LECTURE_ROOM_SERVICE_HOURS,
                     SystemReferenceEnum::LECTURE_ROOM_RESTRICTIONS,
@@ -292,7 +275,6 @@ class FormFieldResource extends JsonResource
 
     }
 
-    /** Resolve BARBER_BOOKING field restrictions by actual form field. */
     private function resolveBarberBookingRestrictionsByFormField(
         FormField $formField,
         SystemReferenceEnum $enum,
@@ -333,7 +315,6 @@ class FormFieldResource extends JsonResource
     }
 
 
-    /** Resolve dynamic blocked dates for booking type. @param int $bookingTypeId @return array */
     private function resolveBlockedDatesByBookingType(int $bookingTypeId): array
     {
         return SystemReferenceEnum::getBookingRestrictionDates($bookingTypeId) ?? [];
@@ -386,7 +367,6 @@ class FormFieldResource extends JsonResource
         };
     }
 
-    /** Resolve TRANSPORTATION_BOOKING restrictions. */
     private function resolveTransportationBookingRestrictionsByFormField(
         FormField $formField,
         SystemReferenceEnum $enum,
@@ -416,7 +396,6 @@ class FormFieldResource extends JsonResource
         };
     }
 
-    /** Resolve CAR_MAINTENANCE_BOOKING restrictions. */
     private function resolveCarMaintenanceBookingRestrictionsByFormField(
         FormField $formField,
         SystemReferenceEnum $enum,
@@ -436,7 +415,6 @@ class FormFieldResource extends JsonResource
         };
     }
 
-    /** Resolve food booking restrictions: service hours for time fields, not-permitted hours for date fields. */
     private function resolveFoodBookingRestrictions(SystemReferenceEnum $enum, array $value): ?array
     {
         return match ($enum) {
@@ -455,7 +433,6 @@ class FormFieldResource extends JsonResource
     }
 
 
-    /** Resolve IN_UNIT_FOOD_BOOKING restrictions: service hours, booking limit, and multiple_of rule. */
     private function resolveInUnitFoodBookingRestrictions(SystemReferenceEnum $enum, array $value): ?array
     {
         return match ($enum) {
@@ -571,7 +548,6 @@ class FormFieldResource extends JsonResource
     }
 
 
-    /** Retrieve and format option fields for a given FormField model - used mainly for child form fields. */
     private function getOptionFieldsByFormField(FormField $formField): mixed
     {
         if (!$formField->relationLoaded('optionField') || $formField->optionField->isEmpty()) {
@@ -596,7 +572,6 @@ class FormFieldResource extends JsonResource
 
 
 
-    /** Recursively build the tree of option fields with 'category_fields' key. */
     private function buildOptionFieldTreeByFormField($option, FormField $formField, array $allowedGenders = []): ?array
     {
 

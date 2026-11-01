@@ -17,8 +17,6 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ManagementBookingController extends Controller
 {
-    // API group: Bookings Approver Management (the bookings a manager handles) - thin: every rule is in the services and in AccessScope.
-
     public function __construct(
         private readonly BookingQueryService $bookingQueryService,
         private readonly BookingWorkflowService $bookingWorkflowService,
@@ -28,13 +26,13 @@ class ManagementBookingController extends Controller
     ) {
     }
 
-    /** GET /api/bookings-approver-management/bookings - the bookings the user may see, with stage, age, target and the actions open to them. @param Request $request @return JsonResponse */
+    /** The bookings the user may see, with stage, age, target and the actions open to them. */
     public function index(Request $request): JsonResponse
     {
         return response()->json($this->bookingQueryService->list($this->accessScope(), $request->query()), Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-approver-management/bookings/{serial} - one booking in full: values, comments, timeline, editable fields, sync state. @param int $serial @return JsonResponse */
+    /** One booking in full: values, comments, timeline, editable fields, sync state. */
     public function show(int $serial): JsonResponse
     {
         $booking = $this->bookingQueryService->show($this->accessScope(), $serial);
@@ -46,13 +44,13 @@ class ManagementBookingController extends Controller
         return response()->json(['data' => $booking], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-approver-management/bookings/{serial}/attachments/{kind}/{id} - the bytes of one file or image of the booking (kind: file | image); images and PDFs open in the page, the rest download. @param int $serial, string $kind, int $id @return StreamedResponse */
+    /** One file or image of the booking (kind: file | image); images and PDFs open inline, the rest download. */
     public function attachment(int $serial, string $kind, int $id): StreamedResponse
     {
         return $this->attachmentService->open($this->accessScope(), $serial, $kind, $id);
     }
 
-    /** POST /api/bookings-approver-management/bookings/{serial}/status - move the booking to status_id (send the version you saw; Idempotency-Key header optional). @param int $serial, ChangeBookingStatusRequest $request @return JsonResponse */
+    /** Move the booking to status_id (send the version you saw; Idempotency-Key header optional). */
     public function changeStatus(int $serial, ChangeBookingStatusRequest $request): JsonResponse
     {
         $result = $this->bookingWorkflowService->changeStatus(
@@ -67,7 +65,7 @@ class ManagementBookingController extends Controller
         return response()->json(['data' => $result, 'message' => $result['message']], Response::HTTP_OK);
     }
 
-    /** PUT /api/bookings-approver-management/bookings/{serial}/values - correct editable date/time values (form_field_id => value). @param int $serial, UpdateBookingValuesRequest $request @return JsonResponse */
+    /** Correct editable date/time values (form_field_id => value). */
     public function updateValues(int $serial, UpdateBookingValuesRequest $request): JsonResponse
     {
         $result = $this->bookingValueService->update(
@@ -81,7 +79,7 @@ class ManagementBookingController extends Controller
         return response()->json(['data' => $result, 'message' => $result['message']], Response::HTTP_OK);
     }
 
-    /** POST|PUT /api/bookings-approver-management/bookings - this system never opens bookings: refused and audited (they are opened in the mobile app). @param Request $request @return JsonResponse */
+    /** This system never opens bookings: refused and audited (they are opened in the mobile app). */
     public function createBlocked(Request $request): JsonResponse
     {
         $this->auditService->denied('booking.create', 'booking', null, 'web_system_cannot_create_bookings', $request->user());

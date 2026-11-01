@@ -6,10 +6,9 @@ use App\Enums\StatusBookingEnum;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** A single dashboard status row; the caller attaches a `count` attribute to the Status model before wrapping. */
+/** A dashboard status row; the caller sets a count attribute on the Status first. */
 class DashboardStatusResource extends JsonResource
 {
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         return [

@@ -9,8 +9,8 @@ use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
 /**
- * What the admin (camp commander) and the super admin do with the people of a unit besides granting roles (that is the assign-*-role endpoints):
- * put a person in a department. An admin works on the people of their own unit only.
+ * Puts a person in a department; an admin (camp commander) works on their own unit's people only, the super admin on any.
+ * Granting roles is done by the assign-*-role endpoints.
  */
 class UserAdminService
 {
@@ -19,9 +19,8 @@ class UserAdminService
     }
 
     /**
-     * Move a person to a department of their unit, or out of any department with $departmentId = null.
+     * Moves a person to a department of their unit, or out of any department with $departmentId = null.
      * @return array{uuid: string, department_id: ?int, department_name: ?string}
-     * @throws DomainError 403 not the admin's unit, 404 no such person, 422 the department is not an active one of the person's unit
      */
     public function setDepartment(AccessScope $scope, string $userUuid, ?int $departmentId): array
     {

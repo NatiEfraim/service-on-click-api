@@ -9,7 +9,6 @@ class FieldTypeSeeder extends Seeder
 {
     public function run(): void
     {
-        //
         $fieldTypes = [
             ['name' => 'number', 'display_name' => 'מספר'],
             ['name' => 'text', 'display_name' => 'טקסט סגור'],

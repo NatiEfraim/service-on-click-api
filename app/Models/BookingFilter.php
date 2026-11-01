@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class BookingFilter extends Model
 {
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'unit_id',
         'booking_type_id',
@@ -15,7 +14,6 @@ class BookingFilter extends Model
     ];
 
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'created_at',
         'updated_at',

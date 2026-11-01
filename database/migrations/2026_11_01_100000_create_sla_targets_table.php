@@ -8,16 +8,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // One handling target per booking type: the total time from the booking's opening to its closing. A booking is overdue once it is older.
+        // One total handling target per booking type; a booking is overdue once older.
         Schema::create('sla_targets', function (Blueprint $table) {
             $table->id();
             $table->foreignId('booking_type_id')->constrained('booking_types')->onDelete('cascade');
-            // 'total' is the only stage in use; the column leaves room for per-stage targets.
+            // Only 'total' is used; leaves room for per-stage targets.
             $table->string('stage', 30)->default('total');
             $table->decimal('target_hours', 8, 2);
-            // The share of the target after which a booking counts as "near the target" (0.80 = 80%).
+            // Share of the target after which a booking is "near" it (0.80 = 80%).
             $table->decimal('warn_ratio', 3, 2)->default(0.80);
-            // Who set it: the personal number of the admin or super admin.
+            // Personal number of the admin who set it.
             $table->string('set_by')->nullable();
             $table->timestamps();
 

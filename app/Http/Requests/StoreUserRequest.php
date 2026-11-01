@@ -34,7 +34,7 @@ class StoreUserRequest extends FormRequest
             'full_name' => ['required', 'max:30', "regex:/^[א-ת'\-\s]+$/u"],
             'phone' => ['nullable', 'regex:/^05\d{8}$/'],
             'unit_id' => ['required', 'integer', 'exists:units,id'],
-            // Optional: an active department of the unit the person is created in.
+            // Optional: an active department of the person's unit.
             'department_id' => [
                 'nullable',
                 'integer',

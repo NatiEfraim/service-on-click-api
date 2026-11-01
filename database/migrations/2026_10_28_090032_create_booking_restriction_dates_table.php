@@ -13,7 +13,6 @@ return new class extends Migration
             $table->date('date');
             $table->foreignId('booking_type_id')->constrained('booking_types')->onDelete('cascade');
             $table->timestamps();
-            // Prevent duplicate taken dates for the same booking type.
             $table->unique(['booking_type_id', 'date']);
         });
     }

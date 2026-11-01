@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/** PUT /api/bookings-admin-management/users/{uuid}/department - department_id, or null to take the person out of any department. */
+/** department_id, or null to take the person out of any department. */
 class SetUserDepartmentRequest extends FormRequest
 {
     public function authorize(): bool

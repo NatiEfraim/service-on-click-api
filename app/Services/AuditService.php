@@ -8,16 +8,14 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The only writer of the audit log. A row is appended inside the caller's transaction, so a change and its audit row stand or fall together;
- * the head row is locked while it is written, so the hash chain stays one line however many requests come at once.
- *
- * A refusal is recorded with denied(), which must be called OUTSIDE the transaction the refusal will roll back - otherwise the row goes with it.
+ * The only writer of the audit log: rows are appended in the caller's transaction and the head row is locked, keeping the hash chain single.
+ * Call denied() OUTSIDE the transaction the refusal rolls back, or the row goes with it.
  */
 class AuditService
 {
     /**
-     * Append a row. $event needs action and entity_type; everything else is optional: entity_id, booking_serial, unit_id, booking_type_id,
-     * before, after, reason, result (success | denied | failed), correlation_id, source, actor_type, actor_id, actor_name.
+     * Appends a row. Requires action and entity_type; optional: entity_id, booking_serial, unit_id, booking_type_id, before, after, reason,
+     * result (success | denied | failed), correlation_id, source, actor_type, actor_id, actor_name.
      * @param array<string, mixed> $event
      */
     public function record(array $event, ?User $actor = null): AuditLog
@@ -62,7 +60,7 @@ class AuditService
         });
     }
 
-    /** A refused or failed attempt at something sensitive. Never throws: a failure to write the row must not hide the refusal it describes. @param array<string, mixed> $context */
+    /** Records a refused or failed attempt; never throws, so a failed write cannot hide the refusal. @param array<string, mixed> $context */
     public function denied(string $action, string $entityType, mixed $entityId, string $reason, ?User $actor, array $context = []): void
     {
         try {
@@ -75,22 +73,20 @@ class AuditService
                 ...$context,
             ], $actor);
         } catch (\Throwable) {
-            // Nothing to do: the caller is already refusing the request.
+            // The caller is already refusing the request.
         }
     }
 
     /**
-     * One page of the log, newest first. Filters (all optional): serial (booking), actor (the actor's personal number), action (a prefix such as
-     * "booking." or "config.sla_target"), source, type (booking type id), result, from / to (Y-m-d), page. The automatic transfer events of the
-     * sync ("sync.outbound.*" written by the schedule) are in the log but not shown here.
+     * One page of the log, newest first. Filters (all optional): serial, actor (personal number), action (prefix such as "booking."),
+     * source, type (booking type id), result, from / to (Y-m-d), page. Automatic "sync.outbound.*" events are not shown.
      * @param array<string, mixed> $filters
      * @return array{data: array<int, array<string, mixed>>, meta: array{total: int, page: int, last_page: int, per_page: int}}
      */
     public function search(array $filters, int $perPage = 40): array
     {
         $page = AuditLog::query()
-            // The machine's transfer events (files sent, failed, retried by the schedule) are not listed; what a person did, and the
-            // conflicts - found, settled by a person or by the import itself - are.
+            // Scheduled transfer events are hidden; human actions and conflicts are listed.
             ->where(fn ($query) => $query->where('action', 'not like', 'sync.%')->orWhere('action', 'like', 'sync.conflict.%')->orWhere('actor_type', 'user'))
             ->when($filters['serial'] ?? null, fn ($query, $value) => $query->where('booking_serial', (int) $value))
             ->when($filters['actor'] ?? null, fn ($query, $value) => $query->where('actor_id', $value))
@@ -110,7 +106,7 @@ class AuditService
     }
 
     /**
-     * Walk the whole log and check the chain, then check that it ends where the head row says it does (rows removed from the end).
+     * Walks the log, checks the chain, then that it ends where the head row says (rows removed from the end).
      * @return array{valid: bool, checked: int, broken_at: ?int}
      */
     public function verify(): array
@@ -131,7 +127,7 @@ class AuditService
         return $result;
     }
 
-    /** The whole log, oldest first, a couple of thousand rows at a time (a buffered cursor would hold the entire table in memory). @return \Generator<int, array<string, mixed>> */
+    /** Yields the log oldest first in chunks of a couple of thousand rows (a buffered cursor would hold the whole table). @return \Generator<int, array<string, mixed>> */
     private function rowsInOrder(): \Generator
     {
         $lastId = 0;

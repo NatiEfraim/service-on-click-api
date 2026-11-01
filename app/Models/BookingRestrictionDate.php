@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class BookingRestrictionDate extends Model
 {
-    //
     protected $fillable = [
         'booking_type_id',
         'date',

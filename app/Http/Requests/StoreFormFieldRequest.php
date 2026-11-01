@@ -4,10 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/**
- * POST /api/bookings-super-admin-management/form-fields/{unitId}/{bookingTypeId} - a new field at the end of the form. The name, the type and (for a
- * choice) the options are checked again by FormFieldRules, which says what is wrong in words.
- */
+/** A new field at the end of the form; FormFieldRules re-checks name, type and options. */
 class StoreFormFieldRequest extends FormRequest
 {
     public function authorize(): bool

@@ -22,7 +22,7 @@ return new class extends Migration
             $table->integer('gender')->default(GenderEnum::NONE->value);
             $table->boolean('is_input')->default(false);
 
-            // Store-payload section for this option (PayloadSectionEnum: 0 none, 1 inputs, 2 selects, 3 items).
+            // PayloadSectionEnum: 0 none, 1 inputs, 2 selects, 3 items.
             $table->integer('payload_section_id')
                 ->default(PayloadSectionEnum::NONE->value);
 
@@ -30,7 +30,7 @@ return new class extends Migration
             ->nullable()
             ->constrained('option_fields')
             ->nullOnDelete();
-            // false = archived: out of the lists while the bookings that chose it keep it (deleting an option would delete their values with it).
+            // false = archived; bookings that chose it keep their values.
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 

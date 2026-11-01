@@ -19,8 +19,6 @@ class UserController extends Controller
     use ImportsApplicationLogJson;
     use ImportsBookingJson;
 
-    // API group: User - the auth user and user management.
-
     public function __construct(
         private readonly UserService $userService,
         private readonly ImportBookingService $importBookingService,
@@ -28,7 +26,7 @@ class UserController extends Controller
     ) {
     }
 
-    /** GET /api/user - fetch the authenticated user's details. @return JsonResponse */
+    /** Fetch the authenticated user's details. */
     public function user(): JsonResponse
     {
         $result = $this->userService->user();
@@ -44,7 +42,7 @@ class UserController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/users/{identifier?} - paginated users, optionally filtered by personal number or name. @param ?string $identifier @return JsonResponse */
+    /** Paginated users, optionally filtered by personal number or name. */
     public function index(?string $identifier = null): JsonResponse
     {
         $result = $this->userService->index(
@@ -62,7 +60,7 @@ class UserController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** POST /api/users - create a user from personal_number, full_name, phone and unit_id. @param StoreUserRequest $request @return JsonResponse */
+    /** Create a user from personal_number, full_name, phone and unit_id. */
     public function store(StoreUserRequest $request): JsonResponse
     {
         $result = $this->userService->store($request->only([
@@ -84,11 +82,8 @@ class UserController extends Controller
     }
 
     /**
-     * GET /api/test-import - read the json files waiting in the bucket right now and return the imported data.
-     * It does the work of the scheduled commands (importBookingJson:mysql, then importApplicationLogJson:mysql): the same traits, services and chunk jobs,
-     * except that the chunk jobs run in this request instead of waiting for the queue worker, so the data can be looked at at once.
-     * ?page, ?per_page (up to 50), ?booking_type_id and ?serial_number (a serial number or its start) choose which imported bookings are shown.
-     * @param TestImportRequest $request @return JsonResponse
+     * Runs the scheduled import commands' work (bookings, then logs) inside this request, chunk jobs included, and returns the imported data.
+     * ?page, ?per_page (max 50), ?booking_type_id and ?serial_number (or its start) choose which bookings are shown.
      */
     public function testImport(TestImportRequest $request): JsonResponse
     {
@@ -110,7 +105,7 @@ class UserController extends Controller
 
             $body = ['message' => HttpStatusCodeEnum::INTERNAL_SERVER_ERROR->getMessage()];
 
-            // The reason (e.g. a bucket that does not exist) is for the developer's machine only: never with APP_DEBUG=false.
+            // The reason (e.g. a missing bucket) is for developers only: never with APP_DEBUG=false.
             if (config('app.debug')) {
                 $body['error'] = $e->getMessage();
             }

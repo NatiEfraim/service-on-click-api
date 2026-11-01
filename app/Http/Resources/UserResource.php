@@ -7,7 +7,6 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class UserResource extends JsonResource
 {
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         return [
@@ -17,7 +16,7 @@ class UserResource extends JsonResource
             'personal_id' => $this->personal_id,
             'phone' => $this->phone,
             'unit_id' => $this->unit_id,
-            // Only when the unit / department were loaded with the user - the resource asks the database for nothing.
+            // Only when unit / department were loaded: the resource queries nothing itself.
             'unit_name' => $this->relationLoaded('unit') ? $this->unit?->displayName() : null,
             'department_id' => $this->department_id,
             'department_name' => $this->relationLoaded('department') ? $this->department?->name : null,
@@ -27,7 +26,7 @@ class UserResource extends JsonResource
     }
 
 
-    /** Format user roles. @return \Illuminate\Support\Collection */
+    /** @return \Illuminate\Support\Collection */
     private function formatRoles()
     {
         return $this->roles
@@ -35,7 +34,6 @@ class UserResource extends JsonResource
             ->values();
     }
 
-    /** Format single role. @param mixed $role @return array */
     private function formatRole($role): array
     {
         return [
@@ -45,7 +43,7 @@ class UserResource extends JsonResource
         ];
     }
 
-    /** Format user permissions. @return \Illuminate\Support\Collection */
+    /** @return \Illuminate\Support\Collection */
     private function formatPermissions()
     {
         return $this->getAllPermissions()
@@ -53,7 +51,6 @@ class UserResource extends JsonResource
             ->values();
     }
 
-    /** Format single permission. @param mixed $permission @return array */
     private function formatPermission($permission): array
     {
         return [

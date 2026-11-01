@@ -22,10 +22,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Correction of the editable date and time values while a booking is handled. Who may, and when, is the Workflow's rule (the turn of the
- * role); which fields is decided by form_fields.editable. A corrected value is saved here and queued as an r2b file for the mobile app
- * (BookingStatusExportService sends it). A barber booking's date and time are also its schedule slot, so the slot moves with them - and
- * only to a time the barber is free.
+ * Correction of editable date/time values while a booking is handled (who and when: Workflow; which fields: form_fields.editable).
+ * A corrected value is saved here and queued as an r2b file for the mobile app; a barber booking's slot moves with it, only to a free time.
  */
 class BookingValueService
 {
@@ -36,9 +34,8 @@ class BookingValueService
     }
 
     /**
-     * @param array<int|string, mixed> $changes form field id => the new value ("Y-m-d" for a date, "H:i" for a time)
+     * @param array<int|string, mixed> $changes form field id => new value ("Y-m-d" for a date, "H:i" for a time)
      * @return array{version: int, changed: array<int, string>, message: string}
-     * @throws DomainError 404 not visible, 403 not allowed now, 409 changed meanwhile or in conflict, 422 invalid
      */
     public function update(AccessScope $scope, int $serial, array $changes, int $expectedVersion, ?string $reason): array
     {
@@ -135,7 +132,7 @@ class BookingValueService
         });
     }
 
-    /** The user's to manage, the version they saw is the current one (else "changed", 409 - before "not your turn"), visible at its stage, and the user's turn. @throws DomainError */
+    /** Checks ownership, version (a stale one answers "changed", 409, before "not your turn"), visibility at its stage and the user's turn. */
     private function assertMayEdit(AccessScope $scope, ?Booking $booking, int $serial, int $expectedVersion, bool $audit): void
     {
         if ($booking === null || !$scope->managesBooking($booking->unit_id, (int) $booking->booking_type_id)) {
@@ -162,8 +159,8 @@ class BookingValueService
     }
 
     /**
-     * The barber slot follows the corrected date and time. The new slot must be on a service day, inside the service hours, clear of the break
-     * and of every other booking. @param array<int, array{field: FormField, row: BookingValue, before: mixed, after: string}> $edits @throws DomainError
+     * Moves the barber slot to the corrected date and time: a service day, inside service hours, clear of the break and other bookings.
+     * @param array<int, array{field: FormField, row: BookingValue, before: mixed, after: string}> $edits
      */
     private function moveBarberSlot(Booking $booking, array $edits): void
     {
@@ -192,7 +189,7 @@ class BookingValueService
             throw new DomainError('התאריך שנבחר אינו יום פעילות של המספרה', 422);
         }
 
-        // Minutes since midnight, not "H:i" text: a slot that runs past midnight must not look earlier than the closing time.
+        // Minutes since midnight, not "H:i" text: a slot past midnight must not look earlier than closing.
         $minutes = fn (string $time): int => ((int) substr($time, 0, 2)) * 60 + (int) substr($time, 3, 2);
         $service = $this->barberServiceHours();
         $break = $this->barberBreakHours();
@@ -210,8 +207,8 @@ class BookingValueService
         // Inside the service hours, so it is still the same day.
         $end = sprintf('%02d:%02d', intdiv($endAt, 60), $endAt % 60);
 
-        // Another booking holds the time only while it holds its slot: a closed one (rejected, canceled, done) does not. The day's slots are
-        // locked while the check runs, so two corrections cannot both take the same free time.
+        // Closed bookings (rejected, canceled, done) do not hold their slot; the day's slots are
+        // locked during the check so two corrections cannot take the same free time.
         $slotFreeingStatuses = array_values(array_unique([...StatusBookingEnum::terminalIds(), ...array_map(
             fn (StatusBookingEnum $status): int => $status->value,
             array_filter(StatusBookingEnum::cases(), fn (StatusBookingEnum $status): bool => $status->freesBarberSlot())
@@ -235,7 +232,7 @@ class BookingValueService
         $slot->update(['date' => $date, 'start_time' => $start . ':00', 'end_time' => $end . ':00']);
     }
 
-    /** Queue the corrections as an r2b file; BookingStatusExportService writes it to the bucket. @param array<int, array{field: FormField, row: BookingValue, before: mixed, after: string}> $edits */
+    /** Queues the corrections as an r2b file for BookingStatusExportService. @param array<int, array{field: FormField, row: BookingValue, before: mixed, after: string}> $edits */
     private function queueForMobileApp(Booking $booking, array $edits, ?string $personalId, string $correlationId): void
     {
         $changedAt = now();

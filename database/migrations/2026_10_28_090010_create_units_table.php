@@ -10,16 +10,15 @@ return new class extends Migration
     {
         Schema::create('units', function (Blueprint $table) {
             $table->id();
-            // The unit's letter (H, N, M, R): the mobile app knows it, and UnitEnum finds the unit by it, so it never changes.
+            // Letter (H, N, M, R) the mobile app uses; UnitEnum resolves units by it.
             $table->string('name');
-            // What this system shows people instead of the letter; it never leaves the system. Empty means "show the letter".
+            // Display name used in this system only; empty means "show the letter".
             $table->string('internal_name', 40)->nullable();
             $table->boolean('is_deleted')->default(0);
             $table->timestamps();
         });
 
-        // Internal only: the mobile app has no departments, so nothing about them is ever exported.
-        // (Made here because users.department_id points at it, and the users table is created right after this one.)
+        // Internal only: never exported to the mobile app.
         Schema::create('departments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('unit_id')->constrained('units')->onDelete('cascade');

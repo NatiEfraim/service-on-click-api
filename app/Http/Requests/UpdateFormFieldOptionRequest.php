@@ -21,13 +21,11 @@ class UpdateFormFieldOptionRequest extends FormRequest
     {
 
     }
-    /** Determine if the user is authorized to make this request. @return bool */
     public function authorize(): bool
     {
         return true;
     }
 
-    /** Get the validation rules that apply to the request. @return array */
     public function rules(): array
     {
 
@@ -73,7 +71,6 @@ class UpdateFormFieldOptionRequest extends FormRequest
         }
     }
 
-    /** Get the validation messages that apply to the request. @return array */
     public function messages(): array
     {
         return [
@@ -93,7 +90,7 @@ class UpdateFormFieldOptionRequest extends FormRequest
         ];
     }
 
-    /** Validate select options recursively. @param int $formFieldId, array $data, array $multySelectedOptions @return bool */
+    /** Validates select options recursively. */
     private function validateSelectOptionsRecursive(int $formFieldId, array $data, array $multySelectedOptions = []): bool
     {
        

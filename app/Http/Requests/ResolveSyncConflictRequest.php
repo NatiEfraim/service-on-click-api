@@ -6,7 +6,7 @@ use App\Models\SyncConflict;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-/** POST /api/bookings-super-admin-management/sync/conflicts/{id}/resolve - which status stands, and why. */
+/** Which status stands, and why. */
 class ResolveSyncConflictRequest extends FormRequest
 {
     public function authorize(): bool
@@ -18,7 +18,7 @@ class ResolveSyncConflictRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // accept_external: the status the mobile app has stands. keep_internal: the decision made here stands and is sent again.
+            // accept_external: the mobile app's status stands. keep_internal: our decision stands and is sent again.
             'resolution' => ['required', Rule::in([SyncConflict::ACCEPT_EXTERNAL, SyncConflict::KEEP_INTERNAL])],
             'reason' => ['required', 'string', 'max:500'],
         ];

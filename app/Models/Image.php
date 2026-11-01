@@ -35,7 +35,7 @@ class Image extends Model
         'id'
     ];
 
-    /** Flag these images as downloaded (sent to Hatch and backed up to export-files). updated_at is not touched. */
+    /** Flags images as downloaded (sent to Hatch, backed up to export-files) without touching updated_at. */
     public static function markAsDownloaded(array $imageIds): void
     {
         foreach (array_chunk($imageIds, 1000) as $chunk) {

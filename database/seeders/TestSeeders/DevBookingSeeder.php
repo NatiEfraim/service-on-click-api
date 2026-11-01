@@ -17,10 +17,7 @@ use App\Models\User;
 use App\Models\ViceApproverHasBooking;
 use Illuminate\Database\Seeder;
 
-/**
- * Synthetic bookings for local development: the bookings are placed in the mobile app, so the web system
- * has none of its own. For each booking type there is one booking in each status the type can reach.
- */
+/** Synthetic bookings for local development: one per booking type and reachable status. */
 class DevBookingSeeder extends Seeder
 {
     /** At most this many bookings per booking type. */
@@ -28,7 +25,7 @@ class DevBookingSeeder extends Seeder
 
     public function run(): void
     {
-        // Whoever has the user role (they log in and see their own bookings) and the people the mobile app knows by ID number.
+        // Users with the user role, and mobile-app users known by ID number.
         $owners = User::query()
             ->whereNotNull('personal_id')
             ->orWhereHas('roles', fn($query) => $query->where('name', RoleEnum::USER->toSpatieRoleName()))
@@ -39,7 +36,7 @@ class DevBookingSeeder extends Seeder
             return;
         }
 
-        // Optional: the vice approver of every booking, and whoever writes the comment.
+        // Optional: vice approver and comment author.
         $viceApprover = $this->firstUserWithRole(RoleEnum::VICE_APPROVER);
         $commenter = $viceApprover
             ?? $this->firstUserWithRole(RoleEnum::APPROVER)
@@ -94,7 +91,7 @@ class DevBookingSeeder extends Seeder
         }
     }
 
-    /** The first user (by id) that holds the role, if there is one. @param RoleEnum $role @return ?User */
+    /** The first user (by id) that holds the role, if there is one. */
     private function firstUserWithRole(RoleEnum $role): ?User
     {
         return User::query()
@@ -103,7 +100,7 @@ class DevBookingSeeder extends Seeder
             ->first();
     }
 
-    /** A value for every top-level form field of the booking's type: the first option for lists, a sample for the rest. @param Booking $booking */
+    /** A sample value for every top-level form field; the first option for lists. */
     private function createValues(Booking $booking): void
     {
         $formFields = FormField::query()
@@ -139,7 +136,7 @@ class DevBookingSeeder extends Seeder
                 continue;
             }
 
-            // Plain fields are stored as a JSON scalar (the model's array cast turns the string into "…").
+            // Plain fields are stored as a JSON scalar (array cast).
             BookingValue::create([
                 'booking_id' => $booking->id,
                 'form_field_id' => $formField->id,

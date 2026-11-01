@@ -11,13 +11,10 @@ class ImportBookingJsonCommand extends Command
 {
     use ImportsBookingJson;
 
-    /** The name and signature of the console command. @var string */
     protected $signature = 'importBookingJson:mysql';
 
-    /** The console command description. @var string */
     protected $description = 'Read the booking files waiting in the bucket (import-json/booking-data), queue their rows chunk by chunk to save the bookings, and move the files to loaded-json';
 
-    /** Execute the console command. @return int */
     public function handle(): int
     {
         try {

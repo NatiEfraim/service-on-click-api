@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('path')->nullable();
             $table->string('type')->nullable();
             $table->string('file_name')->nullable();
-            $table->boolean('is_downloaded')->default(false); // already zipped into the export-files folder of the bucket
+            $table->boolean('is_downloaded')->default(false); // zipped into the bucket's export-files folder
             $table->timestamps();
         });
     }

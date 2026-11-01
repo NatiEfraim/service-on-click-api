@@ -146,7 +146,7 @@ class BookingValueFormatterService
                 'type' => 'file',
                 'name' => $file->file_name,
                 'display_name' => $file->display_name,
-                // A file named by the mobile app's json whose bytes have not arrived has no url yet (resolve() also tries the extension).
+                // A file named in the json whose bytes have not arrived has no url yet (resolve() also tries the extension).
                 'url' => ($path = $this->attachmentService->resolve($file)) ? $this->storageService->generateFileTemporaryUrl($path) : null,
                 'size' => $file->size ?? null,
             ]))
@@ -197,7 +197,7 @@ class BookingValueFormatterService
             return false;
         }
 
-        // Same rule the server applies on submit (Workflow::canEditValues): whoever's turn it is, until the final approval.
+        // Same rule as on submit (Workflow::canEditValues): whoever's turn it is, until the final approval.
         // Uses the user's own permission names: hasPermissionTo() throws for a permission that does not exist.
         return app(Workflow::class)->canEditValues(
             $status,

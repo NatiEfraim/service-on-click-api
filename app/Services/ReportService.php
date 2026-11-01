@@ -11,8 +11,8 @@ use App\Models\Unit;
 use App\Support\AccessScope;
 
 /**
- * The report generator (super admin, admin): the user picks the columns and the filters; this service returns flat rows with the value of every
- * column, and the screen shows the preview and builds the Excel / PDF files from them.
+ * The report generator (super admin, admin): returns flat rows with the value of every column the user picked,
+ * for the preview and the Excel / PDF files.
  */
 class ReportService
 {
@@ -23,11 +23,10 @@ class ReportService
     }
 
     /**
-     * Filters (all optional): serial, types, groups, statuses, units, departments (comma separated ids; groups are group_booking_types ids),
+     * Filters (all optional): serial, types, groups, statuses, units, departments (comma-separated ids; groups are group_booking_types ids),
      * requester (name), personal_id, opened_from / opened_to / updated_from / updated_to (Y-m-d), stage, overdue (yes | no), min_age_days.
      * @param array<string, mixed> $filters
      * @return array{rows: array<int, array<string, mixed>>, total: int, truncated: bool}
-     * @throws DomainError 403
      */
     public function rows(AccessScope $scope, array $filters): array
     {
@@ -90,7 +89,7 @@ class ReportService
             }
         }
 
-        // What depends on the stage, the target or the age is asked of the database too: only the rows that will be shown are read.
+        // Stage, target and age filters also run in the database, so only the rows shown are read.
         if (!empty($filters['stage'])) {
             $this->bookings->limitToStage($query, $scope->workflow(), BookingStageEnum::tryFrom((string) $filters['stage']));
         }

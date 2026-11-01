@@ -24,18 +24,18 @@ return new class extends Migration
   
             $table->boolean('is_input')->default(false);
 
-            // Store-payload section for this field (PayloadSectionEnum: 0 none, 1 inputs, 2 selects, 3 items).
+            // PayloadSectionEnum: 0 none, 1 inputs, 2 selects, 3 items.
             $table->integer('payload_section_id')
                 ->default(PayloadSectionEnum::NONE->value);
 
             $table->json('field_validations')->nullable();
             $table->boolean('editable')->default(1);
             $table->boolean('is_required')->default(1);
-            // Optimistic locking for what this system changes about a field (its name, required, editable, type, place, removal).
+            // Optimistic locking for edits made here.
             $table->unsignedInteger('version')->default(1);
-            // The place of the field in its form: the fields are laid out by position, then id (the seeded ones all start at 0, so id order).
+            // Layout order: position, then id (seeded fields all start at 0).
             $table->unsignedInteger('position')->default(0);
-            // false = archived: out of the form and the settings while the values bookings hold for it stay - a field with values is never deleted.
+            // false = archived; a field that bookings hold values for is never deleted.
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

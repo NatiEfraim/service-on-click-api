@@ -11,11 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Laravel\Passport\Token;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * Login and logout with a Passport personal access token kept in a cookie.
- * Both login controllers - the app's AuthController and the ADFS one that replaces it on the servers -
- * end here, so they answer the same way.
- */
+/** Login and logout with a Passport personal access token in a cookie; the app's and the ADFS login controllers both end here. */
 class AuthService
 {
     public function __construct(
@@ -24,7 +20,7 @@ class AuthService
     ) {
     }
 
-    /** The user of a login with a personal number (the app's own login, used where there is no ADFS). @param Request $request @return User|HttpStatusCodeEnum */
+    /** The user of a login with a personal number (the app's own login, used where there is no ADFS). @return User|HttpStatusCodeEnum */
     public function findUserForLogin(Request $request): User|HttpStatusCodeEnum
     {
         try {
@@ -44,7 +40,7 @@ class AuthService
         }
     }
 
-    /** Revoke the user's earlier tokens, issue a new personal access token and answer with who the user is and the token cookie. @param User $user @return JsonResponse */
+    /** Revokes the user's earlier tokens, issues a new token and answers with the user and the token cookie. */
     public function loginResponse(User $user): JsonResponse
     {
         // Whoever logs in has at least the user role.
@@ -76,7 +72,6 @@ class AuthService
             ->withCookie(Cookie::make($tokenName, $token->accessToken));
     }
 
-    /** Revoke the token of this request and forget its cookie. @param ?User $user @return JsonResponse */
     public function logoutResponse(?User $user): JsonResponse
     {
         try {

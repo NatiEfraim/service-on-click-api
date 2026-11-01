@@ -33,7 +33,6 @@ class BookingResource extends JsonResource
         ];
     }
 
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         return $this->removeNullValues([
@@ -51,14 +50,12 @@ class BookingResource extends JsonResource
         ]);
     }
 
-    /** Remove null values from array. @param array $data @return array */
     private function removeNullValues(array $data): array
     {
         return array_filter($data, fn($value) => !is_null($value));
     }
 
 
-    /** Retrieve booking status data. @return array */
     private function getStatusData(): array
     {
         return [
@@ -69,7 +66,7 @@ class BookingResource extends JsonResource
         ];
     }
 
-    /** Resolve the statuses the auth user can move this booking to now (the status_id the PUT accepts). @return array */
+    /** The status_id values the auth user can move this booking to now. */
     private function getNextStatuses(): array
     {
         $user = Auth::user();
@@ -90,7 +87,6 @@ class BookingResource extends JsonResource
             ?? [];
     }
 
-    /** Format date value. @param mixed $date @return ?string */
     private function formatDate(mixed $date): ?string
     {
         if (!$date) {
@@ -100,7 +96,6 @@ class BookingResource extends JsonResource
         return Carbon::parse($date)->format('d/m/Y');
     }
 
-    /** Retrieve booking type record. */
     private function getBookingType(): array
     {
         return [
@@ -110,7 +105,6 @@ class BookingResource extends JsonResource
         ];
     }
 
-    /** Retrieve the booking owner record. */
     private function getBookingOwner(): array
     {
         return [
@@ -122,7 +116,6 @@ class BookingResource extends JsonResource
     }
 
 
-    /** Retrieve vice_approver details. */
     private function getViceApprover(): ?array
     {
         $vice = $this->viceApprovers->first();
@@ -134,7 +127,6 @@ class BookingResource extends JsonResource
         ] : null;
     }
 
-    /** Retrieve all comments with their author details. */
     private function getComments(): array
     {
         return $this->comments->map(function ($comment) {

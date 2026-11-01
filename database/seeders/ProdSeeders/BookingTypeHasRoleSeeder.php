@@ -9,7 +9,7 @@ use Illuminate\Database\Seeder;
 
 class BookingTypeHasRoleSeeder extends Seeder
 {
-    /** Roles relevant to every booking type; each of them gets a "{role}_{booking_type_id}" permission. @var array<int> */
+    /** Roles on every booking type; each gets a "{role}_{booking_type_id}" permission. @var array<int> */
     private array $commonRoleIds = [
         RoleEnum::ADMIN->value,
         RoleEnum::APPROVER->value,

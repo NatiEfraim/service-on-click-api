@@ -5,14 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
-/** Append-only. Rows are written only by App\Services\AuditService (which keeps the hash chain); a model that is changed or deleted throws. */
+/** Append-only: written only by AuditService (hash chain); update or delete throws. */
 class AuditLog extends Model
 {
     protected $table = 'audit_log';
 
     public $timestamps = false;
 
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'occurred_at',
         'actor_type',
@@ -34,13 +33,12 @@ class AuditLog extends Model
         'hash',
     ];
 
-    /** Attributes hidden for serialization - the hashes are for the chain check, not for the screen. @var array<int, string> */
+    // Hashes serve the chain check, not the screen.
     protected $hidden = [
         'prev_hash',
         'hash',
     ];
 
-    /** Attribute casts. @var array<string, string> */
     protected $casts = [
         'before' => 'array',
         'after' => 'array',

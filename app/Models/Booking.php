@@ -11,8 +11,6 @@ use Illuminate\Support\Str;
 
 class Booking extends Model
 {
-
-
     protected $fillable = [
         'uuid',
         'serial_number',

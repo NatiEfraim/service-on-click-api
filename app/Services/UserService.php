@@ -22,7 +22,7 @@ class UserService
 
     public function __construct(private readonly StorageService $storageService) {}
 
-    /** The authenticated user with roles, permissions and unit. @return mixed */
+    /** The authenticated user with roles, permissions and unit. */
     public function user(): mixed
     {
         try {
@@ -40,13 +40,13 @@ class UserService
         }
     }
 
-    /** Paginate the users, optionally by a personal number / personal id prefix or a full name prefix. @param ?string $identifier @return mixed */
+    /** Paginates users, optionally by personal number / personal id prefix or full-name prefix. */
     public function index(?string $identifier = null): mixed
     {
         try {
             $query = User::with(['roles', 'permissions', 'unit', 'department'])->where('is_deleted', false);
 
-            // An admin deals with the people of their own unit (see BookingAdminManagementService::assertMayManage); the super admin with everybody.
+            // Admins manage their own unit's people (assertMayManage); the super admin everybody.
             if (!Auth::user()->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName())) {
                 $query->where('unit_id', Auth::user()->unit_id);
             }
@@ -76,7 +76,7 @@ class UserService
         }
     }
 
-    /** Create a user. @param array $data personal_number, full_name, phone, unit_id, department_id (optional) @return mixed */
+    /** Creates a user. @param array $data personal_number, full_name, phone, unit_id, department_id (optional) */
     public function store(array $data): mixed
     {
         try {
@@ -111,7 +111,7 @@ class UserService
         }
     }
 
-    /** The user of a login; when several personal numbers match, the highest role wins (a deleted user only if nothing else matches). @param array<int, ?string> $personalNumbers @return ?User */
+    /** The user of a login; with several matching personal numbers the highest role wins (a deleted user only if nothing else matches). */
     public function findForLogin(array $personalNumbers): ?User
     {
         $priority = [
@@ -133,16 +133,15 @@ class UserService
     }
 
     /**
-     * The user of an ADFS login, from the database only - nobody is created here.
-     * First by the personal number; when no one has it, by the ID number Vatican holds for that personal number
-     * (the mobile app knows people by ID number only). Whichever of the two the row lacks is filled in from Vatican.
-     * @param string $personalNumber @param ?string $usernameNumber the number the ADFS user name ends with (ARMY\c9810738) @return ?User
+     * The user of an ADFS login, from the database only (nobody is created). Found by personal number, else by the ID number Vatican holds
+     * for it; whichever of the two the row lacks is filled in from Vatican.
+     * @param ?string $usernameNumber the number the ADFS user name ends with (ARMY\c9810738)
      */
     public function findForAdfsLogin(string $personalNumber, ?string $usernameNumber = null): ?User
     {
         $user = $this->findForLogin([$personalNumber, $usernameNumber]);
 
-        // Vatican is asked only when its answer can matter: nobody has this personal number, or the row has no ID number yet.
+        // Vatican is asked only when it can matter: no row has this personal number, or the row lacks an ID number.
         $vatican = is_null($user) || is_null($user->personal_id) ? $this->getUserFromVatican($personalNumber) : null;
 
         if (is_null($user) && !is_null($vatican['personal_id'] ?? null)) {
@@ -156,7 +155,7 @@ class UserService
         return $user;
     }
 
-    /** Fill in the personal number / ID number the row lacks, from Vatican; a value another row already holds is left out (both columns are unique). @param User $user @param array{personal_number: string, personal_id: ?string} $vatican */
+    /** Fills in the personal/ID number the row lacks from Vatican, skipping a value another row holds (both columns are unique). @param array{personal_number: string, personal_id: ?string} $vatican */
     private function fillMissingIdentifiers(User $user, array $vatican): void
     {
         $fromVatican = [
@@ -182,7 +181,7 @@ class UserService
         }
     }
 
-    /** A person with no role at all becomes a plain user - e.g. after the last manager role was taken away - so they can still see their own bookings. @param User $user */
+    /** Gives a person with no role the plain user role (e.g. after their last manager role was removed) so they still see their own bookings. */
     public function ensureUserRole(User $user): void
     {
         if ($user->roles()->doesntExist()) {
@@ -190,7 +189,7 @@ class UserService
         }
     }
 
-    /** Look a person up by personal number in Vatican for the ID number it holds; null when it does not know them or cannot be reached. @param string $personalNumber @return ?array{personal_number: string, personal_id: ?string} */
+    /** Looks a person up in Vatican for their ID number; null when unknown or unreachable. @return ?array{personal_number: string, personal_id: ?string} */
     private function getUserFromVatican(string $personalNumber): ?array
     {
         try {
@@ -255,10 +254,9 @@ class UserService
     }
 
     /**
-     * The user id of every ID number given, in one query. A person the database does not know yet gets a bare row - the ID number and the unit
-     * of the booking they came with - because the mobile app's people arrive here only through the bookings and logs they appear in.
-     * (Nobody is created by the ADFS login; see findForAdfsLogin.) Throws on a database error, so a queued job tries again.
-     * @param array<string, ?int> $unitIdByPersonalId ID number (already normalized) => unit id @return array<string, int> ID number => user id
+     * The user id of every ID number given, in one query. An unknown person gets a bare row (ID number and the booking's unit), because the mobile
+     * app's people arrive only through bookings and logs. Throws on a database error so a queued job retries.
+     * @param array<string, ?int> $unitIdByPersonalId normalized ID number => unit id @return array<string, int> ID number => user id
      */
     public function idsByPersonalId(array $unitIdByPersonalId): array
     {
@@ -293,7 +291,7 @@ class UserService
         return $userIds;
     }
 
-    /** An ID number as the database keeps it - nine digits, leading zeros included; null for anything that cannot be one (empty, too long, not digits, all zeros). @param mixed $value @return ?string */
+    /** An ID number as stored: nine digits with leading zeros; null for anything else (empty, too long, not digits, all zeros). @return ?string */
     public static function normalizePersonalId(mixed $value): ?string
     {
         if (!is_int($value) && !is_string($value)) {

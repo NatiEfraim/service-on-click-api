@@ -36,7 +36,6 @@ class GetSystemReferencesResource extends JsonResource
         ];
     }
 
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         return [
@@ -49,7 +48,6 @@ class GetSystemReferencesResource extends JsonResource
         ];
     }
 
-    /** Format system references collection. */
     private function formatSystemReferences(
         mixed $systemReferences,
         int $bookingTypeId
@@ -66,7 +64,6 @@ class GetSystemReferencesResource extends JsonResource
             ->all();
     }
 
-    /** Format a single system reference with its details. @param SystemReference $systemReference, int $bookingTypeId @return array */
     private function formatSystemReference(
         SystemReference $systemReference,
         int $bookingTypeId
@@ -89,7 +86,6 @@ class GetSystemReferencesResource extends JsonResource
         ];
     }
 
-    /** Format details as key/value/label rows. @param array $detailsValues, SystemReference $systemReference, int $bookingTypeId @return array */
     private function formatDetails(
         array $detailsValues,
         SystemReference $systemReference,
@@ -112,7 +108,7 @@ class GetSystemReferencesResource extends JsonResource
             ->all();
     }
 
-    /** Resolve a detail value; restriction dates come from the booking type. @param string $key, array $detailsValues, SystemReference $systemReference, int $bookingTypeId @return mixed */
+    /** Restriction dates come from the booking type. */
     private function resolveValue(
         string $key,
         array $detailsValues,
@@ -131,7 +127,7 @@ class GetSystemReferencesResource extends JsonResource
         return $value;
     }
 
-    /** Map system_reference key names to Hebrew labels. @param string $key @return string */
+    /** Hebrew labels for system_reference keys. */
     private function getLabelForKey(string $key): string
     {
         return match ($key) {

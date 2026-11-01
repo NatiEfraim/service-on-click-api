@@ -6,10 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class ApplicationLog extends Model
 {
-    //
-
-
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'booking_id',
         'action_type_id',
@@ -24,14 +20,13 @@ class ApplicationLog extends Model
         'is_exported' => 'boolean',
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'updated_at',
         'created_at',
     ];
 
 
-    /** Flag only the given logs as exported (ones logged mid-export stay pending); updated_at untouched. @param array $applicationLogIds */
+    /** Flags only the given logs as exported; logs written mid-export stay pending. */
     public static function markAsExported(array $applicationLogIds): void
     {
         foreach (array_chunk($applicationLogIds, 1000) as $chunk) {

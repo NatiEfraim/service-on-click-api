@@ -17,13 +17,10 @@ use App\Models\SyncConflict;
 use App\Support\AccessScope;
 use Illuminate\Database\Eloquent\Builder;
 
-/**
- * The bookings a manager sees: the list (what is waiting for whom, for how long, against which target) and one booking in full.
- * Everything is limited by AccessScope; the shape of a row is the contract in docs/admin-api.md.
- */
+/** The bookings a manager sees: the list and one booking in full, limited by AccessScope; the row shape is the contract in docs/admin-api.md. */
 class BookingQueryService
 {
-    /** Columns the list may be sorted by in the database. */
+    /** Columns the list can be sorted by in SQL. */
     private const SQL_SORT = ['serial_number', 'status_changed_at', 'created_at', 'status_id', 'booking_type_id'];
 
     private const MAX_PER_PAGE = 100;
@@ -32,9 +29,9 @@ class BookingQueryService
     private ?array $targets = null;
 
     /**
-     * Filters (all optional): q (serial, ID number, personal number or name), statuses, types, units (comma separated ids), stage, from / to (Y-m-d, the day
-     * the booking was opened), open_only=1, ids (serial numbers), handler (user uuid: who moved the booking), mine=1 (the user has an action on it),
-     * overdue=1, sync (conflict | pending | synced), sort, dir, page, per_page.
+     * Filters (all optional): q (serial, ID number, personal number or name), statuses, types, units (comma-separated ids), stage,
+     * from / to (Y-m-d, day opened), open_only=1, ids (serial numbers), handler (user uuid), mine=1, overdue=1,
+     * sync (conflict | pending | synced), sort, dir, page, per_page.
      * @param array<string, mixed> $filters
      * @return array{data: array<int, array<string, mixed>>, meta: array{total: int, page: int, last_page: int, per_page: int}}
      */
@@ -100,8 +97,7 @@ class BookingQueryService
 
         $query->orderBy('id', 'desc');
 
-        // What depends on the workflow rules, the targets or the sync state is turned into conditions on the database too, so a page is
-        // one query however many bookings the user may see.
+        // Workflow-, target- and sync-dependent rules also become SQL conditions, so a page is one query.
         if (($filters['mine'] ?? '') === '1') {
             $this->limitToActionable($query, $scope);
         }
@@ -192,8 +188,8 @@ class BookingQueryService
     }
 
     /**
-     * One row of the list. $openConflictIds is a map of booking id => true for the bookings with an open sync conflict.
-     * @param array<int, mixed> $openConflictIds
+     * One row of the list.
+     * @param array<int, mixed> $openConflictIds booking id => true for bookings with an open sync conflict
      * @return array<string, mixed>
      */
     public function row(Booking $booking, AccessScope $scope, array $openConflictIds = []): array
@@ -227,7 +223,7 @@ class BookingQueryService
             'overdue' => $target !== null && $totalAgeHours > $target,
             'status_source' => $booking->status_source,
             'version' => (int) $booking->version,
-            // The paper clip of the list: how many files and images the booking has (the bytes may not have arrived yet - the detail says which).
+            // List paper clip: file and image count (bytes may not have arrived yet; the detail says which).
             'attachments_count' => $booking->relationLoaded('files') && $booking->relationLoaded('images')
                 ? $booking->files->count() + $booking->images->count()
                 : (int) ($booking->files_count ?? 0) + (int) ($booking->images_count ?? 0),
@@ -243,7 +239,7 @@ class BookingQueryService
         ];
     }
 
-    /** Only the bookings the user has an action on right now: open, at a status where their role has a move. */
+    /** Bookings the user can act on now: open and at a status where their role has a move. */
     public function limitToActionable(Builder $query, AccessScope $scope): void
     {
         $query->whereNotIn('status_id', StatusBookingEnum::terminalIds())->where(function (Builder $where) use ($scope): void {
@@ -255,7 +251,7 @@ class BookingQueryService
         });
     }
 
-    /** Only the overdue bookings (open, older than their type's handling target) - or, with false, all the others. */
+    /** Overdue bookings (open, older than their type's handling target) or, with false, all the others. */
     public function limitToOverdue(Builder $query, bool $overdue): void
     {
         $terminal = StatusBookingEnum::terminalIds();
@@ -274,13 +270,13 @@ class BookingQueryService
         $overdue ? $query->where($isOverdue) : $query->whereNot($isOverdue);
     }
 
-    /** Only the open bookings that are at least this old (counted from the day they were opened). */
+    /** Open bookings at least this old, counted from the day they were opened. */
     public function limitToMinimumAge(Builder $query, float $days): void
     {
         $query->whereNotIn('status_id', StatusBookingEnum::terminalIds())->where('created_at', '<=', now()->subSeconds((int) round($days * 86400)));
     }
 
-    /** Only the bookings whose decision is in this state toward the mobile app: conflict (a person must decide), pending (not sent yet) or synced. */
+    /** Bookings whose decision is in this state toward the mobile app: conflict, pending (not sent yet) or synced. */
     public function limitToSyncState(Builder $query, string $state): void
     {
         $openConflict = fn (Builder $conflicts) => $conflicts->where('state', SyncConflict::STATE_OPEN);
@@ -293,7 +289,7 @@ class BookingQueryService
         };
     }
 
-    /** Only the bookings in the given stage (what a stage means depends on the booking type: the control officer stage exists for some types only). */
+    /** Bookings in the given stage (some stages, e.g. control officer, exist only for some types). */
     public function limitToStage(Builder $query, Workflow $workflow, ?BookingStageEnum $stage): void
     {
         if ($stage === null) {
@@ -321,7 +317,7 @@ class BookingQueryService
         });
     }
 
-    /** @param mixed $value a comma separated string or a list @return array<int, int> */
+    /** @return array<int, int> ids from a comma-separated string or a list */
     private function ids(mixed $value): array
     {
         $list = is_array($value) ? $value : explode(',', (string) $value);
@@ -354,7 +350,7 @@ class BookingQueryService
             ->all();
     }
 
-    /** What the detail view loads: the same relations the approver's booking list loads for BookingResource, plus the timeline. @return array<int, string> */
+    /** Relations the detail view loads (those of the approver's list for BookingResource) plus the timeline. @return array<int, string> */
     private function detailRelations(): array
     {
         return [

@@ -11,7 +11,6 @@ use Illuminate\Support\Collection;
 class UserWithPermissionIconResource extends JsonResource
 {
     private Collection $bookingTypes;
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
 

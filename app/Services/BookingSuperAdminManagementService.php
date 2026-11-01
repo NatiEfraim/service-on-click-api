@@ -630,7 +630,7 @@ class BookingSuperAdminManagementService
 
             throw $e;
         } catch (\Exception $e) {
-            // Roll back a transaction this method opened and left open (e.g. a failed audit row); the caller's own stays.
+            // Roll back a transaction this method left open (e.g. a failed audit row); the caller's own stays.
             if (DB::transactionLevel() > $transactionLevel) {
                 DB::rollBack();
             }

@@ -7,8 +7,6 @@ use Illuminate\Support\Str;
 
 class OptionField extends Model
 {
-    //
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'uuid',
         'name',
@@ -31,7 +29,6 @@ class OptionField extends Model
         'payload_section_id' => 'integer',
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'created_at',
         'updated_at',
@@ -63,7 +60,7 @@ class OptionField extends Model
         return $this->belongsTo(OptionField::class, 'option_field_id');
     }
 
-    /** The options below this one that are in the form (archived ones are not). */
+    /** Active child options. */
     public function childOptionField()
     {
         return $this->hasMany(OptionField::class, 'option_field_id')->where('option_fields.is_active', true);

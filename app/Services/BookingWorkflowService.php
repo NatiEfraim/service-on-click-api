@@ -20,11 +20,9 @@ use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
 /**
- * A status change made by a person here. Every rule is enforced on the server, never only in the UI: the booking is visible to the user, the
- * user's permission for the booking type allows this move at this stage (Workflow), the requester's own cancellation is left to the mobile
- * app, the comment rules, the food cancellation deadline, no open sync conflict, and the version the user saw is still the current one.
- * Business completion (the status is saved) is separate from transfer completion (the decision is sent back to the mobile app later -
- * see BookingStatusExportService).
+ * A status change made by a person here, with every rule enforced on the server: visibility, permission for this move at this stage (Workflow),
+ * requester cancellation left to the mobile app, comment rules, food cancellation deadline, no open sync conflict and a current version.
+ * The status is saved here; BookingStatusExportService sends the decision to the mobile app later.
  */
 class BookingWorkflowService
 {
@@ -35,9 +33,8 @@ class BookingWorkflowService
     }
 
     /**
-     * @param ?string $idempotencyKey the client's Idempotency-Key: a repeated request with the same key gets the first answer instead of a second action
+     * @param ?string $idempotencyKey the client's Idempotency-Key: a repeated request with the same key gets the first answer
      * @return array{serial_number: int, status_id: int, status_label: ?string, version: int, correlation_id: string, sync_state: string, message: string}
-     * @throws DomainError 404 not visible, 403 not allowed, 409 changed meanwhile or in conflict, 422 invalid
      */
     public function changeStatus(AccessScope $scope, int $serial, int $targetStatusId, ?string $comment, int $expectedVersion, ?string $idempotencyKey = null): array
     {
@@ -51,8 +48,7 @@ class BookingWorkflowService
 
         $target = StatusBookingEnum::tryFrom($targetStatusId) ?? throw new DomainError('סטטוס יעד אינו תקין', 422);
 
-        // The checks that need no lock come first, outside the transaction: a refusal is audited, and a row written inside a transaction that
-        // the refusal rolls back would go with it.
+        // Unlocked checks run before the transaction so a refusal's audit row is not rolled back.
         $this->assertMayChange($scope, Booking::query()->where('serial_number', $serial)->first(), $serial, $target, $comment, $expectedVersion, audit: true);
 
         return DB::transaction(function () use ($scope, $user, $serial, $target, $comment, $expectedVersion, $idempotencyKey, $requestHash): array {
@@ -120,10 +116,8 @@ class BookingWorkflowService
     }
 
     /**
-     * The booking is the user's to manage, the version they saw is the current one, it is visible at its stage, permission, requester-only, comment
-     * and deadline - in that order: a booking that changed meanwhile is answered "changed" (409) - what the user needs to hear - and not "not
-     * allowed" because of the stage it moved to. With $audit a refusal for lack of permission is written to the audit log.
-     * @throws DomainError
+     * Checks in order: ownership, current version, visibility at its stage, permission, requester-only, comment, deadline.
+     * A stale version answers "changed" (409) rather than "not allowed" for the stage the booking moved to. With $audit a permission refusal is audited.
      */
     private function assertMayChange(AccessScope $scope, ?Booking $booking, int $serial, StatusBookingEnum $target, string $comment, int $expectedVersion, bool $audit): void
     {
@@ -167,7 +161,7 @@ class BookingWorkflowService
         $this->assertCancellationDeadline($booking, $target);
     }
 
-    /** The answer given to the same request before, or null when the key is new. @throws DomainError when the key was used for another request */
+    /** The earlier answer to the same request, or null for a new key. Throws when the key was used for another request. */
     private function replay(User $user, string $key, string $requestHash): ?array
     {
         $row = DB::table('idempotency_keys')->where('user_id', $user->id)->where('key', $key)->first();
@@ -183,7 +177,7 @@ class BookingWorkflowService
         return json_decode($row->response, true);
     }
 
-    /** A food booking can be canceled only so many business days before its supply date (the setting of the unit). @throws DomainError */
+    /** A food booking can be canceled only so many business days before its supply date (unit setting). */
     private function assertCancellationDeadline(Booking $booking, StatusBookingEnum $target): void
     {
         if ($target !== StatusBookingEnum::CANCELED_BY_APPROVER) {
@@ -231,7 +225,7 @@ class BookingWorkflowService
         }
     }
 
-    /** The vice approver who passed the booking on is tied to it, so the dashboards can filter by who handled it. */
+    /** Ties the vice approver who passed the booking on to it, so dashboards can filter by handler. */
     private function linkViceApprover(Booking $booking, StatusBookingEnum $target, User $user): void
     {
         if (!in_array($target, [StatusBookingEnum::VICE_APPROVER_APPROVED, StatusBookingEnum::VICE_APPROVER_REJECTED], true)) {

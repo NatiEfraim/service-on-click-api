@@ -14,35 +14,34 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 
-# Every command here only queues its job, so a queue worker must be running (php artisan queue:work).
+// These commands only queue jobs, so a queue worker must be running.
 
-# Reads the booking files waiting in import-json/booking-data, saves their bookings and moves the files to loaded-json - see ImportBookingJsonChunkJob.
+// Booking files in import-json/booking-data (ImportBookingJsonChunkJob).
 Schedule::command(ImportBookingJsonCommand::class)
     ->cron(config('app.jobs.import_booking_json.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping();
 
-# Same for the application logs in import-json/application-log; a minute after the bookings, because a log belongs to a booking - see ImportApplicationLogJsonChunkJob.
+// Application logs; a minute after the bookings because a log belongs to a booking.
 Schedule::command(ImportApplicationLogJsonCommand::class)
     ->cron(config('app.jobs.import_application_log_json.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping();
 
-# Sends the decisions made here (and the corrected values) back to the mobile app as r2b files in the bucket - see BookingStatusExportService.
-# It writes the files itself: no queue worker is needed. (The lock is held for 10 minutes at most: a run that was killed must not stop the
-# schedule for the default 24 hours.)
+// Sends decisions back to the mobile app as r2b files (BookingStatusExportService).
+// Writes files itself (no queue worker); the lock expires after 10 minutes so a killed run cannot block the schedule.
 Schedule::command(ExportBookingStatusJsonCommand::class)
     ->cron(config('app.export_json.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(10);
 
-# Once a night: a row of the audit log that was changed or removed afterwards breaks its hash chain - see VerifyAuditLogCommand.
+// Nightly: a changed or removed audit row breaks its hash chain.
 Schedule::command(VerifyAuditLogCommand::class)
     ->dailyAt('02:30')
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(120);
 
-# An Idempotency-Key only matters for the minutes after a double click; the keys of earlier days are removed.
+// Only the minutes after a double click matter; older keys are removed.
 Schedule::call(fn () => DB::table('idempotency_keys')->where('created_at', '<', now()->subDays(2))->delete())
     ->name('idempotency-keys:prune')
     ->dailyAt('03:00')

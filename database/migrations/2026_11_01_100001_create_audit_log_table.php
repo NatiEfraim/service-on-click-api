@@ -10,14 +10,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Who did what to what, and what it looked like before and after. Written only by App\Services\AuditService; each row carries the hash of the
-        // row before it, so a row that was changed or removed afterwards breaks the chain (php artisan audit:verify).
+        // Append-only log written only by AuditService; each row hashes the row before it (php artisan audit:verify).
         Schema::create('audit_log', function (Blueprint $table) {
             $table->id();
             $table->dateTime('occurred_at', 6);
             // user | system | external
             $table->string('actor_type', 10);
-            // The user's personal number (or ID number), or the name of the component.
+            // Personal number, ID number, or component name.
             $table->string('actor_id')->nullable();
             $table->string('actor_name')->nullable();
             // internal | external | automation
@@ -42,8 +41,8 @@ return new class extends Migration
             $table->index(['actor_id', 'occurred_at']);
         });
 
-        // One row, always id 1: it is locked while a row is appended, so two requests can never chain to the same previous row - and it
-        // remembers the last row, so removing the newest rows shows up too.
+        // Single row (id 1), locked on append so two requests never chain to the same previous row;
+        // remembering the last row also exposes removal of the newest rows.
         Schema::create('audit_log_head', function (Blueprint $table) {
             $table->unsignedTinyInteger('id')->primary();
             $table->unsignedBigInteger('last_id')->nullable();
@@ -55,7 +54,7 @@ return new class extends Migration
         $this->protectAuditLog();
     }
 
-    /** Reverse the migrations. Throws on a production database: the audit history is dropped by an approved procedure, not by a rollback. */
+    /** Throws in production: audit history is dropped by an approved procedure, not a rollback. */
     public function down(): void
     {
         if (app()->isProduction()) {
@@ -69,11 +68,7 @@ return new class extends Migration
         Schema::dropIfExists('audit_log');
     }
 
-    /**
-     * Append-only at the database too: an UPDATE or DELETE raises. The model refuses them as well, and the hash chain shows a change made behind
-     * its back, so a database account that may not create triggers (MySQL asks for the TRIGGER privilege, and SUPER while binary logging is on)
-     * only loses this extra layer.
-     */
+    /** Append-only at the DB level: UPDATE and DELETE raise (needs the TRIGGER privilege). */
     private function protectAuditLog(): void
     {
         $driver = DB::getDriverName();

@@ -9,13 +9,10 @@ use Illuminate\Support\Facades\Log;
 
 class VerifyAuditLogCommand extends Command
 {
-    /** The name and signature of the console command. @var string */
     protected $signature = 'audit:verify';
 
-    /** The console command description. @var string */
     protected $description = 'Check the hash chain of the audit log: a row that was changed or removed afterwards breaks it';
 
-    /** Execute the console command. @return int */
     public function handle(AuditService $auditService): int
     {
         try {

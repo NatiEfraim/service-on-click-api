@@ -10,11 +10,11 @@ return new class extends Migration
     {
         Schema::create('files', function (Blueprint $table) {
             $table->id();
-            $table->string('name');              // randomFileName (e.g. "abc123_xyz.pdf")
-            $table->string('display_name');      // user-friendly display name
-            $table->string('path');              // S3/MinIO path (e.g. "files/abc123_xyz.pdf")
-            $table->string('file_name');         // original filename from upload
-            $table->boolean('is_downloaded')->default(false); // already zipped into the export-files folder of the bucket
+            $table->string('name');
+            $table->string('display_name');
+            $table->string('path');
+            $table->string('file_name'); // original upload name; 'name' is the stored random name
+            $table->boolean('is_downloaded')->default(false); // zipped into the bucket's export-files folder
             $table->timestamps();
         });
     }

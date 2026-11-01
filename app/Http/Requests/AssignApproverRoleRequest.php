@@ -8,19 +8,17 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class AssignApproverRoleRequest extends FormRequest
 {
-    /** Israeli phone number format. */
     private const PHONE_REGEX = '#^(?:0(?:5[0-9]{8}|2[0-9]{7}|3[0-9]{7}|4[0-9]{7}|8[0-9]{7}|9[0-9]{7}|7[2-9][0-9]{7}))$#';
 
-    /** Personal number format - 7 to 8 digits, the number the ADFS login returns. */
+    /** 7 to 8 digits, as returned by the ADFS login. */
     private const PERSONAL_NUMBER_REGEX = '/^\d{7,8}$/';
 
-    /** Determine if the user is authorized to make this request. @return bool */
     public function authorize(): bool
     {
         return true;
     }
 
-    /** Base rules plus an optional boolean per approver role; needs uuid or full_name/personal_number. @return array */
+    /** Needs a uuid or full_name/personal_number, plus an optional boolean per approver role. @return array */
     public function rules(): array
     {
         $rules = [
@@ -28,7 +26,7 @@ class AssignApproverRoleRequest extends FormRequest
             'full_name' => 'required_without:uuid|nullable|string|max:255',
             'personal_number' => ['required_without:uuid', 'nullable', 'string', 'regex:' . self::PERSONAL_NUMBER_REGEX],
             'phone' => ['nullable', 'string', 'regex:' . self::PHONE_REGEX],
-            // Why the roles change - kept in the audit log. Optional.
+            // Optional; kept in the audit log.
             'reason' => 'nullable|string|max:500',
             'role_assignments' => 'required|array|min:1',
             'role_assignments.*.booking_type_id' => 'required|integer|exists:booking_types,id',
@@ -45,7 +43,6 @@ class AssignApproverRoleRequest extends FormRequest
         return $rules;
     }
 
-    /** Custom error messages for validation. @return array */
     public function messages(): array
     {
         return [

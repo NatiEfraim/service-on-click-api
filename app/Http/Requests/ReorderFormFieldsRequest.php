@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/** PUT /api/bookings-super-admin-management/form-fields/{unitId}/{bookingTypeId}/order - the ids of ALL the stand-alone fields of the form, in the new order. */
+/** Ids of ALL the stand-alone fields of the form, in the new order. */
 class ReorderFormFieldsRequest extends FormRequest
 {
     public function authorize(): bool

@@ -108,7 +108,7 @@ enum SystemReferenceEnum
 
 
 
-    /** Get system reference ids related to a specific form field id. */
+    /** System reference ids linked to a form field id. */
     public static function getSystemReferenceIdsByFormFieldId(int $formFieldId): array
     {
         return SystemReferenceHasFormField::query()
@@ -119,7 +119,7 @@ enum SystemReferenceEnum
             ->toArray();
     }
 
-    /** Get all system reference ids related to a booking type id. */
+    /** System reference ids linked to a booking type id. */
     public static function getSystemReferenceIdsByBookingTypeId(int $bookingTypeId): array
     {
         return SystemReference::query()
@@ -130,17 +130,15 @@ enum SystemReferenceEnum
             ->toArray();
     }
 
-    /** Get the unique system reference name of this case. @return string */
+    /** Unique system_references.name of this case. */
     public function getSystemReferenceName(): string
     {
         return match ($this) {
-                // CAR_BOOKING
             self::CAR_TOTAL_CAR_STOCK => 'total_car_stock_car_booking',
             self::CAR_SERVICE_HOURS => 'service_hours_car_booking',
             self::CAR_CONTACT_PHONE => 'contact_phone_car_booking',
             self::CAR_RESTRICTIONS => 'restrictions_car_booking',
             self::CAR_RESTRICTION_DATES => 'restriction_dates_car_booking',
-                // IN_UNIT_FOOD_BOOKING
             self::IN_UNIT_FOOD_CONTACT_PHONE => 'contact_phone_in_unit_food_booking',
             self::IN_UNIT_RESTRICTION_DATES => 'restriction_dates_in_unit_food_booking',
             self::IN_UNIT_FOOD_RESTRICTIONS => 'restrictions_in_unit_food_booking',
@@ -149,7 +147,6 @@ enum SystemReferenceEnum
             self::IN_UNIT_FOOD_COUNT_BUSINESS_DAYS => 'count_businsday_in_unit_food_booking',
             self::IN_UNIT_FOOD_CANCELLATION_ADVANCE_DAYS => 'cancellation_advance_days_in_unit_food_booking',
             self::IN_UNIT_FOOD_MAX_ADVANCE_DAYS => 'max_advance_days_in_unit_food_booking',
-                // OUT_UNIT_FOOD_BOOKING
             self::OUT_UNIT_FOOD_CONTACT_PHONE => 'contact_phone_out_unit_food_booking',
             self::OUT_UNIT_RESTRICTION_DATES => 'restriction_dates_out_unit_food_booking',
             self::OUT_UNIT_FOOD_RESTRICTIONS => 'restrictions_out_unit_food_booking',
@@ -161,19 +158,16 @@ enum SystemReferenceEnum
             => 'cancellation_advance_days_out_unit_food_booking',
             self::OUT_UNIT_FOOD_MAX_ADVANCE_DAYS => 'max_advance_days_out_unit_food_booking',
 
-                // EQUIPMENT_BOOKING_MALE
             self::EQUIPMENT_MALE_CONTACT_PHONE => 'contact_phone_equipment_booking_male',
             self::EQUIPMENT_MALE_QTY_LIMIT_CLOTHING => 'qty_limit_clothing_equipment_booking_male',
             self::EQUIPMENT_MALE_QTY_LIMIT_FOOTWEAR => 'qty_limit_footwear_equipment_booking_male',
             self::EQUIPMENT_MALE_QTY_LIMIT_RELATED_PRODUCTS => 'qty_limit_related_equipment_booking_male',
 
-                // EQUIPMENT_BOOKING_FEMALE
             self::EQUIPMENT_FEMALE_CONTACT_PHONE => 'contact_phone_equipment_booking_female',
             self::EQUIPMENT_FEMALE_QTY_LIMIT_CLOTHING => 'qty_limit_clothing_equipment_booking_female',
             self::EQUIPMENT_FEMALE_QTY_LIMIT_FOOTWEAR => 'qty_limit_footwear_equipment_booking_female',
             self::EQUIPMENT_FEMALE_QTY_LIMIT_RELATED_PRODUCTS => 'qty_limit_related_product_equipment_booking_female',
 
-                // BARBER_BOOKING
             self::BARBER_DATE_ACTIVITI => 'restrictions_barber_booking',
             self::BARBER_CONTACT_PHONE => 'contact_phone_barber_booking',
             self::BARBER_SERVICE_HOURS => 'service_hours_barber_booking',
@@ -184,65 +178,54 @@ enum SystemReferenceEnum
             self::BARBER_ADVANCE_MONTHS => 'advance_month_restrictions_barber_booking',
             self::BARBER_RESTRICTION_DATES => 'restriction_dates_barber_booking',
 
-                // FOOD_BOOKING
             self::FOOD_CONTACT_PHONE => 'contact_phone_food_booking',
             self::FOOD_RESTRICTIONS => 'restrictions_food_booking',
             self::FOOD_SERVICE_HOURS => 'service_hours_food_booking',
-                // LECTURE_ROOM_BOOKING
             self::LECTURE_ROOM_CONTACT_PHONE => 'contact_phone_lecture_room_booking',
             self::LECTURE_ROOM_SERVICE_HOURS => 'service_hours_lecture_room_booking',
             self::LECTURE_ROOM_RESTRICTIONS => 'restrictions_lecture_room_booking',
             self::LECTURE_ROOM_DURATION_TIME => 'duration_time_lecture_room_booking',
 
-                // SMALL_COMMAND_ROOM_BOOKING
             self::SMALL_COMMNAD_ROOM_CONTACT_PHONE => 'contact_phone_small_command_room_booking',
             self::SMALL_COMMNAD_ROOM_SERVICE_HOURS => 'service_hours_small_command_room_booking',
             self::SMALL_COMMNAD_ROOM_RESTRICTIONS => 'restrictions_small_command_room_booking',
             self::SMALL_COMMNAD_ROOM_DURATION_TIME => 'duration_time_small_command_room_booking',
 
-                // TECH_HAMAMA_FIRST_BOOKING
             self::TECH_HAMAMA_FIRST_CONTACT_PHONE => 'contact_phone_tech_hamama_first_booking',
             self::TECH_HAMAMA_FIRST_SERVICE_HOURS => 'service_hours_tech_hamama_first_booking',
             self::TECH_HAMAMA_FIRST_RESTRICTIONS => 'restrictions_tech_hamama_first_booking',
             self::TECH_HAMAMA_FIRST_DURATION_TIME => 'duration_time_tech_hamama_first_booking',
 
-                // TECH_HAMAMA_SECOND_BOOKING
             self::TECH_HAMAMA_SECOND_CONTACT_PHONE => 'contact_phone_tech_hamama_second_booking',
             self::TECH_HAMAMA_SECOND_SERVICE_HOURS => 'service_hours_tech_hamama_second_booking',
             self::TECH_HAMAMA_SECOND_RESTRICTIONS => 'restrictions_tech_hamama_second_booking',
             self::TECH_HAMAMA_SECOND_DURATION_TIME => 'duration_time_tech_hamama_second_booking',
 
 
-                // TRANSPORTATION_BOOKING
             self::TRANSPORTATION_CONTACT_PHONE => 'contact_phone_transportation_booking',
             self::TRANSPORTATION_SERVICE_HOURS => 'service_hours_transportation_booking',
             self::TRANSPORTATION_MINIMUM_ADVANCE_DAYS => 'minimum_advance_days_transportation_booking',
             self::TRANSPORTATION_RESTRICTION_DATES => 'restriction_dates_transportation_booking',
-                // CAR_MAINTENANCE_BOOKING
             self::CAR_MAINTENANCE_CONTACT_PHONE => 'contact_phone_car_maintenance_booking',
             self::CAR_MAINTENANCE_DRIVERS_AMOUNT => 'drivers_amount_car_maintenance_booking',
             self::CAR_MAINTENANCE_RESTRICTION_DATES => 'restriction_dates_car_maintenance_booking',
-                // CONSTRUCTION_BOOKING
             self::CONSTRUCTION_CONTACT_PHONE => 'contact_phone_construction_booking',
         };
     }
 
-    /** Find the enum case by its unique system_reference name. @param ?string $name @return ?self */
+    /** Finds the case by its unique system_references.name. */
     public static function fromSystemReferenceName(?string $name): ?self
     {
         return match ($name) {
-            // CAR_BOOKING
             'total_car_stock_car_booking' => self::CAR_TOTAL_CAR_STOCK,
             'service_hours_car_booking' => self::CAR_SERVICE_HOURS,
             'contact_phone_car_booking' => self::CAR_CONTACT_PHONE,
             'restrictions_car_booking' => self::CAR_RESTRICTIONS,
             'restriction_dates_car_booking' => self::CAR_RESTRICTION_DATES,
-            // FOOD_BOOKING
             'contact_phone_food_booking' => self::FOOD_CONTACT_PHONE,
             'restrictions_food_booking' => self::FOOD_RESTRICTIONS,
             'service_hours_food_booking' => self::FOOD_SERVICE_HOURS,
 
-            // IN_UNIT_FOOD_BOOKING
             'contact_phone_in_unit_food_booking' => self::IN_UNIT_FOOD_CONTACT_PHONE,
             'restriction_dates_in_unit_food_booking' => self::IN_UNIT_RESTRICTION_DATES,
             'restrictions_in_unit_food_booking' => self::IN_UNIT_FOOD_RESTRICTIONS,
@@ -252,7 +235,6 @@ enum SystemReferenceEnum
             'cancellation_advance_days_in_unit_food_booking' => self::IN_UNIT_FOOD_CANCELLATION_ADVANCE_DAYS,
             'max_advance_days_in_unit_food_booking' => self::IN_UNIT_FOOD_MAX_ADVANCE_DAYS,
 
-            // OUT_UNIT_FOOD_BOOKING
             'contact_phone_out_unit_food_booking' => self::OUT_UNIT_FOOD_CONTACT_PHONE,
             'restriction_dates_out_unit_food_booking'=> self::OUT_UNIT_RESTRICTION_DATES,
             'restrictions_out_unit_food_booking' => self::OUT_UNIT_FOOD_RESTRICTIONS,
@@ -264,19 +246,16 @@ enum SystemReferenceEnum
             => self::OUT_UNIT_FOOD_CANCELLATION_ADVANCE_DAYS,
             'max_advance_days_out_unit_food_booking' => self::OUT_UNIT_FOOD_MAX_ADVANCE_DAYS,
 
-            // EQUIPMENT_BOOKING_MALE
             'contact_phone_equipment_booking_male' => self::EQUIPMENT_MALE_CONTACT_PHONE,
             'qty_limit_clothing_equipment_booking_male' => self::EQUIPMENT_MALE_QTY_LIMIT_CLOTHING,
             'qty_limit_footwear_equipment_booking_male' => self::EQUIPMENT_MALE_QTY_LIMIT_FOOTWEAR,
             'qty_limit_related_equipment_booking_male' => self::EQUIPMENT_MALE_QTY_LIMIT_RELATED_PRODUCTS,
 
-            // EQUIPMENT_BOOKING_FEMALE
             'contact_phone_equipment_booking_female' => self::EQUIPMENT_FEMALE_CONTACT_PHONE,
             'qty_limit_clothing_equipment_booking_female' => self::EQUIPMENT_FEMALE_QTY_LIMIT_CLOTHING,
             'qty_limit_footwear_equipment_booking_female' => self::EQUIPMENT_FEMALE_QTY_LIMIT_FOOTWEAR,
             'qty_limit_related_product_equipment_booking_female' => self::EQUIPMENT_FEMALE_QTY_LIMIT_RELATED_PRODUCTS,
 
-            // BARBER_BOOKING
             'restrictions_barber_booking' => self::BARBER_DATE_ACTIVITI,
             'contact_phone_barber_booking' => self::BARBER_CONTACT_PHONE,
             'service_hours_barber_booking' => self::BARBER_SERVICE_HOURS,
@@ -287,47 +266,40 @@ enum SystemReferenceEnum
             'advance_month_restrictions_barber_booking' => self::BARBER_ADVANCE_MONTHS,
             'restriction_dates_barber_booking' => self::BARBER_RESTRICTION_DATES,
 
-            // LECTURE_ROOM_BOOKING
             'contact_phone_lecture_room_booking' => self::LECTURE_ROOM_CONTACT_PHONE,
             'service_hours_lecture_room_booking' => self::LECTURE_ROOM_SERVICE_HOURS,
             'restrictions_lecture_room_booking' => self::LECTURE_ROOM_RESTRICTIONS,
             'duration_time_lecture_room_booking' => self::LECTURE_ROOM_DURATION_TIME,
 
-            // SMALL_COMMAND_ROOM_BOOKING
             'contact_phone_small_command_room_booking' => self::SMALL_COMMNAD_ROOM_CONTACT_PHONE,
             'service_hours_small_command_room_booking' => self::SMALL_COMMNAD_ROOM_SERVICE_HOURS,
             'restrictions_small_command_room_booking' => self::SMALL_COMMNAD_ROOM_RESTRICTIONS,
             'duration_time_small_command_room_booking' => self::SMALL_COMMNAD_ROOM_DURATION_TIME,
 
-            // TECH_HAMAMA_FIRST_BOOKING
             'contact_phone_tech_hamama_first_booking' => self::TECH_HAMAMA_FIRST_CONTACT_PHONE,
             'service_hours_tech_hamama_first_booking' => self::TECH_HAMAMA_FIRST_SERVICE_HOURS,
             'restrictions_tech_hamama_first_booking' => self::TECH_HAMAMA_FIRST_RESTRICTIONS,
             'duration_time_tech_hamama_first_booking' => self::TECH_HAMAMA_FIRST_DURATION_TIME,
 
-            // TECH_HAMAMA_SECOND_BOOKING
             'contact_phone_tech_hamama_second_booking' => self::TECH_HAMAMA_SECOND_CONTACT_PHONE,
             'service_hours_tech_hamama_second_booking' => self::TECH_HAMAMA_SECOND_SERVICE_HOURS,
             'restrictions_tech_hamama_second_booking' => self::TECH_HAMAMA_SECOND_RESTRICTIONS,
             'duration_time_tech_hamama_second_booking' => self::TECH_HAMAMA_SECOND_DURATION_TIME,
 
-            // TRANSPORTATION_BOOKING
             'contact_phone_transportation_booking' => self::TRANSPORTATION_CONTACT_PHONE,
             'service_hours_transportation_booking' => self::TRANSPORTATION_SERVICE_HOURS,
             'minimum_advance_days_transportation_booking' => self::TRANSPORTATION_MINIMUM_ADVANCE_DAYS,
             'restriction_dates_transportation_booking' => self::TRANSPORTATION_RESTRICTION_DATES,
-            // CAR_MAINTENANCE_BOOKING
             'contact_phone_car_maintenance_booking' => self::CAR_MAINTENANCE_CONTACT_PHONE,
             'drivers_amount_car_maintenance_booking' => self::CAR_MAINTENANCE_DRIVERS_AMOUNT,
             'restriction_dates_car_maintenance_booking' => self::CAR_MAINTENANCE_RESTRICTION_DATES,
-            // CONSTRUCTION_BOOKING
             'contact_phone_construction_booking' => self::CONSTRUCTION_CONTACT_PHONE,
 
             default => null,
         };
     }
     
-    /** Get this case's system reference id from DB by unique name, cached. @return ?int */
+    /** This case's DB id, looked up by name and cached. */
     public function getSystemReferenceId(): ?int
     {
         static $cache = [];
@@ -359,7 +331,7 @@ enum SystemReferenceEnum
             ->toArray();
     }
 
-    /** Get the decoded system reference value of a booking type. @param int $bookingTypeId, ?int $systemReferenceId @return array */
+    /** Decoded system reference value of a booking type. */
     public static function getSystemReferenceValue(
         int $bookingTypeId,
         ?int $systemReferenceId,
@@ -401,25 +373,20 @@ enum SystemReferenceEnum
         };
     }
     
-    /** Get a Hebrew label for this system reference. @return string */
     public function label(): string
     {
         return match ($this) {
-                // ---- Car booking ----
             self::CAR_TOTAL_CAR_STOCK => 'סה״כ רכבים להזמנה',
             self::CAR_SERVICE_HOURS => 'שעות פעילות הזמנת רכב',
             self::CAR_CONTACT_PHONE => 'טלפון ליצירת קשר להזמנת רכב',
             self::CAR_RESTRICTIONS => 'הגבלת זמני הזמנת רכב',
 
-                // ---- Car maintenance ----
             self::CAR_MAINTENANCE_CONTACT_PHONE =>
             'טלפון ליצירת קשר להזמנת טיפולי רכב',
 
-                // ---- Equipment ----
             self::EQUIPMENT_MALE_CONTACT_PHONE,self::EQUIPMENT_FEMALE_CONTACT_PHONE =>
             'טלפון ליצירת קשר להזמנת ציוד',
 
-                // ---- Barber ----
             self::BARBER_CONTACT_PHONE =>
             'טלפון ליצירת קשר להזמנת מספרה',
 
@@ -432,7 +399,6 @@ enum SystemReferenceEnum
 
         
 
-                // ---- Food ----
             self::FOOD_CONTACT_PHONE =>
             'טלפון ליצירת קשר — הזמנת מזון',
 
@@ -472,7 +438,7 @@ enum SystemReferenceEnum
         };
     }
 
-    /** Map a system_reference value key to its Hebrew label. @param string $key @return string */
+    /** Hebrew label for a system reference value key. */
     private function getLabelForKey(string $key): string
     {
         return match ($key) {

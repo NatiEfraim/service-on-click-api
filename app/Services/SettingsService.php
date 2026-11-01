@@ -23,8 +23,8 @@ use App\Traits\CancelsBookingsOnRestrictionDates;
 use Carbon\Carbon;
 
 /**
- * What the settings screen of one booking type in one unit shows (system references, form fields and options, statement, who manages the
- * type), and what blocking dates would do. Reading only - the changes go through the existing approver / super admin endpoints.
+ * What the settings screen of one booking type in one unit shows (references, fields and options, statement, managers)
+ * and what blocking dates would do. Read-only; changes go through the approver / super admin endpoints.
  */
 class SettingsService
 {
@@ -34,10 +34,7 @@ class SettingsService
     {
     }
 
-    /**
-     * @return array<string, mixed> system_references, form_fields (with used_by: how many bookings hold a value), options, statement, managers, open_count, can_edit_global
-     * @throws DomainError 403 when the user may not manage this booking type in this unit
-     */
+    /** @return array<string, mixed> system_references, form_fields (with used_by), options, statement, managers, open_count, can_edit_global */
     public function view(AccessScope $scope, int $unitId, int $bookingTypeId): array
     {
         if (!$scope->canManageSettings($unitId, $bookingTypeId)) {
@@ -46,7 +43,7 @@ class SettingsService
             throw new DomainError('אין לך הרשאה לצפות בהגדרות תחום זה', 403);
         }
 
-        // The archived fields are out of the form (their values stay in the bookings that hold them).
+        // Archived fields are out of the form; their values stay in the bookings.
         $fields = FormField::query()
             ->where('unit_id', $unitId)
             ->where('booking_type_id', $bookingTypeId)
@@ -90,12 +87,12 @@ class SettingsService
                 'position' => (int) $field->position,
                 'version' => (int) $field->version,
                 'used_by' => (int) ($usedBy[$field->id] ?? 0),
-                // Made here (not one of the mobile app's): only these can change type or be removed.
+                // Custom fields only (not the mobile app's) can change type or be removed.
                 'is_custom' => $field->isCustom(),
                 'can_change_type' => $field->isCustom() && !isset($usedBy[$field->id]),
                 'can_remove' => $field->isCustom() && $field->form_field_id === null && !isset($parentIds[$field->id]) && $standAlone > 1,
             ])->all(),
-            // What a new field may be, for the "add a field" form.
+            // Types offered by the "add a field" form.
             'field_types' => FieldType::query()
                 ->whereIn('id', FormFieldRules::CREATABLE_TYPES)
                 ->orderBy('id')
@@ -138,11 +135,9 @@ class SettingsService
     }
 
     /**
-     * The bookings that blocking these dates would cancel - shown before the list of blocked dates is saved. The dates that are blocked
-     * already are not new and cancel nothing.
+     * The bookings that blocking these dates would cancel, shown before the list is saved; already blocked dates cancel nothing.
      * @param array<int, string> $dates the full list of Y-m-d dates the reference would hold
      * @return array{new_dates: array<int, string>, removed_dates: array<int, string>, affected_count: int, affected_serials: array<int, int>, affected_in_other_units: int, cancel_status_id: int, cancel_status_label: ?string}
-     * @throws DomainError 403 not the user's booking type, 422 not a list of blocked dates
      */
     public function restrictionImpact(AccessScope $scope, int $systemReferenceId, array $dates): array
     {
@@ -173,8 +168,8 @@ class SettingsService
         $bookingTypeId = (int) $reference->booking_type_id;
         $cancelStatus = BookingTypeEnum::getCancelStatusForRestrictionDates($bookingTypeId);
 
-        // The list of blocked dates belongs to the booking type, not to a unit: a new date cancels the bookings of EVERY unit on it. The count says
-        // so; the serial numbers of other units' bookings are shown only to the super admin.
+        // Blocked dates belong to the booking type, not a unit: a new date cancels EVERY unit's bookings on it.
+        // Serial numbers of other units' bookings are shown only to the super admin.
         $affected = Booking::query()
             ->whereIn('id', $this->findBookingIdsOnRestrictedDates($bookingTypeId, $newDates))
             ->orderBy('serial_number')
@@ -194,7 +189,7 @@ class SettingsService
         ];
     }
 
-    /** The people of the unit who hold a managing permission on the type, with their roles on it. @return array<int, array<string, mixed>> */
+    /** Unit members holding a managing permission on the type, with their roles on it. @return array<int, array<string, mixed>> */
     private function managers(int $unitId, int $bookingTypeId): array
     {
         $prefixes = [PermissionEnum::ADMIN, PermissionEnum::APPROVER, PermissionEnum::VICE_APPROVER, PermissionEnum::TRANSPORTATION_CONTROL_OFFICER];

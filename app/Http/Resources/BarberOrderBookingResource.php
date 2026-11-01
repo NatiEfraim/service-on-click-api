@@ -12,7 +12,6 @@ class BarberOrderBookingResource extends JsonResource
 {
     use ResolvesBarberSchedule;
 
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         $date = Carbon::parse($this->date);

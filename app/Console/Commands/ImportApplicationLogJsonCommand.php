@@ -11,13 +11,10 @@ class ImportApplicationLogJsonCommand extends Command
 {
     use ImportsApplicationLogJson;
 
-    /** The name and signature of the console command. @var string */
     protected $signature = 'importApplicationLogJson:mysql';
 
-    /** The console command description. @var string */
     protected $description = 'Read the application log files waiting in the bucket (import-json/application-log), queue their rows chunk by chunk to save the logs, and move the files to loaded-json';
 
-    /** Execute the console command. @return int */
     public function handle(): int
     {
         try {

@@ -7,15 +7,14 @@ use App\Models\Booking;
 use Illuminate\Support\Collection;
 
 /**
- * How long bookings stayed in each status, from the application log (the entries that name the status a booking moved into).
- * A booking saved before the log carried statuses has no such entries: its current status, since status_changed_at, is all that is known -
- * so every booking ends in an open interval of its current status, whatever the log says.
+ * How long bookings stayed in each status, from the application log. Bookings saved before the log carried statuses only know their
+ * current status since status_changed_at, so every booking ends in an open interval of its current status.
  */
 class StatusTimelineService
 {
     /**
      * @param Collection<int, Booking> $bookings
-     * @param ?int $leftSince only the intervals that were still open at this moment (unix time) or ended after it; null keeps all of them
+     * @param ?int $leftSince only intervals still open at this unix time or ended after it; null keeps all
      * @return array<int, array{booking_id: int, booking_type_id: int, status_id: int, entered_at: int, left_at: ?int, created_at: int, handler: ?string}>
      */
     public function intervals(Collection $bookings, ?int $leftSince = null): array
@@ -26,8 +25,8 @@ class StatusTimelineService
 
         $intervals = [];
 
-        // The logs are read for a few thousand bookings at a time: a statement cannot hold an unlimited list of ids, and the logs of the ones
-        // already done need not stay in memory.
+        // Logs are read a few thousand bookings at a time: a statement cannot hold an unlimited id list,
+        // and the logs of finished bookings need not stay in memory.
         foreach ($bookings->chunk(2000) as $chunk) {
             $logs = ApplicationLog::query()
                 ->whereIn('booking_id', $chunk->modelKeys())

@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/** PUT /api/bookings-super-admin-management/form-fields/{id} - change a field: send the version the screen saw and only what changes. */
+/** Send the version the screen saw and only what changes. */
 class UpdateFormFieldRequest extends FormRequest
 {
     public function authorize(): bool

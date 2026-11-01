@@ -28,12 +28,11 @@ Route::controller(UserController::class)
         Route::post('/', [UserController::class, 'store']);
     });
 
-// Reads the json files waiting in the bucket right now (what the scheduled import commands do) and returns the imported data.
-// Open on a local machine (APP_ENV=local) so Postman needs no token; on any other environment only the super admin may call it.
+// Imports the bucket files waiting now; token-free on APP_ENV=local, super admin only elsewhere.
 Route::get('/test-import', [UserController::class, 'testImport'])
     ->middleware(app()->environment('local') ? [] : ['auth:api', 'throttle:api', 'role:super_admin']);
 
-// The only endpoints a person with just the user role may call (besides GET /user and POST /logout).
+// Requester endpoints (user role)
 Route::controller(BookingController::class)
     ->prefix('bookings')
     ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|user'])
@@ -56,31 +55,29 @@ Route::controller(BookingApproverManagementController::class)
         Route::put('/system-references', [BookingApproverManagementController::class, 'updateSystemReferences']);
     });
 
-// Managing the bookings. Every role with a managing permission reaches these routes; what each may see and do is decided per booking
-// type (and unit) by AccessScope and the Workflow, so a role that has no turn gets a refusal, not an empty menu.
+// Booking management: access is decided per booking by AccessScope and Workflow.
 Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer'])
     ->prefix('bookings-approver-management')
     ->group(function () {
-        // The bookings: the list with stage and age, one booking in full, the status change and the correction of date/time values.
+        // Bookings
         Route::controller(ManagementBookingController::class)->group(function () {
             Route::get('/bookings', 'index');
             Route::get('/bookings/{serial}', 'show')->whereNumber('serial');
             Route::get('/bookings/{serial}/attachments/{kind}/{id}', 'attachment')->whereNumber('serial')->whereIn('kind', ['file', 'image'])->whereNumber('id');
             Route::post('/bookings/{serial}/status', 'changeStatus')->whereNumber('serial');
             Route::put('/bookings/{serial}/values', 'updateValues')->whereNumber('serial');
-            // This system never opens a booking: the attempt is answered with 405 and audited.
+            // Opening a booking is refused (405, audited).
             Route::match(['post', 'put'], '/bookings', 'createBlocked');
             Route::post('/bookings/{bookingTypeId}/create', 'createBlocked')->whereNumber('bookingTypeId');
         });
 
-        // The settings of a booking type in a unit, and what blocking dates would cancel.
+        // Booking type settings
         Route::controller(ManagementSettingsController::class)->group(function () {
             Route::get('/settings/{unitId}/{bookingTypeId}', 'settings')->whereNumber(['unitId', 'bookingTypeId']);
             Route::post('/settings/references/{id}/impact', 'restrictionImpact')->whereNumber('id');
         });
 
-        // What a screen opens with, and the figures. (The domain dashboard and the bottlenecks are for the roles that lead a domain; the
-        // service says no to the others.)
+        // Dashboard and figures; the domain dashboard and bottlenecks are checked in the service.
         Route::controller(ManagementInsightController::class)->group(function () {
             Route::get('/me', 'me');
             Route::get('/catalog', 'catalog');
@@ -99,7 +96,7 @@ Route::controller(BookingAdminManagementController::class)
         Route::get('/get-approver-permissions/{userUuid}', [BookingAdminManagementController::class, 'getApproverPermissions']);
     });
 
-// The admin (camp commander) and the super admin: the handling targets of the booking types, the main screen and the reports.
+// Admin and super admin: targets, main screen, reports
 Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin'])
     ->prefix('bookings-admin-management')
     ->group(function () {
@@ -113,7 +110,7 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin'])
             Route::get('/reports', 'reports');
         });
 
-        // Which department a person is in (an admin: the people of their own unit).
+        // User department
         Route::put('/users/{uuid}/department', [ManagementOrgController::class, 'setUserDepartment'])->whereUuid('uuid');
     });
 
@@ -137,7 +134,7 @@ Route::controller(BookingSuperAdminManagementController::class)
         Route::delete('/remove-option/{formFieldId}', [BookingSuperAdminManagementController::class, 'removeOption']);
     });
 
-// The super admin: the organisation (units and departments) and the audit log.
+// Super admin: organisation and audit log
 Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
     ->prefix('bookings-super-admin-management')
     ->group(function () {
@@ -149,8 +146,7 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             Route::put('/org/departments/{id}', 'updateDepartment')->whereNumber('id');
         });
 
-        // The form of a booking type: add, change, move and remove its fields, and whether an approver may correct the value of a date / time field.
-        // A change is told to the mobile app (system_config); a field with values is archived, never deleted.
+        // Booking type forms: changes go to the mobile app, fields with values are archived.
         Route::controller(ManagementSettingsController::class)->group(function () {
             Route::post('/form-fields/{unitId}/{bookingTypeId}', 'createField')->whereNumber(['unitId', 'bookingTypeId']);
             Route::put('/form-fields/{unitId}/{bookingTypeId}/order', 'reorderFields')->whereNumber(['unitId', 'bookingTypeId']);
@@ -159,7 +155,7 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             Route::delete('/form-fields/{id}', 'removeField')->whereNumber('id');
         });
 
-        // The traffic with the mobile app: the files sent back, the decisions waiting to be sent, the sync conflicts.
+        // Mobile app sync
         Route::controller(ManagementSyncController::class)->group(function () {
             Route::get('/sync', 'overview');
             Route::get('/sync/files/{id}', 'file')->whereNumber('id');
@@ -168,7 +164,7 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             Route::post('/sync/run', 'run');
         });
 
-        // The audit log is append-only: reading it and checking its chain are the only things allowed; any other attempt is refused and audited.
+        // Audit log is append-only: other methods are refused and audited.
         Route::controller(ManagementAuditController::class)->group(function () {
             Route::get('/audit', 'index');
             Route::get('/audit/verify', 'verify');

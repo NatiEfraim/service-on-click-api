@@ -6,13 +6,10 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * The only place that talks to the bucket. The disk is chosen by STORAGE_SERVICE:
- * "minio" on local, "s3" on the servers (see config/filesystems.php).
- */
+/** The only place that talks to the bucket; STORAGE_SERVICE picks the disk ("minio" locally, "s3" on servers). */
 class StorageService
 {
-    /** Upload storage/logs/laravel.log to the bucket's logs folder; with $error the log file is first reset to just that error. @param \Throwable|string|null $error @return int HTTP status code */
+    /** Uploads storage/logs/laravel.log to the bucket's logs folder; with $error the log is first reset to just that error. @return int HTTP status code */
     public function logToS3(\Throwable|string|null $error = null): int
     {
         try {
@@ -41,7 +38,7 @@ class StorageService
 
             $fileName = 'laravel.log';
 
-            // Outside prod the bucket name is part of the object key itself.
+            // Outside prod the bucket name is part of the object key.
             $prefix = !$isProd ? "{$bucket}/" : '';
             $objectPath = "{$prefix}{$folder}/{$fileName}";
 
@@ -56,7 +53,7 @@ class StorageService
         }
     }
 
-    /** Overwrite laravel.log with just this error so the next upload has only it. @param string $localPath, \Throwable|string $error */
+    /** Overwrites laravel.log with just this error so the next upload holds only it. */
     private function resetLogFileWithError(string $localPath, \Throwable|string $error): void
     {
         $timestamp = now()->format('Y-m-d H:i:s');
@@ -83,7 +80,6 @@ class StorageService
         }
     }
 
-    /** Delete a previously uploaded image. @param string $path @return bool */
     public function deleteImage(string $path): bool
     {
         try {
@@ -103,13 +99,12 @@ class StorageService
         }
     }
 
-    /** Delete a previously uploaded file (works for any file type). @param string $path @return bool */
     public function deleteFile(string $path): bool
     {
         return $this->deleteImage($path);
     }
 
-    /** The object key of a file in a bucket folder - outside prod the bucket name is part of the key itself (same rule as logToS3). @param string $remoteDirectory, string $fileName @return string */
+    /** Object key of a file in a bucket folder; outside prod the bucket name is part of the key (as in logToS3). */
     public function buildBucketKey(string $remoteDirectory, string $fileName = ''): string
     {
         $diskName = config('filesystems.storage_service');
@@ -118,7 +113,7 @@ class StorageService
         return $prefixBucket . trim($remoteDirectory, '/') . ($fileName === '' ? '' : '/' . $fileName);
     }
 
-    /** Names of the .json files in a bucket folder that start with $fileNamePrefix, oldest first (the date in the name sorts the same way). Throws when the disk refuses the listing. @param string $fileNamePrefix, string $remoteDirectory @return array<int, string> */
+    /** Names of .json files in a bucket folder starting with $fileNamePrefix, oldest first (the date in the name sorts the same). Throws when the disk refuses. @return array<int, string> */
     public function listJsonFilesInBucket(string $fileNamePrefix, string $remoteDirectory): array
     {
         $disk = Storage::disk(config('filesystems.storage_service'));
@@ -132,7 +127,7 @@ class StorageService
             ->all();
     }
 
-    /** Read and decode a bucket JSON file; throws if it is missing, empty or not valid JSON. @param string $fileName, string $remoteDirectory @return array */
+    /** Reads and decodes a bucket JSON file; throws when it is missing, empty or invalid. */
     public function readJsonFromBucket(string $fileName, string $remoteDirectory): array
     {
         $disk = Storage::disk(config('filesystems.storage_service'));
@@ -142,7 +137,7 @@ class StorageService
             throw new \RuntimeException("JSON file {$fileKey} not found in the bucket");
         }
 
-        // Remove the UTF-8 BOM if the uploaded JSON file contains it.
+        // Strip the UTF-8 BOM if present.
         $contents = preg_replace('/^\xEF\xBB\xBF/', '', (string) $disk->get($fileKey));
 
         if (trim($contents) === '') {
@@ -158,7 +153,7 @@ class StorageService
         return $decoded;
     }
 
-    /** Write a JSON file into a bucket folder, replacing the one with that name. Throws when the disk refuses. @param string $fileName, string $remoteDirectory, string $contents @return string the object key written */
+    /** Writes a JSON file into a bucket folder, replacing the one with that name. @return string the object key written */
     public function putJsonToBucket(string $fileName, string $remoteDirectory, string $contents): string
     {
         $fileKey = $this->buildBucketKey($remoteDirectory, $fileName);
@@ -170,7 +165,7 @@ class StorageService
         return $fileKey;
     }
 
-    /** Move a file to another bucket folder (copy, then delete the original). A file with that name already there stays: the moved one gets the date and time before ".json". @param string $fileName, string $fromDirectory, string $toDirectory @return string the name the file has in $toDirectory */
+    /** Moves a file to another bucket folder (copy, then delete). If the name exists there, the moved file gets the date and time before ".json". @return string the name in $toDirectory */
     public function moveBucketFile(string $fileName, string $fromDirectory, string $toDirectory): string
     {
         $disk = Storage::disk(config('filesystems.storage_service'));
@@ -200,13 +195,13 @@ class StorageService
         return $toFileName;
     }
 
-    /** A signed URL for a stored image that expires after TEMP_URL_LIFETIME minutes (the bucket is private). @param string $path @return string */
+    /** Signed URL for a stored image, valid TEMP_URL_LIFETIME minutes (the bucket is private). */
     public function generateImageTemporaryUrl(string $path): string
     {
         return $this->temporaryUrl($path);
     }
 
-    /** A signed URL for a stored file that expires after TEMP_URL_LIFETIME minutes (the bucket is private). @param string $path @return string */
+    /** Signed URL for a stored file, valid TEMP_URL_LIFETIME minutes (the bucket is private). */
     public function generateFileTemporaryUrl(string $path): string
     {
         return $this->temporaryUrl($path);

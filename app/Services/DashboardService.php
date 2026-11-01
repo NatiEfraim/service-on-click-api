@@ -12,9 +12,8 @@ use App\Models\SyncConflict;
 use App\Support\AccessScope;
 
 /**
- * The main screen (a tile per booking type, with what is open by stage) and the dashboard of a booking type.
- * The super admin and the admin (camp commander) see the tiles and any of their booking types; the approver (domain commander) only his own
- * booking types' dashboard; a handler (vice approver, control officer) none.
+ * The main screen (a tile per booking type with open bookings by stage) and the dashboard of a booking type.
+ * Super admin and admin see all tiles and booking types; the approver only his own booking types' dashboard; handlers none.
  */
 class DashboardService
 {
@@ -24,7 +23,7 @@ class DashboardService
     ) {
     }
 
-    /** @return array{domains: array<int, array<string, mixed>>, by_type_stage: array<int, array<string, int>>} @throws DomainError 403 */
+    /** @return array{domains: array<int, array<string, mixed>>, by_type_stage: array<int, array<string, int>>} */
     public function home(AccessScope $scope): array
     {
         if (!$scope->isSuperAdmin() && !$scope->isAdmin()) {
@@ -37,7 +36,7 @@ class DashboardService
 
         $base = $scope->applyToBookings(Booking::query())->whereIn('booking_type_id', $typeIds);
 
-        // Counted by the database: nothing but the figures is read.
+        // Counted in the database: only the figures are read.
         $totals = (clone $base)->selectRaw('booking_type_id, COUNT(*) AS total')->groupBy('booking_type_id')->pluck('total', 'booking_type_id');
         $openByStatus = (clone $base)
             ->whereNotIn('status_id', $terminal)
@@ -79,10 +78,9 @@ class DashboardService
     }
 
     /**
-     * The dashboard of one or more booking types: totals, handling times, where the open bookings wait, the trend and the oldest bookings.
-     * @param array<int, int|string> $requestedTypeIds booking types asked for (cut down to those the user may open; empty = all of them)
+     * Dashboard of one or more booking types: totals, handling times, where open bookings wait, the trend and the oldest bookings.
+     * @param array<int, int|string> $requestedTypeIds booking types asked for (cut to those the user may open; empty = all)
      * @return array<string, mixed>
-     * @throws DomainError 403
      */
     public function domain(AccessScope $scope, array $requestedTypeIds, int $days = 30): array
     {
@@ -104,8 +102,8 @@ class DashboardService
 
         $base = $scope->applyToBookings(Booking::query())->whereIn('booking_type_id', $typeIds);
 
-        // Totals over the whole history are counted by the database; the bookings read are the open ones and those that moved in the window
-        // (the closed ones before it are in no figure but the two counts).
+        // Totals over the whole history are counted in the database; the bookings read are the open ones
+        // and those that moved in the window.
         $totalAll = (clone $base)->count();
         $closedAll = (clone $base)->whereIn('status_id', $terminal)->count();
 
@@ -123,7 +121,7 @@ class DashboardService
             ->values()
             ->all();
 
-        // (A subquery, not the list of ids: a long list does not fit in one statement.)
+        // A subquery, not an id list: a long list does not fit in one statement.
         $conflicts = SyncConflict::query()
             ->whereIn('booking_id', (clone $base)->whereNotIn('status_id', $terminal)->select('id'))
             ->where('state', SyncConflict::STATE_OPEN)

@@ -17,11 +17,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class UpdateSystemReferenceRequest extends FormRequest
 {
-    /**
-     * The route is open to every managing role, but a role holds its permission for one booking type: whoever edits the references of a booking
-     * type (and blocks dates on it, which cancels bookings) must manage that type. A refusal is audited and answered like every other (403).
-     * @return bool
-     */
+    /** The role must manage the booking type being edited (blocking dates cancels bookings); a refusal is audited and answered 403. */
     public function authorize(): bool
     {
         $user = Auth::user();
@@ -37,7 +33,6 @@ class UpdateSystemReferenceRequest extends FormRequest
         return false;
     }
 
-    /** Get the validation rules that apply to the request. @return array */
     public function rules(): array
     {
         try {
@@ -93,7 +88,6 @@ class UpdateSystemReferenceRequest extends FormRequest
         return $rules;
     }
 
-    /** Get the validation messages that apply to the request. @return array */
     public function messages(): array
     {
         return [
@@ -102,7 +96,6 @@ class UpdateSystemReferenceRequest extends FormRequest
         ];
     }
 
-    /** Validate that all received system_reference IDs belong to the received booking_type_id. */
     private function validateSystemReferenceIdsByBookingType(int $bookingTypeId, array $details): bool
     {
         $allowedSystemReferenceIds = SystemReferenceEnum::getSystemReferenceIdsByBookingTypeId($bookingTypeId);
@@ -116,7 +109,6 @@ class UpdateSystemReferenceRequest extends FormRequest
         return true;
     }
 
-    /** Validate every submitted system_reference's fields. */
     private function validateSystemReferenceDetails(int $bookingTypeId, array $details): bool
     {
         foreach ($details as $systemReferenceId => $fields) {
@@ -168,7 +160,6 @@ class UpdateSystemReferenceRequest extends FormRequest
         };
     }
 
-    /** Allowed detail keys per SystemReferenceEnum case, grouped by shape. */
     private function allowedKeysBySystemReference(SystemReferenceEnum $enum): array
     {
         return match ($enum) {
@@ -233,7 +224,7 @@ class UpdateSystemReferenceRequest extends FormRequest
         };
     }
 
-    /** Every submitted key must belong to the reference's key set; an empty set means "unconstrained". */
+    /** An empty key set means "unconstrained". */
     private function validateAllowedKeys(array $fields, array $allowedKeys): bool
     {
         if ($allowedKeys === []) {
@@ -294,7 +285,7 @@ class UpdateSystemReferenceRequest extends FormRequest
         return (int) $driversAmount >= 1;
     }
 
-    /** Furthest supply date in days from today - a whole number of at least 1. */
+    /** Days from today, a whole number of at least 1. */
     private function validateMaxAdvanceDays(array $fields): bool
     {
         if (!$this->validateAllowedKeys($fields, ['max_advance_days'])) {
@@ -310,7 +301,6 @@ class UpdateSystemReferenceRequest extends FormRequest
         return (int) $maxAdvanceDays >= 1;
     }
 
-    /** Ensure every submitted key already exists and every value is valid for its field type. */
     private function validateFieldsAgainstExistingRecord(SystemReferenceEnum $enum, SystemReference $record, array $fields): bool
     {
         $existingJson = $record->decodedValue();
@@ -328,7 +318,7 @@ class UpdateSystemReferenceRequest extends FormRequest
         return true;
     }
 
-    /** Validate one field's value; count_businsday is a plain boolean, not a checkbox array. */
+    /** count_businsday is a plain boolean, not a checkbox array. */
     private function isValidSystemReferenceFieldValue(SystemReferenceEnum $enum, int $fieldTypeId, mixed $value): bool
     {
         return match ($enum) {
@@ -387,7 +377,7 @@ class UpdateSystemReferenceRequest extends FormRequest
         return null;
     }
 
-    /** Pairs of [service-hours reference, its break-hours reference or null]. @return array<int, array> */
+    /** @return array<int, array> pairs of [service-hours reference, its break-hours reference or null] */
     private function serviceAndBreakHoursPairs(): array
     {
         return [
@@ -428,7 +418,7 @@ class UpdateSystemReferenceRequest extends FormRequest
         return ['start' => $start, 'end' => $end];
     }
 
-    /** Convert an "HH:MM" string to minutes since midnight, or null when it is not a valid time. */
+    /** "HH:MM" to minutes since midnight; null when invalid. */
     private function toMinutesOfDay(mixed $time): ?int
     {
         if (!is_string($time) || !preg_match('/^(\d{1,2}):(\d{2})$/', $time, $matches)) {

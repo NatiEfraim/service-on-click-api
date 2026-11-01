@@ -29,10 +29,10 @@ class StatusSeeder extends Seeder
             'canceled_by_changing_time' => 'בוטלה עקב שינויי זמנים במספרה',
             //TRANSPORTATION_BOOKING
             'processing_by_control_officer' => 'ההזמנה בטיפול רמ"ד תו"ב',
-            //The vice approver's answer, sent on to the approver
+            // Vice approver's answer, sent on to the approver
             'vice_approver_approved' => 'הועברה לאישור סופי',
             'vice_approver_rejected' => 'הועברה לביטול סופי',
-            //TRANSPORTATION_BOOKING - the control officer's answer, sent on to the vice approver
+            // TRANSPORTATION_BOOKING: control officer's answer, sent on to the vice approver
             'control_officer_approved' => 'אושרה ע"י רמ"ד תו"ב',
             'control_officer_rejected' => 'נדחתה ע"י רמ"ד תו"ב',
         ];

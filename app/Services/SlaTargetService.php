@@ -8,7 +8,7 @@ use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The handling target of a booking type: the total hours from the booking's opening to its closing. A booking older than that is overdue.
+ * The handling target of a booking type: total hours from opening to closing; an older booking is overdue.
  * The super admin sets any type's target; an admin (camp commander) only the types they administer.
  */
 class SlaTargetService
@@ -22,7 +22,7 @@ class SlaTargetService
     {
     }
 
-    /** The targets of the booking types the user may see. @return array<int, array{booking_type_id: int, target_hours: float, warn_ratio: float, set_by: ?string}> */
+    /** Targets of the booking types the user may see. @return array<int, array{booking_type_id: int, target_hours: float, warn_ratio: float, set_by: ?string}> */
     public function list(AccessScope $scope): array
     {
         return SlaTarget::query()
@@ -40,9 +40,8 @@ class SlaTargetService
     }
 
     /**
-     * Set the target of a booking type, or remove it with $hours = null.
+     * Sets the target of a booking type, or removes it with $hours = null.
      * @return array{saved: bool, booking_type_id: int, target_hours: ?float, warn_ratio: ?float}
-     * @throws DomainError 403 not the user's booking type, 422 out of range
      */
     public function set(AccessScope $scope, int $bookingTypeId, ?float $hours, float $warnRatio = 0.8): array
     {

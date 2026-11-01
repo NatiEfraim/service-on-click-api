@@ -121,7 +121,7 @@ class BookingApproverManagementService
         }
     }
 
-    /** Build dashboard status counts and total_bookings for a filtered subset (incl. statuses). @param string $bookingType, array $filters, array $viceApproversUuids, array $statusIds @return array|HttpStatusCodeEnum */
+    /** Dashboard status counts and total_bookings for a filtered subset. @return array|HttpStatusCodeEnum */
     public function getFilteredDashboard(
         string $bookingType,
         array $filters = [],
@@ -142,7 +142,6 @@ class BookingApproverManagementService
                 $base->whereIn('status_id', $statusIds);
             }
 
-            // Aggregate in SQL
             $counts = (clone $base)
                 ->select('status_id', DB::raw('COUNT(*) as cnt'))
                 ->groupBy('status_id')
@@ -183,7 +182,7 @@ class BookingApproverManagementService
         }
     }
 
-    /** Get the auth unit's vice approvers (uuid, full_name) for a booking type. @param int $bookingTypeId @return HttpStatusCodeEnum|array */
+    /** The auth unit's vice approvers (uuid, full_name) for a booking type. @return HttpStatusCodeEnum|array */
     public function getViceApprovers(int $bookingTypeId): HttpStatusCodeEnum|array
     {
         try {
@@ -206,7 +205,7 @@ class BookingApproverManagementService
         }
     }
 
-    /** Paginate the unit's bookings of a type, filtered by status, vice approvers, dates and serial. @param int $bookingTypeId, array $statusIds, array $viceApproversUuids, array $filters, ?string $serialNumber @return HttpStatusCodeEnum|AnonymousResourceCollection|array */
+    /** The unit's bookings of a type, paginated and filtered by status, vice approvers, dates and serial. @return HttpStatusCodeEnum|AnonymousResourceCollection|array */
     public function getBookings(
         int $bookingTypeId,
         array $statusIds,
@@ -225,7 +224,7 @@ class BookingApproverManagementService
                 'comments.user',
                 'viceApprovers.user',
 
-                // Uploads, each tagged with its form field - shown inside booking_values by BookingValueFormatterService.
+                // Uploads tagged with their form field; BookingValueFormatterService shows them in booking_values.
                 'files',
                 'images',
 
@@ -287,7 +286,7 @@ class BookingApproverManagementService
         }
     }
 
-    /** Get the unit's system references and statement for a booking type. @param string $bookingType @return array|HttpStatusCodeEnum */
+    /** The unit's system references and statement for a booking type. @return array|HttpStatusCodeEnum */
     public function getSystemReferences(string $bookingType): array|HttpStatusCodeEnum
     {
         try {
@@ -303,7 +302,6 @@ class BookingApproverManagementService
                 ->where('booking_type_id', $bookingTypeId)
                 ->value('statement');
 
-            // Interpolate the statement with dynamic values from system references
             $interpolatedStatement = $this->interpolateStatement($statement, $this->authUser->unit_id);
 
             $systemReferences = SystemReference::query()
@@ -331,7 +329,7 @@ class BookingApproverManagementService
 
    
 
-    /** List barber service dates with taken count, service and break hours (optionally one date). @param string $dateQuery @return HttpStatusCodeEnum|AnonymousResourceCollection|array */
+    /** Barber service dates with taken count, service and break hours (optionally one date). @return HttpStatusCodeEnum|AnonymousResourceCollection|array */
     public function getBarberBookingDate(string $dateQuery = null): HttpStatusCodeEnum|AnonymousResourceCollection|array
     {
 
@@ -402,7 +400,7 @@ class BookingApproverManagementService
     }
 
 
-    /** List active barber bookings by date/start time, filtered by date, id and status. @param string $dateQuery, int $id, mixed $statusBookingId @return HttpStatusCodeEnum|AnonymousResourceCollection */
+    /** Active barber bookings by date/start time, filtered by date, id and status. @return HttpStatusCodeEnum|AnonymousResourceCollection */
     public function getOrderBarberBooking(string $dateQuery = null, int $id = null, $statusBookingId = null): HttpStatusCodeEnum|AnonymousResourceCollection
     {
 
@@ -443,7 +441,7 @@ class BookingApproverManagementService
         }
     }
 
-    /** Update the unit's system reference values by id; restriction dates sync booking blocks. @param array $updatedDetails @return array|HttpStatusCodeEnum */
+    /** Updates the unit's system reference values by id; restriction dates sync booking blocks. @return array|HttpStatusCodeEnum */
     public function updateSystemReferences(array $updatedDetails = []): array|HttpStatusCodeEnum
     {
         try {
@@ -498,7 +496,7 @@ class BookingApproverManagementService
                     bookingTypeId: (int) $record->booking_type_id,
                 );
 
-                // The mobile app is told the whole value of the setting (a list of blocked dates lives in its own table here, so it is taken from $after).
+                // The mobile app gets the whole value; blocked dates live in their own table, so it comes from $after.
                 if ($before !== $after) {
                     $this->queueConfigChange('system_reference', 'update', [
                         'unit_id' => (int) $record->unit_id,
@@ -523,7 +521,6 @@ class BookingApproverManagementService
     }
 
 
-    /** The pool of status ids valid for a given booking type. */
     private function getStatusIdsByBookingType(int $bookingTypeId): array
     {
         return BookingTypeHasStatus::query()
@@ -535,8 +532,8 @@ class BookingApproverManagementService
     }
 
     /**
-     * Sync booking restriction dates to match the frontend's final dates array.
-     * @return array{before: array<int, string>, after: array<int, string>} the blocked Y-m-d dates before and after, sorted (for the audit row)
+     * Syncs booking restriction dates to the frontend's final dates array.
+     * @return array{before: array<int, string>, after: array<int, string>} blocked Y-m-d dates before and after, sorted, for the audit row
      */
     private function syncBookingRestrictionDates(int $bookingTypeId, array $dates): array
     {
@@ -550,7 +547,7 @@ class BookingApproverManagementService
             ->values()
             ->toArray();
 
-        // Dates already blocked before this update - anything beyond these is a newly added block.
+        // Dates blocked before this update; anything beyond them is a new block.
         $existingDates = BookingRestrictionDate::query()
             ->where('booking_type_id', $bookingTypeId)
             ->pluck('date')
@@ -567,7 +564,6 @@ class BookingApproverManagementService
             return ['before' => $existingDates, 'after' => []];
         }
 
-        // Delete dates no longer in the submitted final array.
         BookingRestrictionDate::query()
             ->where('booking_type_id', $bookingTypeId)
             ->whereNotIn('date', $dates)
@@ -580,7 +576,7 @@ class BookingApproverManagementService
             ]);
         }
 
-        // A date just became blocked - cancel any booking already sitting on it.
+        // A newly blocked date cancels any booking already on it.
         $newlyBlockedDates = array_values(array_diff($dates, $existingDates));
 
         $this->cancelBookingsOnNewlyRestrictedDates(
@@ -627,7 +623,7 @@ class BookingApproverManagementService
     }
 
 
-    /** Apply advanced filter logic to the query using form field values (including date ranges). */
+    /** Applies advanced filters to the query using form field values (including date ranges). */
     private function filterQuery($query, $filters): mixed
     {
         foreach ($filters as $filter) {
@@ -667,7 +663,7 @@ class BookingApproverManagementService
         return $query;
     }
 
-    /** Format given filters by merging filter values with form field and operator data. */
+    /** Merges filter values with form field and operator data. */
     private function formatFilters($filters): mixed
     {
         $filtersIds = [];

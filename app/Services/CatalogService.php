@@ -13,7 +13,7 @@ use App\Models\Status;
 use App\Models\Unit;
 use App\Support\AccessScope;
 
-/** What a screen needs when it opens: who the user is and what they may do (me), and the lists every dropdown is made of (catalog). */
+/** Screen bootstrap data: who the user is and what they may do (me), and the dropdown lists (catalog). */
 class CatalogService
 {
     private const CAPABILITIES = [
@@ -21,7 +21,6 @@ class CatalogService
         'users.manage', 'dashboard.view', 'reports.view', 'targets.manage',
     ];
 
-    /** @return array<string, mixed> */
     public function me(AccessScope $scope): array
     {
         $user = $scope->user->loadMissing(['unit:id,name,internal_name', 'department:id,name']);
@@ -48,7 +47,6 @@ class CatalogService
         ];
     }
 
-    /** @return array<string, mixed> */
     public function catalog(AccessScope $scope): array
     {
         $unitsQuery = Unit::query()->where('is_deleted', false)->orderBy('id');

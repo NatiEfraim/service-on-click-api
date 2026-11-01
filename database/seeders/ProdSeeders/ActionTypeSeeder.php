@@ -8,7 +8,7 @@ use Illuminate\Database\Seeder;
 
 class ActionTypeSeeder extends Seeder
 {
-    /** Run the database seeds - rows are built from ActionTypeEnum so ids can never drift. */
+    /** Rows are built from ActionTypeEnum so ids cannot drift. */
     public function run(): void
     {
         foreach (ActionTypeEnum::rows() as $row) {

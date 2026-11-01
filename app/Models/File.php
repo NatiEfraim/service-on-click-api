@@ -18,7 +18,6 @@ class File extends Model
         });
     }
 
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'name',
         'display_name',
@@ -35,7 +34,7 @@ class File extends Model
         'id'
     ];
 
-    /** Flag these files as downloaded (sent to Hatch and backed up to export-files). updated_at is not touched. */
+    /** Flags files as downloaded (sent to Hatch, backed up to export-files) without touching updated_at. */
     public static function markAsDownloaded(array $fileIds): void
     {
         foreach (array_chunk($fileIds, 1000) as $chunk) {

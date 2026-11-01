@@ -6,10 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class Unit extends Model
 {
-
-    //
-
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'name',
         'internal_name',
@@ -18,14 +14,13 @@ class Unit extends Model
         'updated_at'
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'is_deleted',
         'created_at',
         'updated_at',
     ];
 
-    /** The name people see in this system: the internal name, else the unit's letter. @return string */
+    /** Display name: the internal name, else the unit's letter. */
     public function displayName(): string
     {
         return $this->internal_name ?: $this->name;

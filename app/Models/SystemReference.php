@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class SystemReference extends Model
 {
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'booking_type_id',
         'unit_id',
@@ -23,13 +22,11 @@ class SystemReference extends Model
     ];
 
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'created_at',
         'updated_at',
     ];
 
-    /** Attribute casts. @var array<string, string> */
     protected $casts = [
         'details_values' => 'array',
         'details_display_names' => 'array',
@@ -41,7 +38,7 @@ class SystemReference extends Model
     ];
 
 
-    /** The value as an array; the 'array' cast still yields a JSON string for double-encoded rows. @return array<string, mixed> */
+    /** @return array<string, mixed> Decoded value; the 'array' cast still yields a JSON string for double-encoded rows. */
     public function decodedValue(): array
     {
         $value = $this->value;

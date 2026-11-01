@@ -45,7 +45,7 @@ class BookingAdminManagementService
             $roleIds = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->value)->all();
             $permissionPrefixes = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->toPermissionEnum()->value)->all();
 
-            // An admin deals with the people of their own unit (assertMayManage); the super admin with everybody.
+            // An admin manages their own unit's people (assertMayManage); the super admin manages everybody.
             $users = User::whereHas('roles', function ($query) use ($roleIds) {
                 $query->whereIn('id', $roleIds);
             })
@@ -74,7 +74,7 @@ class BookingAdminManagementService
         }
     }
 
-    /** Get booking types the auth user manages, with the user's approver role flags. @param string $userUuid @return array|HttpStatusCodeEnum */
+    /** Booking types the auth user manages, with the user's approver role flags. @return array|HttpStatusCodeEnum */
     public function getApproverPermissions(string $userUuid): array|HttpStatusCodeEnum
     {
         try {
@@ -90,7 +90,7 @@ class BookingAdminManagementService
             $user = User::where('uuid', $userUuid)->with(['roles', 'permissions'])
                 ->where('is_deleted', false)->first();
 
-            // (A person of another unit is not one an admin deals with.)
+            // A person of another unit is not one an admin deals with.
             if (!$user || (!$this->isSuperAdmin() && (int) $user->unit_id !== (int) Auth::user()->unit_id)) {
                 return HttpStatusCodeEnum::BAD_REQUEST;
             }
@@ -151,7 +151,7 @@ class BookingAdminManagementService
         }
     }
 
-    /** Assign or revoke approver roles/permissions per booking type for a user. @param array $validated @return mixed */
+    /** Assigns or revokes approver roles/permissions per booking type for a user. */
     public function assignApproverRole(array $validated = []): mixed
     {
 
@@ -159,7 +159,7 @@ class BookingAdminManagementService
 
             $approverManagementRoles = $this->getApproverManagementRoles();
 
-            // Before the transaction: a refusal is audited, and a row written inside a transaction that the refusal rolls back would go with it.
+            // Before the transaction: a refusal is audited, and that row would be rolled back inside it.
             $this->assertMayManage($validated);
 
             DB::beginTransaction();
@@ -224,7 +224,7 @@ class BookingAdminManagementService
             return $this->getApprovers(identifier: $user->personal_number);
 
         } catch (DomainError $e) {
-            // A refusal, not a failure: nothing was changed, and the answer is the rule's own.
+            // A refusal, not a failure: nothing changed and the answer is the rule's own.
             throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
@@ -235,9 +235,9 @@ class BookingAdminManagementService
     }
 
     /**
-     * An admin grants roles only on the booking types they administer, and only to the people of their own unit; the super admin may do both
-     * anywhere. A person who does not exist yet is created in the admin's unit, so only the booking types count for them.
-     * @param array<string, mixed> $validated the request: uuid or personal_number, and role_assignments @throws DomainError 403
+     * An admin grants roles only on booking types they administer and only to their own unit's people; the super admin anywhere.
+     * A person who does not exist yet is created in the admin's unit, so only the booking types count.
+     * @param array<string, mixed> $validated uuid or personal_number, and role_assignments
      */
     private function assertMayManage(array $validated): void
     {
@@ -266,7 +266,7 @@ class BookingAdminManagementService
             throw new DomainError('ניתן להקצות הרשאות רק בתחומים שבניהולך ולמשתמשי היחידה שלך', 403);
         }
 
-        // The admin only views and manages: a role they gave themselves would let them take the approver's decisions as well.
+        // The admin only views and manages: a self-granted role would let them take approver decisions too.
         if ($target !== null && (int) $target->id === (int) $admin->id) {
             app(AuditService::class)->denied('user.permissions.change', 'user', $admin->actorId(), 'self_grant', $admin, ['unit_id' => $admin->unit_id]);
 
@@ -279,7 +279,7 @@ class BookingAdminManagementService
         return Auth::user()->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName());
     }
 
-    /** Fetch the user by uuid or personal number, creating one when no uuid is sent and none exists. @param array $validated @return ?User */
+    /** Finds the user by uuid or personal number; creates one when no uuid is sent and none exists. */
     private function resolveApproverUser(array $validated): ?User
     {
         if (!empty($validated['uuid'])) {
@@ -314,13 +314,13 @@ class BookingAdminManagementService
         return $user->load(['roles', 'permissions']);
     }
 
-    /** Roles used across getApprovers()/getApproverPermissions()/assignApproverRole(). @return Collection */
+    /** Roles shared by the approver management methods. */
     private function getApproverManagementRoles(): Collection
     {
         return BookingTypeHasRole::approverManagementRoleEnums();
     }
 
-    /** Remove a role from the user if they hold no permissions for it. @param User $user, string $rolePrefix */
+    /** Removes a role from the user if they hold no permissions for it. */
     private function cleanupRolePermissions(User $user, string $rolePrefix): void
     {
 

@@ -125,7 +125,7 @@ class FormFieldService
 
             $before = $this->snapshot($field);
 
-            // Only what the request changes is validated, so an unrelated change does not trip on a legacy duplicate name.
+            // Only what the request changes is validated, so an unrelated change ignores a legacy duplicate name.
             $label = array_key_exists('field_display_name', $data) ? trim((string) $data['field_display_name']) : $before['field_display_name'];
             $type = array_key_exists('field_type_id', $data) ? (int) $data['field_type_id'] : $before['field_type_id'];
             $wanted = [
@@ -157,7 +157,7 @@ class FormFieldService
 
             $attributes = $changed;
 
-            // Mobile-app fields follow the mobile app's rules; custom fields follow their name, type and required flag.
+            // Mobile-app fields follow the mobile app's rules; custom fields follow name, type and required flag.
             if ($field->isCustom()) {
                 $attributes['field_validations'] = $wanted['is_required'] ? ['required' => 'יש לספק ' . $label] : null;
                 $attributes += FormFieldRules::defaultsFor($type);

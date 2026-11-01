@@ -14,14 +14,12 @@ use Symfony\Component\HttpFoundation\Response;
 class BookingApproverManagementController extends Controller
 {
 
-    // API group: Bookings Approver Management - dashboards, bookings and system references for approvers.
-
     public function __construct(
         private readonly BookingApproverManagementService $bookingApproverManagementService
     ) {
     }
 
-    /** GET /api/bookings-approver-management/dashboard/{bookingType} - status counts, filtered by ?filter_<id> and ?vice_approver_uuid. @param string $bookingType, Request $request @return JsonResponse */
+    /** Status counts, filtered by ?filter_<id> and ?vice_approver_uuid. */
     public function getBookingsDashboard(string $bookingType, Request $request): JsonResponse
     {
         $filters = [];
@@ -51,7 +49,7 @@ class BookingApproverManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-approver-management/filtered-dashboard/{bookingType} - status counts by status_id, vice_approver_uuid, from/to. @param string $bookingType, Request $request @return JsonResponse */
+    /** Status counts by status_id, vice_approver_uuid, from/to. */
     public function getFilteredDashboard(string $bookingType, Request $request): JsonResponse
     {
 
@@ -101,7 +99,7 @@ class BookingApproverManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-approver-management/get-vice-approvers/{bookingTypeId} - list the vice approvers of a booking type. @param int $bookingTypeId @return JsonResponse */
+    /** List the vice approvers of a booking type. */
     public function getViceApprovers(int $bookingTypeId): JsonResponse
     {
         $result = $this->bookingApproverManagementService->getViceApprovers(
@@ -117,16 +115,14 @@ class BookingApproverManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-approver-management/get-bookings/{bookingTypeId} - bookings by status, vice approver, serial number and date range. @param int $bookingTypeId, Request $request @return JsonResponse */
+    /** Bookings by status, vice approver, serial number and date range. */
     public function getBookings(int $bookingTypeId, Request $request): JsonResponse
     {
         
-        // existing query params
         $statusIds = $request->query('status_id') ? explode(',', $request->query('status_id')) : [];
         $viceApproversUuids = $request->query('vice_approver_uuid') ? explode(',', $request->query('vice_approver_uuid')) : [];
         $serialNumber=$request->query('serial_number',null);
      
-        // flat query params
         $from = $request->query('from');
         $to = $request->query('to');
         $rules = [
@@ -170,7 +166,7 @@ class BookingApproverManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-approver-management/system-references/{bookingType} - fetch the system reference settings of a booking type. @param string $bookingType @return JsonResponse */
+    /** Fetch the system reference settings of a booking type. */
     public function getSystemReferences(string $bookingType): JsonResponse
     {
 
@@ -189,7 +185,7 @@ class BookingApproverManagementController extends Controller
     }
 
 
-    /** PUT /api/bookings-approver-management/system-references - update system reference details from details_values (id => fields). @param UpdateSystemReferenceRequest $request @return JsonResponse */
+    /** Update system reference details from details_values (id => fields). */
     public function updateSystemReferences(UpdateSystemReferenceRequest $request): JsonResponse
     {
        

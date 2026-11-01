@@ -24,7 +24,7 @@ class ProdSeeder extends Seeder
 {
     public function run(): void
     {
-        // The order matters: booking types first (the enums resolve booking type ids from the database).
+        // Booking types first: the enums resolve their ids from the database.
         $this->call([
             BookingTypeSeeder::class,
             RoleAndPermissionSeeder::class,

@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/** POST /org/units and PUT /org/units/{id}: the code (the unit's letter - it cannot change) and the name people see here. */
+/** The unit's code (its letter, immutable) and the name people see here. */
 class SaveUnitRequest extends FormRequest
 {
     public function authorize(): bool
@@ -15,7 +15,7 @@ class SaveUnitRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        // What a code or a name may look like is OrgRules' to say, with the reason in Hebrew.
+        // OrgRules decides what a code or name may look like, with the reason in Hebrew.
         return [
             'code' => ['required', 'string', 'max:10'],
             'name' => ['required', 'string', 'max:100'],

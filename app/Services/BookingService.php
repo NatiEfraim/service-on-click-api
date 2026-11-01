@@ -11,7 +11,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
-/** What anyone who logs in may read about bookings: their own history and a single booking. The managing endpoints are in the *ManagementService classes. */
+/** What anyone who logs in may read about bookings: their own history and a single booking; managing endpoints are in the *ManagementService classes. */
 class BookingService
 {
     public function __construct(
@@ -19,7 +19,7 @@ class BookingService
     ) {
     }
 
-    /** Retrieve one booking by its uuid - only the owner (role user) or the booking's unit can see it. */
+    /** One booking by uuid; visible only to the owner (role user) or the booking's unit. */
     public function show(string $bookingUuid): ShowBookingResource|HttpStatusCodeEnum|array
     {
         try {
@@ -64,7 +64,7 @@ class BookingService
         }
     }
 
-    /** Paginate the auth user's own bookings, filtered by status, booking type and serial. @param array $statusIds, array $bookingTypeIds, ?string $serialNumber @return HttpStatusCodeEnum|AnonymousResourceCollection|array */
+    /** The auth user's own bookings, paginated and filtered by status, booking type and serial. @return HttpStatusCodeEnum|AnonymousResourceCollection|array */
     public function myBookings(array $statusIds = [], array $bookingTypeIds = [], ?string $serialNumber = null): HttpStatusCodeEnum|\Illuminate\Http\Resources\Json\AnonymousResourceCollection|array
     {
         try {
@@ -84,7 +84,7 @@ class BookingService
                 $query->whereIn('booking_type_id', $bookingTypeIds);
             }
 
-            // id breaks the ties: bookings made in the same second must not repeat or go missing between pages.
+            // id breaks ties: bookings made in the same second must not repeat or go missing between pages.
             $myBookings = $query->orderBy('created_at', 'desc')->orderBy('id', 'desc')->paginate(PaginationEnum::PER_PAGE->value);
 
             return MyBookingResource::collection($myBookings);

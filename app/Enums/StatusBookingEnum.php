@@ -31,7 +31,7 @@ enum StatusBookingEnum: int
     case CONTROL_OFFICER_APPROVED  = 17;
     case CONTROL_OFFICER_REJECTED  = 18;
 
-    /** Get the StatusBookingEnum instance based on the status name (the `statuses.name` column). */
+    /** Resolves the enum from `statuses.name`. */
     public static function fromStatusName(string $name): ?self
     {
         return match ($name) {
@@ -57,12 +57,11 @@ enum StatusBookingEnum: int
         };
     }
 
-    /** Get this status's display order on the status dashboards. @return int */
+    /** Display order on the status dashboards. */
     public function getPosition(): int
     {
         return match ($this) {
             self::RECEIVED => 1,
-                //TRANSPORTATION_BOOKING
             self::PROCESSING_BY_CONTROL_OFFICER => 2,
             self::CONTROL_OFFICER_APPROVED => 3,
             self::CONTROL_OFFICER_REJECTED => 4,
@@ -74,36 +73,34 @@ enum StatusBookingEnum: int
             self::REJECTED => 10,
             self::CANCELED_BY_USER => 11,
             self::CANCELED_BY_APPROVER => 12,
-                //TRANSPORTATION_BOOKING
             self::PENDING_FILE => 13,
             self::PENDING_PROCESSING => 14,
             self::PENDING_APPROVED => 15,
-                //BARBER_BOOKING
             self::APPROVED_BY_BARBER => 16,
             self::CANCELED_BY_BARBER => 17,
             self::CANCELED_BY_CHANGING_TIME => 18,
         };
     }
 
-    /** Waiting for the vice approver (control officer answered; incl. legacy PROCESSING_BY_CONTROL_OFFICER). @return bool */
+    /** Waiting for the vice approver (control officer answered; incl. legacy PROCESSING_BY_CONTROL_OFFICER). */
     public function isWaitingForViceApprover(): bool
     {
         return in_array($this, [self::PROCESSING_BY_CONTROL_OFFICER, self::CONTROL_OFFICER_APPROVED, self::CONTROL_OFFICER_REJECTED], true);
     }
 
-    /** Waiting for the approver's final decision (vice approver answered; incl. legacy PROCESSING). @return bool */
+    /** Waiting for the approver's final decision (vice approver answered; incl. legacy PROCESSING). */
     public function isWaitingForApprover(): bool
     {
         return in_array($this, [self::PROCESSING, self::VICE_APPROVER_APPROVED, self::VICE_APPROVER_REJECTED], true);
     }
 
-    /** TRANSPORTATION_BOOKING only: on hold on the supplier side (files, supplier approval or number). @return bool */
+    /** TRANSPORTATION_BOOKING only: on hold on the supplier side (files, approval or number). */
     public function isPendingForSupplier(): bool
     {
         return in_array($this, [self::PENDING_FILE, self::PENDING_PROCESSING, self::PENDING_APPROVED], true);
     }
 
-    /** Check if the booking's owner can still cancel it in this status. */
+    /** Whether the owner can still cancel in this status. */
     public function canBeCanceledByUser(): bool
     {
         return $this === self::RECEIVED
@@ -112,13 +109,13 @@ enum StatusBookingEnum: int
             || $this->isWaitingForApprover();
     }
 
-    /** The booking is closed: nothing more happens to it (rejected, completed or canceled). */
+    /** Closed: rejected, completed or canceled. */
     public function isTerminal(): bool
     {
         return !$this->canBeCanceledByRestrictionDates();
     }
 
-    /** The ids of the closed statuses (rejected, completed, canceled). @return array<int, int> */
+    /** @return array<int, int> Ids of the closed statuses. */
     public static function terminalIds(): array
     {
         return array_values(array_map(
@@ -127,7 +124,7 @@ enum StatusBookingEnum: int
         ));
     }
 
-    /** The action_types row written to application_logs when a booking moves into this status. */
+    /** The action logged in application_logs when a booking moves into this status. */
     public function getActionType(): ActionTypeEnum
     {
         return match ($this) {
@@ -145,9 +142,8 @@ enum StatusBookingEnum: int
     }
 
     /**
-     * A barber booking in this status no longer holds its slot (the statuses the mobile app frees, plus the one a changed barber time sets).
-     * Rejected and canceled-by-the-barber are deliberately not in the list: the mobile app keeps those slots, and this system mirrors it. (A
-     * correction of a time still treats every closed booking as not holding its time - see BookingValueService.)
+     * A barber booking in this status no longer holds its slot.
+     * REJECTED and CANCELED_BY_BARBER are deliberately absent: the mobile app keeps those slots.
      */
     public function freesBarberSlot(): bool
     {
@@ -160,13 +156,12 @@ enum StatusBookingEnum: int
         ], true);
     }
 
-    /** Get role flags by permission names (hasPermissionTo may throw). @param iterable $permissionNames, int $bookingTypeId @return array */
     public static function resolveRoleFlags(iterable $permissionNames, int $bookingTypeId): array
     {
         return Workflow::roleFlags($permissionNames, $bookingTypeId);
     }
 
-    /** Get the status_id options the user may move this booking to. @param array $roleFlags, ?int $bookingTypeId @return array */
+    /** Statuses the user may move this booking to. */
     public function getNextStatuses(array $roleFlags, ?int $bookingTypeId = null): array
     {
         $allowed = $this->getAllowedTransitions($roleFlags, $bookingTypeId);
@@ -193,7 +188,6 @@ enum StatusBookingEnum: int
         }, $allowed);
     }
 
-    /** Check if the roles allow moving to $targetStatus. @param self $targetStatus, array $roleFlags, ?int $bookingTypeId @return bool */
     public function canChangeTo(self $targetStatus, array $roleFlags, ?int $bookingTypeId = null): bool
     {
         foreach ($this->getAllowedTransitions($roleFlags, $bookingTypeId) as $transition) {
@@ -205,13 +199,12 @@ enum StatusBookingEnum: int
         return false;
     }
 
-    /** The transitions the roles allow from this status - turn-based, see App\Domain\Workflow\Workflow. @param array $roleFlags, ?int $bookingTypeId @return array */
+    /** Transitions the roles allow from this status (see Workflow). */
     private function getAllowedTransitions(array $roleFlags, ?int $bookingTypeId = null): array
     {
         return app(Workflow::class)->allowedTransitions($this, $roleFlags, (int) $bookingTypeId);
     }
 
-    /** Get the Hebrew dashboard display name for this status. @return string */
     public function getDashboardDisplayName(): string
     {
         return match ($this) {
@@ -222,15 +215,12 @@ enum StatusBookingEnum: int
             self::COMPLETED => 'הזמנות שהסתיימו',
             self::CANCELED_BY_USER => 'בוטלו ע"י משתמש',
             self::CANCELED_BY_APPROVER => 'בוטלו ע"י מפקד תחום',
-                //TRANSPORTATION_BOOKING
             self::PENDING_FILE => 'ממתין לקבצים מהלקוח',
             self::PENDING_PROCESSING => 'ממתין לאישור ספק',
             self::PENDING_APPROVED => 'ממתין למספר ספק',
-                //BARBER_BOOKING
             self::APPROVED_BY_BARBER => 'טופל ע"י הספר',
             self::CANCELED_BY_BARBER => 'בוטלה ע"י הספר',
             self::CANCELED_BY_CHANGING_TIME => 'בוטלה עכב שינויים בזמני המספרה',
-                //TRANSPORTATION_BOOKING
             self::PROCESSING_BY_CONTROL_OFFICER => 'טופלו רמ"ד תו"ב',
             self::VICE_APPROVER_APPROVED => 'הועברו לאישור סופי',
             self::VICE_APPROVER_REJECTED => 'הועברו לביטול סופי',
@@ -240,7 +230,6 @@ enum StatusBookingEnum: int
     }
 
 
-    /** Get the dashboard icon id for this status. @return string */
     public function getStatusIconDashBoard(): string
     {
         return match ($this) {
@@ -251,15 +240,12 @@ enum StatusBookingEnum: int
             self::COMPLETED => '5',//'הזמנות שהסתיימו'
             self::CANCELED_BY_USER => '6',//'בוטלו ע"י משתמש'
             self::CANCELED_BY_APPROVER => '7',//'בוטלו ע"י גורם טכני',
-                //TRANSPORTATION_BOOKING
             self::PENDING_FILE => '8',//'ממתינים לקבצים נוספים מהלקוח'
             self::PENDING_PROCESSING => '9',//'ממתין לאישור מהספק'
             self::PENDING_APPROVED => '10',// 'ממתינים לאישור סופי מהספק (כלומר למספר ספק)'
-                //BARBERֹBֹ_BOOKING
             self::APPROVED_BY_BARBER => '11',// 'בקשה שנסגרה ע"י הספר'
             self::CANCELED_BY_BARBER => '12',// 'בקשה שבוטלה ע"י הספר'
             self::CANCELED_BY_CHANGING_TIME => '13',// 'בקשה שנסגרה ע"י שינויים בזמנים'
-                //TRANSPORTATION_BOOKING
             self::PROCESSING_BY_CONTROL_OFFICER => '14',// 'בטיפול רמ"ד תו"ב'
             self::VICE_APPROVER_APPROVED => '15',// 'הועברו לאישור סופי'
             self::VICE_APPROVER_REJECTED => '16',// 'הועברו לביטול סופי'
@@ -268,7 +254,6 @@ enum StatusBookingEnum: int
         };
     }
 
-    /** Get the Hebrew status message for this booking status. @return string|null */
     public function getStatusMessage(): string|null
     {
         return match ($this) {
@@ -281,15 +266,12 @@ enum StatusBookingEnum: int
             self::COMPLETED => 'הסתיימה בהצלחה',
             self::CANCELED_BY_USER => 'בוטלה ע"י המשתמש',
             self::CANCELED_BY_APPROVER => 'בוטלה ע"י גורם מאשר',
-                //TRANSPORTATION_BOOKING
             self::PENDING_FILE => 'ממתינה להעלת קבצים נוספים במערכת',
             self::PENDING_PROCESSING => 'ממתינה לאישור מחברת ספק',
             self::PENDING_APPROVED => 'ממתינה למספר ספק',
-                //BARBERֹBֹ_BOOKING
             self::APPROVED_BY_BARBER => 'נסגרה ע"י הספר',
             self::CANCELED_BY_BARBER => 'בוטלה ע"י הספר',
             self::CANCELED_BY_CHANGING_TIME => 'בוטלה עכב שינויי זמנים במספרה',
-                //TRANSPORTATION_BOOKING
             self::PROCESSING_BY_CONTROL_OFFICER,
             self::CONTROL_OFFICER_APPROVED,
             self::CONTROL_OFFICER_REJECTED => 'ההזמנה בטיפול רמ"ד תו"ב',
@@ -297,7 +279,7 @@ enum StatusBookingEnum: int
         };
     }
 
-    /** Get the Hebrew status message used in the SMS log to S3. @return string|null */
+    /** Status message used in the SMS log sent to S3. */
     public function getStatusMessageToLogSMS(): string|null
     {
         return match ($this) {
@@ -310,15 +292,12 @@ enum StatusBookingEnum: int
             self::COMPLETED => 'בקשה הסתיימה בהצלחה',
             self::CANCELED_BY_USER => 'בקשה בוטלה ע"י משתמש',
             self::CANCELED_BY_APPROVER => 'בקשה בוטלה ע"י גורם טכני',
-                //TRANSPORTATION_BOOKING
             self::PENDING_FILE => 'בקשה ממתינה לקבצים נוספים',
             self::PENDING_PROCESSING => 'בקשה ממתינה לאישור ספק',
             self::PENDING_APPROVED => 'בקשה ממתינה למספר ספק',
-                //BARBERֹBֹ_BOOKING
             self::APPROVED_BY_BARBER => 'נסגרה ע"י הספר',
             self::CANCELED_BY_BARBER => 'בוטלה ע"י הספר',
             self::CANCELED_BY_CHANGING_TIME => 'בוטלה עכב שינויי זמנים במספרה',
-                //TRANSPORTATION_BOOKING
             self::PROCESSING_BY_CONTROL_OFFICER,
             self::CONTROL_OFFICER_APPROVED,
             self::CONTROL_OFFICER_REJECTED => 'בקשה בטיפול רמ"ד תו"ב',
@@ -326,7 +305,7 @@ enum StatusBookingEnum: int
         };
     }
 
-    /** Get the status subtitle shown to approvers in getBookings. @return ?string */
+    /** Subtitle shown to approvers in the bookings list. */
     public function getSubTitleStatusMessage(): ?string
     {
         return match ($this) {
@@ -338,15 +317,12 @@ enum StatusBookingEnum: int
             self::COMPLETED => 'בקשה הסתיימה בהצלחה',
             self::CANCELED_BY_USER => 'בקשה בוטלה ע"י משתמש',
             self::CANCELED_BY_APPROVER => 'בקשה בוטלה ע"י גורם טכני',
-                //TRANSPORTATION_BOOKING
             self::PENDING_FILE => 'בקשה ממתינה לקבצים נוספים',
             self::PENDING_PROCESSING => 'בקשה ממתינה לאישור ספק',
             self::PENDING_APPROVED => 'בקשה ממתינה למספר ספק',
-                //BARBERֹBֹ_BOOKING
             self::APPROVED_BY_BARBER => 'נסגרה ע"י הספר',
             self::CANCELED_BY_BARBER => 'בוטלה ע"י הספר',
             self::CANCELED_BY_CHANGING_TIME => 'בוטלה עכב שינויי זמנים במספרה',
-                //TRANSPORTATION_BOOKING
             self::PROCESSING_BY_CONTROL_OFFICER => 'בקשה בטיפול רמ"ד תו"ב',
             self::CONTROL_OFFICER_APPROVED => 'הבקשה אושרה ע"י רמ"ד תו"ב וממתינה למפקד',
             self::CONTROL_OFFICER_REJECTED => 'הבקשה הועברה לביטול ע"י רמ"ד תו"ב וממתינה למפקד',
@@ -355,7 +331,7 @@ enum StatusBookingEnum: int
     }
 
 
-    /** Resolve an extra, status-specific message (e.g. a realization deadline once APPROVED). */
+    /** Extra status-specific message, e.g. the realization deadline once APPROVED. */
     public function getAdditionalMessage(int $bookingTypeId): ?string
     {
         return match ($this) {
@@ -367,7 +343,6 @@ enum StatusBookingEnum: int
         };
     }
 
-    /** Get the Hebrew stage label ("שלב N") for this status. @return string|null */
     public function getStatusStage(): string|null
     {
         return match ($this) {
@@ -380,7 +355,6 @@ enum StatusBookingEnum: int
             self::REJECTED => 'שלב 5',
             self::CANCELED_BY_APPROVER => 'שלב 6',
             self::CANCELED_BY_USER => 'שלב 7',
-                //TRANSPORTATION_BOOKING
             self::PENDING_FILE => 'שלב 8',
             self::PENDING_PROCESSING => 'שלב 9',
             self::PENDING_APPROVED => 'שלב 10',
@@ -394,7 +368,7 @@ enum StatusBookingEnum: int
         };
     }
 
-    /** Check if this status can still be canceled by a newly restricted date (terminal statuses cannot). */
+    /** False for closed statuses, which a newly restricted date cannot cancel. */
     public function canBeCanceledByRestrictionDates(): bool
     {
         return !in_array($this, [
@@ -407,7 +381,7 @@ enum StatusBookingEnum: int
         ], true);
     }
 
-    /** Check if this status holds a slot/resource and should count toward capacity validation. */
+    /** Whether the status holds a slot/resource that counts toward capacity. */
     public function isActiveForCapacityValidation(): bool
     {
         return in_array($this, [

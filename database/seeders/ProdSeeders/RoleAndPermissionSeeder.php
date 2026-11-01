@@ -16,13 +16,13 @@ class RoleAndPermissionSeeder extends Seeder
 {
     private const GUARD_NAME = 'passport';
 
-    /** The roles of the web system - role ids are the RoleEnum values, the same ids the mobile app uses. @var array<int, RoleEnum> */
+    /** Role ids are the RoleEnum values, shared with the mobile app. @var array<int, RoleEnum> */
     private const ROLES = [
         RoleEnum::SUPER_ADMIN,
         RoleEnum::ADMIN,
         RoleEnum::APPROVER,
         RoleEnum::VICE_APPROVER,
-        // Everyone else who logs in: sees only their own bookings (GET /bookings/my-bookings and GET /bookings/{uuid}).
+        // Everyone else: sees only their own bookings.
         RoleEnum::USER,
     ];
 
@@ -50,7 +50,7 @@ class RoleAndPermissionSeeder extends Seeder
     private function createRoles(): void
     {
         foreach (self::ROLES as $roleEnum) {
-            // The id is pinned to the enum value: booking_type_has_roles and the permission checks read roles by it.
+            // Id pinned to the enum value; booking_type_has_roles and permission checks read roles by it.
             Role::unguarded(fn() => Role::updateOrCreate(
                 [
                     'id' => $roleEnum->value,

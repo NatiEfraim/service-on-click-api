@@ -29,8 +29,7 @@ enum BookingTypeEnum
     case ENTRY_PERMISSION_BOOKING;
     case KITBAG_BOOKING;
 
-    //-----Workspaces
-    // case WE_WORK_SPACE_BOOKING;
+    // Workspaces
     case WE_WORK_BOOKING;
     case LARGE_COMMAND_ROOM_BOOKING;
     case SMALL_COMMAND_ROOM_BOOKING;
@@ -38,7 +37,7 @@ enum BookingTypeEnum
     case TECH_HAMAMA_FIRST_BOOKING;
     case TECH_HAMAMA_SECOND_BOOKING;
 
-    /** Get the id for this booking type, cached per-request since it's resolved via a DB query. */
+    /** The booking type's DB id, memoized per request. */
     public function getBookingTypeId(): ?int
     {
         static $cache = [];
@@ -58,7 +57,6 @@ enum BookingTypeEnum
         return $cache[$name];
     }
 
-    /** Fetch a booking type record by id. @param int $bookingTypeId @return ?BookingType */
     public static function getBookingTypeRecord(int $bookingTypeId): ?BookingType
     {
         return BookingType::query()
@@ -66,7 +64,7 @@ enum BookingTypeEnum
             ->first();
     }
     
-    /** Normalize booking type route param, e.g. "car-booking" => "car_booking". */
+    /** Route param to name, e.g. "car-booking" => "car_booking". */
     public static function normalizeBookingTypeName(string $bookingType): string
     {
         return Str::snake(str_replace(
@@ -76,7 +74,7 @@ enum BookingTypeEnum
         ));
     }
 
-    /** Format booking type name for route response, e.g. "car_booking" => "car-booking". */
+    /** Name to route param, e.g. "car_booking" => "car-booking". */
     public static function formatBookingTypeRouteName(string $bookingTypeName): string
     {
         return str_replace(
@@ -86,7 +84,7 @@ enum BookingTypeEnum
         );
     }
 
-    /** Get booking type id from route name, e.g. "car-booking" => 1. */
+    /** Booking type id from a route name, e.g. "car-booking" => 1. */
     public static function getBookingTypeIdFromRouteName(string $bookingType): ?int
     {
         $bookingTypeName = self::normalizeBookingTypeName($bookingType);
@@ -96,14 +94,12 @@ enum BookingTypeEnum
         return $bookingTypeEnum?->getBookingTypeId();
     }
 
-    /** Get the DB name for this booking type. @return ?string */
     public function getBookingTypeName(): ?string
     {
         return match ($this) {
             self::CAR_BOOKING => 'car_booking',
             self::EQUIPMENT_BOOKING => 'equipment_booking',
             self::CAR_MAINTENANCE_BOOKING => 'car_maintenance_booking',
-                // FOOD
             self::FOOD_BOOKING => 'food_booking',
             self::OUT_UNIT_FOOD_BOOKING => 'out_unit_food_booking',
             self::IN_UNIT_FOOD_BOOKING => 'in_unit_food_booking',
@@ -131,12 +127,11 @@ enum BookingTypeEnum
             self::LECTURE_ROOM_BOOKING => 'lecture_room_booking',
             self::TECH_HAMAMA_FIRST_BOOKING => 'tech_hamama_first_booking',
             self::TECH_HAMAMA_SECOND_BOOKING => 'tech_hamama_second_booking',
-            // self::WE_WORK_SPACE_BOOKING => 'we_work_space_booking',
             default => null,
         };
     }
 
-    /** Get the BookingTypeEnum instance based on the booking type name. */
+    /** Resolves the enum from the booking type name. */
     public static function fromBookingTypeName(string $name): ?self
     {
         return match ($name) {
@@ -147,7 +142,6 @@ enum BookingTypeEnum
             'equipment_booking_female' => self::EQUIPMENT_BOOKING_FEMALE,
             'car_maintenance_booking' => self::CAR_MAINTENANCE_BOOKING,
 
-            // FOOD
             'food_booking' => self::FOOD_BOOKING,
             'out_unit_food_booking' => self::OUT_UNIT_FOOD_BOOKING,
             'in_unit_food_booking' => self::IN_UNIT_FOOD_BOOKING,
@@ -178,7 +172,7 @@ enum BookingTypeEnum
         };
     }
 
-    /** Fetch custom display_name based on unit_id and booking_type_id. */
+    /** Display name, with per-unit overrides. */
     public function getCustomDisplayName(int $unitId): string|bool
     {
         try {
@@ -265,7 +259,7 @@ enum BookingTypeEnum
         }
     }
 
-    /** Get all UI metadata for the current booking type: nav title, header title, subtitle. */
+    /** UI titles: nav title, form title and subtitle. */
     public function getSections(): array
     {
         return match ($this) {
@@ -288,7 +282,6 @@ enum BookingTypeEnum
         };
     }
 
-    /** Get the Hebrew management nav title for this booking type. @return ?string */
     public function getManagementNavTitle(): ?string
     {
         return match ($this) {
@@ -310,7 +303,6 @@ enum BookingTypeEnum
     }
 
 
-    /** Get the Hebrew management settings nav title for this booking type. @return ?string */
     public function getManagementSettingsNavTitle(): ?string
     {
         return match ($this) {
@@ -331,7 +323,7 @@ enum BookingTypeEnum
         };
     }
 
-    /** Get the expected number of form fields for a given booking type ID. */
+    /** Expected form field count (exact or max) for a booking type id. */
     public static function getExpectedFieldCountById(int $bookingTypeId): ?array
     {
 

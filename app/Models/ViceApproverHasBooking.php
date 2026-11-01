@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ViceApproverHasBooking extends Model
 {
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'user_id',
         'booking_id',
@@ -15,7 +14,6 @@ class ViceApproverHasBooking extends Model
         'is_deleted',
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'updated_at',
         'created_at',

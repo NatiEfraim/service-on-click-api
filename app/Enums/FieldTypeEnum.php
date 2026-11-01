@@ -32,7 +32,6 @@ enum FieldTypeEnum: int
     case NUMBER_ASTERISK = 22;
     case IMAGE = 23;
 
-    /** Get this field type's DB id by its name. @return ?int */
     public function getFieldTypeId(): ?int
     {
         return match ($this) {
@@ -63,7 +62,7 @@ enum FieldTypeEnum: int
     }
 
 
-    /** Get field type ids that support selectable options. @return array */
+    /** Field type ids that support selectable options. */
     public static function selectedFieldTypeIds(): array
     {
         return [
@@ -74,7 +73,7 @@ enum FieldTypeEnum: int
         ];
     }
 
-    /** Get file/image field type ids; stored on booking_has_files/images, never in booking_value or exports. @return array */
+    /** File/image type ids; stored on booking_has_files/images, never in booking_value or exports. */
     public static function uploadFieldTypeIds(): array
     {
         return [
@@ -83,13 +82,12 @@ enum FieldTypeEnum: int
         ];
     }
 
-    /** Determine if the given field type id is an uploaded file or image. */
     public static function isUploadFieldTypeId(?int $fieldTypeId): bool
     {
         return in_array((int) $fieldTypeId, self::uploadFieldTypeIds(), true);
     }
 
-    /** Get all field type ids that belong to form fields of a specific booking type. */
+    /** Field type ids used by a booking type's form fields. */
     public static function getFieldTypeIdsByBookingTypeId(int $bookingTypeId): array
     {
         return FormField::query()
@@ -102,7 +100,6 @@ enum FieldTypeEnum: int
             ->toArray();
     }
 
-    /** Validate a value by its field type id. @param int $fieldTypeId, mixed $value @return bool */
     public static function isValidValueByFieldTypeId(int $fieldTypeId, mixed $value): bool
     {
         return match ($fieldTypeId) {
@@ -140,19 +137,17 @@ enum FieldTypeEnum: int
         };
     }
 
-    /** Validate a select/radio value (string or int). @param mixed $value @return bool */
     public static function isValidSelectValue(mixed $value): bool
     {
         return is_string($value) || is_int($value);
     }
 
-    /** Validate a non-empty text value. @param mixed $value @return bool */
     public static function isValidText(mixed $value): bool
     {
         return is_string($value) && trim($value) !== '';
     }
 
-    /** Validate number value: int/float, or a digits-only string with no leading 0. */
+    /** int/float, or a digits-only string with no leading 0. */
     public static function isValidNumber(mixed $value): bool
     {
         if (is_int($value) || is_float($value)) {
@@ -166,13 +161,12 @@ enum FieldTypeEnum: int
         return preg_match('/^[1-9][0-9]*$/', $value) === 1;
     }
 
-    /** Validate a date in a supported format. @param mixed $value @return bool */
     public static function isValidDate(mixed $value): bool
     {
         return !is_null(self::parseDateValue($value));
     }
 
-    /** Validate that the value is a valid date (Y-m-d, d/m/Y, or d-m-Y) and not Friday/Saturday. */
+    /** A valid date (Y-m-d, d/m/Y or d-m-Y) that is not Friday/Saturday. */
     public static function isValidDateAndNotWeekend(mixed $value): bool
     {
         $date = self::parseDateValue($value);
@@ -184,7 +178,6 @@ enum FieldTypeEnum: int
         return !($date->isFriday() || $date->isSaturday());
     }
 
-    /** Parse date value from supported formats (Y-m-d, d/m/Y, d-m-Y). */
     public static function parseDateValue(mixed $value): ?Carbon
     {
         if (!is_string($value) || trim($value) === '') {
@@ -209,7 +202,7 @@ enum FieldTypeEnum: int
     }
 
 
-    /** Validate array of Y-m-d dates, none of them Friday or Saturday. */
+    /** Array of Y-m-d dates, none on Friday/Saturday. */
     public static function isValidMultiDateAndNotWeekend(mixed $value): bool
     {
         if (!is_array($value)) {
@@ -224,7 +217,7 @@ enum FieldTypeEnum: int
 
         return true;
     }
-    /** Validate time, expected format HH:MM (e.g. "10:30"). */
+    /** Time as HH:MM. */
     public static function isValidTime(mixed $value): bool
     {
         if (!is_string($value)) {
@@ -234,7 +227,7 @@ enum FieldTypeEnum: int
         return (bool) preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $value);
     }
 
-    /** Validate an Israeli phone number (mobile or landline). @param mixed $value @return bool */
+    /** Israeli phone number (mobile or landline). */
     public static function isValidIsraeliPhone(mixed $value): bool
     {
         if (!is_string($value)) {
@@ -245,14 +238,12 @@ enum FieldTypeEnum: int
 
     }
 
-    /** Validate an email. @param mixed $value @return bool */
     public static function isValidEmail(mixed $value): bool
     {
         return is_string($value)
             && filter_var($value, FILTER_VALIDATE_EMAIL) !== false;
     }
 
-    /** Validate a URL. @param mixed $value @return bool */
     public static function isValidUrl(mixed $value): bool
     {
         return is_string($value)
@@ -264,7 +255,7 @@ enum FieldTypeEnum: int
         return is_array($value) && !empty($value);
     }
 
-    /** Validate an array of Base64 image Data URIs (png/jpg/jpeg) within the image max size. @param mixed $value @return bool */
+    /** Array of Base64 image Data URIs (png/jpg/jpeg) within the max size. */
     public static function isValidBase64ImageArray(mixed $value): bool
     {
         if (!is_array($value) || empty($value)) {
@@ -280,7 +271,7 @@ enum FieldTypeEnum: int
         return true;
     }
 
-    /** Validate one Base64 image Data URI against config('app.booking_type.uploads.image'). @param mixed $value @return bool */
+    /** One Base64 image Data URI, checked against config('app.booking_type.uploads.image'). */
     public static function isValidBase64ImageDataUri(mixed $value): bool
     {
         return self::isValidBase64DataUriAgainstRules(
@@ -289,7 +280,7 @@ enum FieldTypeEnum: int
         );
     }
 
-    /** Validate an array of Base64 document Data URIs (pdf/docx/xlsx/pptx) within the file max size. @param mixed $value @return bool */
+    /** Array of Base64 document Data URIs (pdf/docx/xlsx/pptx) within the max size. */
     public static function isValidBase64FileArray(mixed $value): bool
     {
         if (!is_array($value) || empty($value)) {
@@ -305,7 +296,7 @@ enum FieldTypeEnum: int
         return true;
     }
 
-    /** Validate one Base64 document Data URI against config('app.booking_type.uploads.file'). @param mixed $value @return bool */
+    /** One Base64 document Data URI, checked against config('app.booking_type.uploads.file'). */
     public static function isValidBase64FileDataUri(mixed $value): bool
     {
         return self::isValidBase64DataUriAgainstRules(
@@ -314,7 +305,7 @@ enum FieldTypeEnum: int
         );
     }
 
-    /** Validate an array where each item is a document or image Data URI (e.g. EQUIPMENT_BOOKING files). */
+    /** Array of document or image Data URIs (e.g. EQUIPMENT_BOOKING files). */
     public static function isValidBase64FileOrImageArray(mixed $value): bool
     {
         if (!is_array($value) || empty($value)) {
@@ -330,7 +321,7 @@ enum FieldTypeEnum: int
         return true;
     }
 
-    /** Shared Data URI check: well-formed, mime allowed, and Base64 size within $rules['max_kb']. */
+    /** Data URI is well-formed, mime allowed and within $rules['max_kb']. */
     private static function isValidBase64DataUriAgainstRules(mixed $value, array $rules): bool
     {
         if (!is_string($value) || trim($value) === '') {
@@ -366,7 +357,6 @@ enum FieldTypeEnum: int
         return $decodedSize <= $maxBytes;
     }
 
-    /** Normalize a raw booking value from DB JSON into a clean PHP type. */
     public static function normalize(
         int $fieldTypeValue,
         mixed $value,
@@ -389,7 +379,7 @@ enum FieldTypeEnum: int
 
     }
 
-    /** Decode a JSON string if possible, else return the value as is. @param mixed $value @return mixed */
+    /** Decodes a JSON string, else returns the value as is. */
     private static function decodeJsonValue(mixed $value): mixed
     {
         if (!is_string($value)) {
@@ -405,7 +395,7 @@ enum FieldTypeEnum: int
         return $value;
     }
 
-    /** Normalize a number (string for JSON export, null if not numeric). @param mixed $value, bool $exportJson @return string|int|float|null */
+    /** Numeric value (string for JSON export), null when not numeric. */
     private static function normalizeNumberValue(
         mixed $value,
         bool $exportJson = false
@@ -414,7 +404,7 @@ enum FieldTypeEnum: int
             return null;
         }
 
-        // A leading-zero number (e.g. vehicle number 08560002) stays a string so the zero is kept.
+        // Keep a leading zero (e.g. vehicle number 08560002) by returning a string.
         if ($exportJson || (is_string($value) && preg_match('/^0[0-9]+$/', $value))) {
             return (string) $value;
         }
@@ -422,7 +412,6 @@ enum FieldTypeEnum: int
         return 0 + $value;
     }
 
-    /** Cast a value to string. @param mixed $value @return string */
     private static function normalizeTextValue(mixed $value): string
     {
         return is_string($value)
@@ -430,7 +419,7 @@ enum FieldTypeEnum: int
             : (string) $value;
     }
 
-    /** Format a date as Y-m-d for JSON export, else d/m/Y. @param mixed $value, bool $exportJson @return ?string */
+    /** Y-m-d for JSON export, else d/m/Y. */
     private static function normalizeDateValue(
         mixed $value,
         bool $exportJson = false
@@ -448,7 +437,6 @@ enum FieldTypeEnum: int
         return null;
     }
 
-    /** Format a time string as H:i. @param mixed $value @return ?string */
     private static function normalizeTimeValue(mixed $value): ?string
     {
         if (!is_string($value)) {
@@ -459,7 +447,7 @@ enum FieldTypeEnum: int
     }
 
 
-    /** Format an already json-decoded DB value by field type id. @param int $fieldTypeValue, mixed $value @return mixed */
+    /** Formats a json-decoded DB value by field type id. */
     public static function RetrivedformattedFieldTypeValue(int $fieldTypeValue, mixed $value): mixed
     {
         $value = self::unwrapJsonValue(raw: $value);
@@ -474,7 +462,6 @@ enum FieldTypeEnum: int
         };
     }
 
-    /** Validate that a date value is valid and not Friday/Saturday. */
     public function validateDateValue(mixed $value): bool
     {
         try {
@@ -493,7 +480,6 @@ enum FieldTypeEnum: int
             return false;
         }
     }
-    // -------------------- Private functions --------------------
 
     private static function formatDate(mixed $value): ?string
     {
@@ -562,8 +548,6 @@ enum FieldTypeEnum: int
         return null;
     }
 
-    // -------------------- Utilities --------------------
-
     private static function unwrapJsonValue(mixed $raw): mixed
     {
         if (is_array($raw) && array_key_exists('value', $raw) && count($raw) === 1) {
@@ -572,7 +556,7 @@ enum FieldTypeEnum: int
         return $raw;
     }
 
-    /** Parse to Carbon via formats/timestamp ($timeOnly: on today). @param mixed $value, array $formats, bool $timeOnly @return ?Carbon */
+    /** Parses via formats or timestamp; $timeOnly places the time on today. */
     private static function coerceToCarbon(mixed $value, array $formats, bool $timeOnly = false): ?Carbon
     {
         if ($value instanceof Carbon) {

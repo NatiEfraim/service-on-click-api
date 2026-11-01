@@ -12,13 +12,7 @@ use Illuminate\Database\Seeder;
 
 class BookingTypeSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * The ids are the ones the mobile app's BookingTypeSeeder produces (the outsourced link types -
-     * weapon, kitbag, digital ticket, entry permission - are not part of the web system, so their ids
-     * stay unused). Exported bookings carry booking_type_id, so the two systems must agree on them.
-     */
+    /** Ids match the mobile app's BookingTypeSeeder (outsourced types stay unused); exported bookings carry them. */
     public function run(): void
     {
         $bookingTypeGroups = [

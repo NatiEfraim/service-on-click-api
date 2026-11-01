@@ -10,7 +10,6 @@ use App\Models\FormField;
 
 class IndexSelectsResource extends JsonResource
 {
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         return [
@@ -24,7 +23,6 @@ class IndexSelectsResource extends JsonResource
         ];
     }
 
-    /** Format form fields collection. */
     private function formatFormFields(mixed $formFields): array
     {
         return $formFields
@@ -34,7 +32,6 @@ class IndexSelectsResource extends JsonResource
             ->all();
     }
 
-    /** Format a single form field recursively. @param FormField $formField @return array */
     private function formatFormField(FormField $formField): array
     {
         $childFormFields = $formField->childFormFields
@@ -57,7 +54,6 @@ class IndexSelectsResource extends JsonResource
         ]);
     }
 
-    /** Format booking type. @param mixed $bookingType @return array */
     private function formatBookingType(mixed $bookingType): array
     {
         return [
@@ -68,13 +64,11 @@ class IndexSelectsResource extends JsonResource
         ];
     }
 
-    /** Check if this form field has option fields with category. @param FormField $formField @return bool */
     private function hasCategory(FormField $formField): bool
     {
         return (bool) ($formField->optionField->first()?->has_category ?? false);
     }
 
-    /** Remove null values. @param array $data @return array */
     private function removeNullValues(array $data): array
     {
         return array_filter($data, fn($value) => !is_null($value));

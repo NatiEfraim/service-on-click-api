@@ -9,13 +9,10 @@ use Illuminate\Support\Facades\Log;
 
 class ExportBookingStatusJsonCommand extends Command
 {
-    /** The name and signature of the console command. @var string */
     protected $signature = 'exportBookingStatusJson:mysql';
 
-    /** The console command description. @var string */
     protected $description = 'Send the decisions made here, the corrected values and the changes of the configuration back to the mobile app: r2b files in the bucket (export-json/booking-status, booking-values, system-config)';
 
-    /** Execute the console command. @return int */
     public function handle(BookingStatusExportService $exportService): int
     {
         try {
@@ -40,7 +37,7 @@ class ExportBookingStatusJsonCommand extends Command
             $config = $result['config'];
             $this->info("Configuration files sent: {$config['sent']}.");
 
-            // Waiting out a back-off is normal; a file that is blocked, failed now or out of attempts needs somebody to look (the sync screen says why).
+            // Waiting out a back-off is normal; blocked, failed or out-of-attempts files need a look.
             $needsLook = in_array($config['reason'] ?? null, ['blocked', 'failed', 'needs_manual_retry'], true);
 
             if (isset($config['reason'])) {

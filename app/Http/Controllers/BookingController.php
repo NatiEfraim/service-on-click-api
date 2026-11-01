@@ -10,14 +10,12 @@ use Symfony\Component\HttpFoundation\Response;
 
 class BookingController extends Controller
 {
-    // API group: Booking - what anyone who logs in may read about bookings (a person with only the user role may call just these two).
-
     public function __construct(
         private readonly BookingService $bookingService
     ) {
     }
 
-    /** GET /api/bookings/{bookingUuid} - fetch one booking (serial number, status, dynamic fields). @param string $bookingUuid @return JsonResponse */
+    /** Fetch one booking (serial number, status, dynamic fields). */
     public function show(string $bookingUuid): JsonResponse
     {
         $result = $this->bookingService->show(bookingUuid: $bookingUuid);
@@ -33,10 +31,10 @@ class BookingController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings/my-bookings - auth user's bookings, filtered by status_id[], booking_type_id[], serial_number. @param Request $request @return JsonResponse */
+    /** Auth user's bookings, filtered by status_id[], booking_type_id[], serial_number. */
     public function myBookings(Request $request): JsonResponse
     {
-        // (array): a single value (?status_id=1) is as good as a list (?status_id[]=1).
+        // Cast: a single ?status_id=1 works as well as ?status_id[]=1.
         $statusIds = array_filter((array) $request->query('status_id', []), fn($val) => !is_null($val) && $val !== '');
         $bookingTypeIds = array_filter((array) $request->query('booking_type_id', []), fn($val) => !is_null($val) && $val !== '');
         $serialNumber = $request->query('serial_number');

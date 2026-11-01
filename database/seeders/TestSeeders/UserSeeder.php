@@ -14,7 +14,7 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         $managers = [
-            // full_name, personal_id (ID number), phone, personal_number (the ADFS login), role
+            // full_name, personal_id (ID number), phone, personal_number (ADFS login), role
             ['full_name' => 'רועי סחייק', 'personal_id' => '206094468', 'phone' => '0545452493', 'personal_number' => '99804761', 'role' => RoleEnum::SUPER_ADMIN],
             ['full_name' => 'נתנאל רפאל אפרים', 'personal_id' => '315552810', 'phone' => '0532157802', 'personal_number' => '99810738', 'role' => RoleEnum::ADMIN],
             ['full_name' => 'ליאון לב', 'personal_id' => '325639797', 'phone' => '0547453538', 'personal_number' => '99815080', 'role' => RoleEnum::ADMIN],
@@ -42,7 +42,7 @@ class UserSeeder extends Seeder
 
             $user->assignRole($roleEnum->value);
 
-            // The super admin manages the system as a whole; every other role works per booking type.
+            // Super admin manages the whole system; other roles work per booking type.
             if ($roleEnum !== RoleEnum::SUPER_ADMIN) {
                 $user->givePermissionTo(
                     $bookingTypeIds->map(fn(int $id): string => $roleEnum->toPermissionEnum()->keyForId($id))->all()

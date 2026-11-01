@@ -13,14 +13,12 @@ use Illuminate\Http\Request;
 class BookingAdminManagementController extends Controller
 {
 
-    // API group: Bookings Admin Management - manage approver roles in the admin's scope.
-
     public function __construct(
         private readonly BookingAdminManagementService $bookingAdminManagementService
     ) {
     }
 
-    /** GET /api/bookings-admin-management/get-approvers - list approvers/vice approvers, optional ?identifier filter. @param Request $request @return JsonResponse */
+    /** List approvers/vice approvers, optional ?identifier filter. */
     public function getApprovers(Request $request): JsonResponse
     {
         $result = $this->bookingAdminManagementService->getApprovers(
@@ -37,7 +35,7 @@ class BookingAdminManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-admin-management/get-approver-permissions/{userUuid} - the user's approver role flags per managed booking type. @param string $userUuid @return JsonResponse */
+    /** The user's approver role flags per managed booking type. */
     public function getApproverPermissions(string $userUuid): JsonResponse
     {
         $result = $this->bookingAdminManagementService->getApproverPermissions(userUuid: $userUuid);
@@ -53,7 +51,7 @@ class BookingAdminManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** POST /api/bookings-admin-management/assign-approver-role - assign/remove approver roles and permissions per booking type. @param AssignApproverRoleRequest $request @return JsonResponse */
+    /** Assign/remove approver roles and permissions per booking type. */
     public function assignApproverRole(AssignApproverRoleRequest $request): JsonResponse
     {
         $result = $this->bookingAdminManagementService->assignApproverRole(

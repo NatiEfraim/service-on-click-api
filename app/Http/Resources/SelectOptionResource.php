@@ -8,13 +8,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class SelectOptionResource extends JsonResource
 {
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         return $this->buildOptionFieldTree($this->resource);
     }
 
-    /** Recursively build the tree of option fields. */
     private function buildOptionFieldTree($option): array
     {
         $optionData = [
@@ -53,7 +51,6 @@ class SelectOptionResource extends JsonResource
         return $this->removeNullValues($optionData);
     }
 
-    /** Remove null values from response. @param array $data @return array */
     private function removeNullValues(array $data): array
     {
         return array_filter($data, fn($value) => !is_null($value));

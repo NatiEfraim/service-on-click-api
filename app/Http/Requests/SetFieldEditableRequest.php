@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/** PUT /api/bookings-super-admin-management/form-fields/{id}/editable - may an approver correct this field's value (the version is the one the screen saw). */
+/** Whether an approver may correct this field's value; the version is the one the screen saw. */
 class SetFieldEditableRequest extends FormRequest
 {
     public function authorize(): bool

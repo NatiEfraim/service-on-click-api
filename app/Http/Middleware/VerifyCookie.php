@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/** The login sets the personal access token in a cookie; every request reads it back as the bearer token. */
+/** The login stores the token in a cookie; every request reads it back as the bearer token. */
 class VerifyCookie
 {
     public function handle(Request $request, Closure $next): Response

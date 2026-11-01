@@ -12,7 +12,7 @@ class BookingTypeHasStatementSeeder extends Seeder
 {
     public function run(): void
     {
-        // [booking type, statement, when it is shown] - an empty statement is seeded inactive.
+        // [booking type, statement, when shown]; an empty statement is seeded inactive.
         $bookingTypeStatements = [
             [BookingTypeEnum::CAR_BOOKING, $this->getCarBookingStatement(), StatementShowTimeEnum::ON_SUBMIT],
             [BookingTypeEnum::CAR_MAINTENANCE_BOOKING, $this->getCarMaintenanceBookingStatement(), StatementShowTimeEnum::ON_SUBMIT],
@@ -42,7 +42,6 @@ class BookingTypeHasStatementSeeder extends Seeder
         }
     }
 
-    // ------------------------------ Private Functions -------------------------------------------- //
     /** Mirrors the drive purpose date rules in StoreBookingRequest::validateCarBookingDrivePurposeDateRange(). */
     private function getCarBookingStatement(): string
     {
@@ -54,7 +53,7 @@ class BookingTypeHasStatementSeeder extends Seeder
     }
     private function getBarberBookingStatement(): string
     {
-        // Use placeholders that will be interpolated when the statement is retrieved
+        // Placeholders are interpolated when the statement is retrieved.
         return "לידיעתך, יוקצה לך זמן תספורת של {haircut_time} דקות בלבד";
     }
 

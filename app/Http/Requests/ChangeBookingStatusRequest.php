@@ -4,10 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/**
- * POST /api/bookings-approver-management/bookings/{serial}/status. Only the shape is checked here; whether the move is allowed, and the
- * comment rules, are the workflow's (BookingWorkflowService), which answers with the reason.
- */
+/** Shape only: whether the move is allowed, and the comment rules, belong to BookingWorkflowService. */
 class ChangeBookingStatusRequest extends FormRequest
 {
     public function authorize(): bool
@@ -26,7 +23,7 @@ class ChangeBookingStatusRequest extends FormRequest
     {
         return [
             'status_id' => ['required', 'integer'],
-            // The version of the booking the user saw: a change is refused when the booking moved on since.
+            // A change is refused when the booking moved on since the user saw this version.
             'version' => ['required', 'integer', 'min:1'],
             'comment' => ['nullable', 'string', 'max:500'],
             'idempotency_key' => ['nullable', 'string', 'max:80'],

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /** Run the migrations; maps booking types to their relevant roles (read by RoleAndPermissionSeeder). */
+    /** Maps booking types to roles (read by RoleAndPermissionSeeder). */
     public function up(): void
     {
         Schema::create('booking_type_has_roles', function (Blueprint $table) {

@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/** The query of GET /api/test-import: which of the imported bookings to show. */
+/** Query of the test-import route: which imported bookings to show. */
 class TestImportRequest extends FormRequest
 {
     public function authorize(): bool

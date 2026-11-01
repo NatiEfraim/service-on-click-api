@@ -8,12 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // A double click or a network retry of a status change sends the same Idempotency-Key: the second request gets the first one's answer.
+        // A retry sends the same Idempotency-Key and gets the first response.
         Schema::create('idempotency_keys', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id');
             $table->string('key', 80);
-            // What the key was first used for: the same key with another request is refused instead of answered with the wrong response.
+            // Request fingerprint: the same key with a different request is refused.
             $table->char('request_hash', 64);
             $table->json('response');
             $table->timestamps();

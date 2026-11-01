@@ -6,16 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class UnitHasBookingType extends Model
 {
-    //
-
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'unit_id',
         'booking_type_id',
     ];
 
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'updated_at',
         'created_at',

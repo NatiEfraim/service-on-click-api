@@ -6,8 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class BarberBooking extends Model
 {
-    //
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'user_id',
         'booking_id',

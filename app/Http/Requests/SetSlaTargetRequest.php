@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/** PUT /api/bookings-admin-management/targets - set the handling target of a booking type, or remove it with target_hours = null. */
+/** Sets the handling target of a booking type, or removes it with target_hours = null. */
 class SetSlaTargetRequest extends FormRequest
 {
     public function authorize(): bool
@@ -17,7 +17,7 @@ class SetSlaTargetRequest extends FormRequest
     {
         return [
             'booking_type_id' => ['required', 'integer', 'exists:booking_types,id'],
-            // Hours from the booking's opening to its closing; null removes the target. The range is checked by SlaTargetService, which says what it is.
+            // Hours from opening to closing; null removes the target. SlaTargetService checks the range.
             'target_hours' => ['present', 'nullable', 'numeric'],
             'warn_ratio' => ['nullable', 'numeric'],
         ];

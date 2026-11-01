@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class Status extends Model
 {
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'name',
         'display_name',
@@ -14,7 +13,6 @@ class Status extends Model
     ];
 
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'created_at',
         'updated_at',

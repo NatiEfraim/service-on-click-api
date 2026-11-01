@@ -11,8 +11,8 @@ use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Units (the letter the mobile app knows + the name people see here) and departments. Super admin only, like the other system-wide settings.
- * The letter of a unit cannot be changed: the mobile app and UnitEnum find the unit by it.
+ * Super-admin management of units (the letter the mobile app knows plus the name shown here) and departments.
+ * A unit's letter cannot change: the mobile app and UnitEnum find the unit by it.
  */
 class OrgService
 {
@@ -22,7 +22,7 @@ class OrgService
     ) {
     }
 
-    /** Every unit with its departments and how many people are in each. @return array<int, array<string, mixed>> */
+    /** Every unit with its departments and head counts. @return array<int, array<string, mixed>> */
     public function listing(AccessScope $scope): array
     {
         $this->need($scope, 'org.view');
@@ -47,10 +47,9 @@ class OrgService
     }
 
     /**
-     * Add a unit (code and name), or rename one (the code stays).
+     * Adds a unit (code and name) or renames one (the code stays).
      * @param array{code?: string, name?: string} $data
      * @return array{id: int, code: string, name: string}
-     * @throws DomainError 403, 422 invalid
      */
     public function saveUnit(AccessScope $scope, ?int $id, array $data): array
     {
@@ -90,7 +89,7 @@ class OrgService
                 'after' => ['code' => $unit->name, 'name' => $unit->displayName()],
             ], $scope->user);
 
-            // The mobile app is told a unit exists - by its letter only. Its name, and the departments, never leave this system.
+            // The mobile app learns of a unit by its letter only; names and departments never leave this system.
             if (!$id) {
                 $this->configOutbox->queue('unit', 'create', ['unit_id' => $unit->id, 'data' => ['unit_id' => $unit->id, 'code' => $unit->name]]);
             }
@@ -100,10 +99,10 @@ class OrgService
     }
 
     /**
-     * Add a department to a unit, or rename / switch one on or off.
+     * Adds a department to a unit, or renames / toggles one.
      * @param array{name?: string, is_active?: bool} $data
      * @return array{id: int, unit_id: int, name: string, is_active: bool}
-     * @throws DomainError 403, 409 people are still in it, 422 invalid
+     * @throws DomainError 409 when people are still in it
      */
     public function saveDepartment(AccessScope $scope, ?int $id, ?int $unitId, array $data): array
     {
@@ -154,7 +153,6 @@ class OrgService
         });
     }
 
-    /** @throws DomainError 403 */
     private function need(AccessScope $scope, string $action): void
     {
         if (!$scope->can('config.global')) {

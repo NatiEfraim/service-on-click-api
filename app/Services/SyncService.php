@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * What the screen for the traffic with the mobile app shows - the files sent back, the decisions still waiting to be sent, the sync
- * conflicts - and what a person can do about it: settle a conflict, send now. Sending itself is BookingStatusExportService's.
+ * The screen for traffic with the mobile app: files sent back, decisions waiting to be sent and sync conflicts, plus settling a conflict and "send now".
+ * Sending itself is BookingStatusExportService's.
  */
 class SyncService
 {
@@ -37,7 +37,7 @@ class SyncService
 
         return [
             'health' => $this->health(),
-            // (Without the payload: it can be large, and the screen shows a file's content only when it is opened.)
+            // Without the payload: it can be large and the screen shows a file's content only when opened.
             'files' => SyncFile::query()->orderByDesc('id')->limit(150)
                 ->get(['id', 'kind', 'file_name', 'state', 'attempts', 'record_count', 'last_error', 'next_attempt_at', 'completed_at', 'created_at'])
                 ->map(fn (SyncFile $file): array => $this->fileRow($file))->all(),
@@ -79,7 +79,7 @@ class SyncService
         return ['file' => $this->fileRow($file), 'records' => array_slice($payload['bookings'] ?? $payload['changes'] ?? [], 0, 500)];
     }
 
-    /** Send what is waiting now, instead of at the next round. @return array<string, mixed> @throws DomainError 403 */
+    /** Sends what is waiting now instead of at the next round. @return array<string, mixed> */
     public function run(AccessScope $scope): array
     {
         $this->need($scope, 'sync.operate');
@@ -88,9 +88,9 @@ class SyncService
     }
 
     /**
-     * Settle a conflict: keep the status the mobile app has (accept_external) or our decision (keep_internal). The reason is kept in the audit log.
+     * Settles a conflict: keep the mobile app's status (accept_external) or ours (keep_internal); the reason goes to the audit log.
      * @return array{resolved: bool, status_id: int}
-     * @throws DomainError 403, 409 settled already, 422 the reason is missing or the requester's cancellation would be revived
+     * @throws DomainError 422 when the reason is missing or the requester's cancellation would be revived
      */
     public function resolveConflict(AccessScope $scope, int $conflictId, string $resolution, string $reason): array
     {
@@ -132,7 +132,7 @@ class SyncService
 
                 $this->log($booking, $external, $scope, 'system', $correlationId);
 
-                // The status that arrived may give a barber slot back, as a decision made here would.
+                // The incoming status may free a barber slot, as a decision made here would.
                 if ($external->freesBarberSlot()) {
                     BarberBooking::query()->where('booking_id', $booking->id)->update(['is_deleted' => true]);
                 }
@@ -177,7 +177,6 @@ class SyncService
         });
     }
 
-    /** @return array<string, mixed> */
     private function health(): array
     {
         return [
@@ -215,7 +214,6 @@ class SyncService
         app(BookingStatusRecorder::class)->log($booking, $status, $scope->user, $source, $correlationId);
     }
 
-    /** @throws DomainError 403 */
     private function need(AccessScope $scope, string $capability): void
     {
         if (!$scope->can($capability)) {

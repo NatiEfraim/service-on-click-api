@@ -7,14 +7,12 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateOptionFieldRequest extends FormRequest
 {
-    /** Determine if the user is authorized to make this request. @return bool */
     public function authorize(): bool
     {
         return true;
     }
 
 
-    /** Prepare data before validation. */
     protected function prepareForValidation(): void
     {
         $formFieldId = (int) $this->route('formFieldId');
@@ -34,7 +32,6 @@ class UpdateOptionFieldRequest extends FormRequest
         }
     }
 
-    /** Get the validation rules that apply to the request. @return array */
     public function rules(): array
     {
 
@@ -52,7 +49,6 @@ class UpdateOptionFieldRequest extends FormRequest
     }
 
 
-    /** Get the validation messages that apply to the request. @return array */
     public function messages(): array
     {
         return [
@@ -85,7 +81,6 @@ class UpdateOptionFieldRequest extends FormRequest
     }
 
 
-    /** Validate select options recursively. */
     private function validateSelectOptionsRecursive(int $formFieldId, array $data, array $multySelectedOptions = []): bool
     {
 

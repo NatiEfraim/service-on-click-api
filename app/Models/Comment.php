@@ -7,19 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class Comment extends Model
 {
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'booking_id',
         'user_id',
         'comment',
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'updated_at',
     ];
 
-    /** Get created_at formatted as d/m/Y. @param mixed $value @return string|null */
     public function getCreatedAtAttribute($value): string|null
     {
         return $value ? Carbon::parse($value)->format('d/m/Y') : null;

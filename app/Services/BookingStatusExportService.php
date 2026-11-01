@@ -80,13 +80,13 @@ class BookingStatusExportService
             'updated_at' => (string) $booking->statusSince()->getTimestamp(),
         ])->values()->all()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
-        // The day in the file name identifies the snapshot, so decisions still waiting tomorrow go in a new file.
+        // The day in the name identifies the snapshot: decisions still waiting tomorrow go in a new file.
         $file = SyncFile::query()->firstOrCreate(
             ['direction' => 'outbound', 'sha256' => hash('sha256', $fileName . "\n" . $json)],
             ['kind' => SyncFile::KIND_BOOKING_STATUS, 'file_name' => $fileName, 'state' => SyncFile::STATE_QUEUED, 'record_count' => $decisions->count(), 'payload' => $json]
         );
 
-        // The same snapshot failed before: wait out the back-off; after the last attempt a person retries it.
+        // The same snapshot failed before: wait out the back-off; after the last attempt a person retries.
         if ($file->state === SyncFile::STATE_FAILED) {
             if ($file->next_attempt_at === null) {
                 return ['sent' => false, 'reason' => 'needs_manual_retry', 'file_id' => $file->id];
@@ -276,7 +276,7 @@ class BookingStatusExportService
             throw new DomainError('הקובץ הוחלף בקובץ עדכני יותר', 409);
         }
 
-        // A change kept while the configuration channel was off goes out when it is switched on, not by hand.
+        // A change kept while the config channel was off goes out when it is switched on, not by hand.
         if ($file->state === SyncFile::STATE_AWAITING_SUPPORT && !config('app.export_json.config_channel_enabled', true)) {
             throw new DomainError('ערוץ ההגדרות כבוי', 409);
         }

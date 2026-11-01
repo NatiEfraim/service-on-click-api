@@ -11,19 +11,19 @@ return new class extends Migration
         Schema::create('bookings', function (Blueprint $table) {
             $table->id();
             $table->uuid();
-            // The number both apps show. The import finds a booking by it, so two bookings may never share one.
+            // Shown by both apps; the import matches bookings by it, so it must be unique.
             $table->bigInteger('serial_number')->nullable()->unique();
             $table->foreignId('unit_id')->constrained('units')->onDelete('cascade');
             $table->foreignId('booking_type_id')->constrained('booking_types')->onDelete('cascade');
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->foreignId('status_id')->default(1)->constrained('statuses')->onDelete('cascade');
-            // Optimistic locking: a status change or a value edit names the version it saw, and is refused when the booking moved on since.
+            // Optimistic locking: edits name the version they saw and are refused if it moved on.
             $table->unsignedInteger('version')->default(1);
-            // The last status seen from the mobile app - tells a decision made here from a change made there (three-way merge on import).
+            // Last status seen from the mobile app, for the three-way merge on import.
             $table->unsignedTinyInteger('ext_status_id')->nullable();
-            // Who set the current status: external (the mobile app), internal (a decision made here) or system.
+            // Who set the current status: external (mobile app), internal (decided here) or system.
             $table->string('status_source', 10)->default('external');
-            // When the current status was set. updated_at moves with every edit, so it cannot tell how long the booking has waited.
+            // When the status was set; updated_at moves on every edit, so it cannot measure waiting time.
             $table->timestamp('status_changed_at')->nullable();
             $table->boolean('is_exported')->default(false);
             $table->boolean('is_status_exported')->default(true);

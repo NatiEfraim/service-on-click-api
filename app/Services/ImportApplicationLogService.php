@@ -14,10 +14,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Save the logs of the exported application log files (SrvOnClick_b2r_application_logs_<date>.json): what was done to a booking
- * (action_type_id), by whom (personal_id) and when. A log belongs to the booking with its serial number, so the booking must be saved
- * first - ImportBookingService. A log that is saved already is recognised by booking, action, person and time, so reading a file again adds nothing.
- * The file also carries the booking's status at that time: it is saved too (status_id), which makes the log the booking's timeline - how long each stage took.
+ * Saves exported application log files: what was done to a booking (action_type_id), by whom (personal_id) and when, plus the booking's
+ * status then, which makes the log its timeline. The booking must be saved first (ImportBookingService);
+ * a saved log is recognised by booking, action, person and time, so a re-read adds nothing.
  */
 class ImportApplicationLogService
 {
@@ -45,9 +44,9 @@ class ImportApplicationLogService
     }
 
     /**
-     * Save one chunk of the file in one transaction. A row that cannot be a log is logged and skipped; a log whose booking is not saved yet is
-     * counted in booking_not_found - the job looks again later (see ImportApplicationLogJsonChunkJob).
-     * @param array $logsChunk, int $chunkIndex @return array<string, int> created, already_saved, skipped, booking_not_found
+     * Saves one chunk in a transaction. Unusable rows are logged and skipped; a log whose booking is not saved yet is counted in
+     * booking_not_found and the job looks again later (see ImportApplicationLogJsonChunkJob).
+     * @return array<string, int> created, already_saved, skipped, booking_not_found
      */
     public function importChunk(array $logsChunk, int $chunkIndex): array
     {
@@ -110,7 +109,7 @@ class ImportApplicationLogService
                 'status_id' => $row['status_id'],
                 'source' => 'external',
                 'user_id' => $userId,
-                // The mobile app has these already - nothing here is sent back to it.
+                // Nothing here is sent back to the mobile app.
                 'is_exported' => true,
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
@@ -129,9 +128,7 @@ class ImportApplicationLogService
         return $stats;
     }
 
-    //----------------------------- Private Methods ------------------------//
-
-    /** Why a row cannot be saved (a string), or the row ready to save. @return array|string */
+    /** @return array|string the reason a row is unusable, or the row ready to save */
     private function prepareRow(mixed $logData): array|string
     {
         if (!is_array($logData)) {
@@ -158,7 +155,7 @@ class ImportApplicationLogService
             return 'missing or invalid created_at';
         }
 
-        // A status the file names that this system does not know is left out; the log is saved all the same.
+        // A status unknown to this system is left out; the log is saved anyway.
         $statusId = is_numeric($logData['status_id'] ?? null) && StatusBookingEnum::tryFrom((int) $logData['status_id']) !== null
             ? (int) $logData['status_id']
             : null;
@@ -172,7 +169,7 @@ class ImportApplicationLogService
         ];
     }
 
-    /** The logs these bookings have already, as keys for logKey(). @param array<int, int> $bookingIds @return array<string, true> */
+    /** The logs these bookings already have, as keys for logKey(). @return array<string, true> */
     private function savedLogKeys(array $bookingIds): array
     {
         if ($bookingIds === []) {

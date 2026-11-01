@@ -38,7 +38,7 @@ class MetricsService
             ->with(['user:id,uuid,full_name,personal_id,personal_number', 'bookingType:id,display_name', 'status:id,display_name'])
             ->get();
 
-        // (A subquery, not the list of ids: a long list does not fit in one statement.)
+        // A subquery, not an id list: a long list does not fit in one statement.
         $conflicts = SyncConflict::query()
             ->whereIn('booking_id', (clone $base)->whereNotIn('status_id', StatusBookingEnum::terminalIds())->select('id'))
             ->where('state', SyncConflict::STATE_OPEN)
@@ -62,7 +62,7 @@ class MetricsService
             'by_type_stage' => $rows->groupBy('booking_type_id')->map(fn ($group) => $group->countBy('stage'))->all(),
             'by_status' => (clone $base)->select('status_id', DB::raw('COUNT(*) AS total'))->groupBy('status_id')->pluck('total', 'status_id')->all(),
             'my_top' => $rows->filter(fn (array $row): bool => $row['actions'] !== [])->sortByDesc('stage_age_hours')->take(6)->values()->all(),
-            // For the roles that only view (the camp commander).
+            // For view-only roles (the camp commander).
             'oldest_top' => $rows->sortByDesc('stage_age_hours')->take(6)->values()->all(),
             'bottlenecks' => array_slice($this->bottlenecks($scope, [])['stages'], 0, 4),
             'trend' => $this->trend($scope, 30),
@@ -76,7 +76,7 @@ class MetricsService
     }
 
     /**
-     * Where the bookings wait. Filters: days (the window, 1 to 365, default 30), types (comma separated booking type ids), unit (super admin only).
+     * Where the bookings wait. Filters: days (window, 1 to 365, default 30), types (comma-separated booking type ids), unit (super admin only).
      * @param array<string, mixed> $filters
      * @return array<string, mixed>
      */
@@ -88,14 +88,14 @@ class MetricsService
         $types = !empty($filters['types']) ? array_values(array_filter(array_map('intval', explode(',', (string) $filters['types'])))) : null;
         $unit = !empty($filters['unit']) && $scope->isSuperAdmin() ? (int) $filters['unit'] : null;
 
-        // The open bookings and those that moved since the previous period began: the others have no stay in either period.
+        // Open bookings and those that moved since the previous period began; no other has a stay in either period.
         $visible = $scope->applyToBookings(Booking::query())
             ->when($types, fn ($query) => $query->whereIn('booking_type_id', $types))
             ->when($unit, fn ($query) => $query->where('unit_id', $unit))
             ->openOrMovedSince(Carbon::createFromTimestamp($previousFrom))
             ->get();
 
-        // The stays that ended before the window began do not count; those that ended in the window before it are the previous period.
+        // Stays that ended before the window began do not count; those ended in the window before it are the previous period.
         $all = $this->timeline->intervals($visible, $previousFrom);
         $intervals = [];
         $previousIntervals = [];
@@ -141,7 +141,7 @@ class MetricsService
             ->sortByDesc('open')
             ->values();
 
-        // Load per person: the moves they made in the window and how fast (the system assigns bookings to nobody in particular).
+        // Load per person: moves made in the window and how fast (bookings are assigned to nobody in particular).
         $handlers = collect($intervals)
             ->filter(fn (array $interval): bool => $interval['left_at'] !== null && $interval['handler'])
             ->groupBy('handler')
@@ -155,7 +155,7 @@ class MetricsService
             ->take(12)
             ->all();
 
-        // Pools: the open bookings that wait for a role, shared by the people who hold that role for the type in the unit.
+        // Pools: open bookings waiting for a role, shared by the holders of that role for the type in the unit.
         $pools = $byType
             ->filter(fn (array $row): bool => BookingStageEnum::from($row['stage'])->actingRole() !== null)
             ->map(function (array $row) use ($scope, $unit): array {

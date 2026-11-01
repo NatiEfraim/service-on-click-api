@@ -4,13 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/** The handling target of a booking type: the total hours from the booking's opening to its closing. */
+/** Handling target of a booking type: hours from opening to closing. */
 class SlaTarget extends Model
 {
     /** The only stage in use. */
     public const STAGE_TOTAL = 'total';
 
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'booking_type_id',
         'stage',
@@ -19,13 +18,11 @@ class SlaTarget extends Model
         'set_by',
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'created_at',
         'updated_at',
     ];
 
-    /** Attribute casts. @var array<string, string> */
     protected $casts = [
         'target_hours' => 'float',
         'warn_ratio' => 'float',

@@ -8,15 +8,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * The app's own login, by personal number - for local development and tests.
- * It asks for no secret, so the servers replace this file with ADFS/AuthController.php (see the Dockerfile).
- */
+/** Local-development login by personal number; servers swap in ADFS/AuthController.php (see the Dockerfile). */
 class AuthController extends Controller
 {
     public function __construct(private readonly AuthService $authService) {}
 
-    /** POST /api/login - log in with a personal number; the personal access token is set in a cookie. @param Request $request @return JsonResponse */
+    /** Log in with a personal number; the personal access token is set in a cookie. */
     public function login(Request $request): JsonResponse
     {
         $user = $this->authService->findUserForLogin($request);
@@ -32,7 +29,7 @@ class AuthController extends Controller
         return $this->authService->loginResponse($user);
     }
 
-    /** POST /api/logout - revoke the token and forget its cookie. @param Request $request @return JsonResponse */
+    /** Revoke the token and forget its cookie. */
     public function logout(Request $request): JsonResponse
     {
         return $this->authService->logoutResponse($request->user());

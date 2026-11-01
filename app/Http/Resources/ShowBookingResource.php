@@ -38,7 +38,6 @@ class ShowBookingResource extends JsonResource
         ];
     }
 
-    /** Transform the resource into an array; used specifically for the `show()` function (single booking). */
     public function toArray(Request $request): array
     {
         $cancellationData = $this->getCancellationData();
@@ -60,12 +59,10 @@ class ShowBookingResource extends JsonResource
 
     }
 
-    /** Remove only null values from array. @param array $data @return array */
     private function removeNullValues(array $data): array
     {
         return array_filter($data, fn($value) => !is_null($value));
     }
-    /** Retrieve booking type data. @return array */
     private function getBookingTypeData(): array
     {
         return $this->removeNullValues([
@@ -76,7 +73,6 @@ class ShowBookingResource extends JsonResource
         ]);
     }
 
-    /** Retrieve booking user data. @return array */
     private function getUserData(): array
     {
         return $this->removeNullValues([
@@ -88,7 +84,6 @@ class ShowBookingResource extends JsonResource
     }
 
 
-    /** Retrieve booking status data. @return array */
     private function getStatusData(): array
     {
         return $this->removeNullValues([
@@ -114,7 +109,6 @@ class ShowBookingResource extends JsonResource
             : null;
     }
 
-    /** Format resource date. @param mixed $date @return ?string */
     private function formatDate(mixed $date): ?string
     {
         if (!$date) {
@@ -144,7 +138,7 @@ class ShowBookingResource extends JsonResource
             ->all() ?? [];
     }
     
-    /** Whether the booking can still be cancelled (as UpdateBookingRequest checks) plus its cancellation_advance_days. @return array */
+    /** Whether the booking can still be cancelled (as UpdateBookingRequest checks), plus cancellation_advance_days. */
     private function getCancellationData(): array
     {
         $cancelableStatusIds = [
@@ -223,7 +217,7 @@ class ShowBookingResource extends JsonResource
         ];
     }
 
-    /** Subtract $days business days (skipping Fri/Sat) from $date. */
+    /** Subtracts business days (skipping Fri/Sat). */
     private function subtractBusinessDays(Carbon $date, int $days): Carbon
     {
         $cursor = $date->copy();

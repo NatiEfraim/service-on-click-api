@@ -15,7 +15,7 @@ return new class extends Migration
             $table->foreignId('booking_type_id')->nullable()->constrained('booking_types')->onDelete('cascade');
             $table->text('statement')->nullable();
             $table->boolean('is_active')->default(false);
-            // StatementShowTimeEnum: 0 = right after the form opens, 1 = when the user submits the form.
+            // StatementShowTimeEnum: 0 = when the form opens, 1 = on submit.
             $table->unsignedTinyInteger('show_time')->default(StatementShowTimeEnum::ON_SUBMIT->value);
             $table->timestamps();
         });

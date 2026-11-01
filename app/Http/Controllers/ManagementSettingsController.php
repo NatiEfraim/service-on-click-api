@@ -17,8 +17,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ManagementSettingsController extends Controller
 {
-    // API group: settings of a booking type (read), the editable flag of a field and the handling targets - thin: the rules are in the services and in AccessScope.
-
     public function __construct(
         private readonly SettingsService $settingsService,
         private readonly SlaTargetService $slaTargetService,
@@ -26,19 +24,19 @@ class ManagementSettingsController extends Controller
     ) {
     }
 
-    /** GET /api/bookings-approver-management/settings/{unitId}/{bookingTypeId} - system references, form fields and options, statement and managers of a booking type in a unit. @param int $unitId, int $bookingTypeId @return JsonResponse */
+    /** System references, form fields and options, statement and managers of a booking type in a unit. */
     public function settings(int $unitId, int $bookingTypeId): JsonResponse
     {
         return response()->json(['data' => $this->settingsService->view($this->accessScope(), $unitId, $bookingTypeId)], Response::HTTP_OK);
     }
 
-    /** POST /api/bookings-approver-management/settings/references/{id}/impact - which bookings blocking these dates would cancel (nothing is saved). @param int $id, RestrictionImpactRequest $request @return JsonResponse */
+    /** Which bookings blocking these dates would cancel (nothing is saved). */
     public function restrictionImpact(int $id, RestrictionImpactRequest $request): JsonResponse
     {
         return response()->json(['data' => $this->settingsService->restrictionImpact($this->accessScope(), $id, $request->input('dates'))], Response::HTTP_OK);
     }
 
-    /** PUT /api/bookings-super-admin-management/form-fields/{id}/editable - may an approver correct this date / time field's value. @param int $id, SetFieldEditableRequest $request @return JsonResponse */
+    /** May an approver correct this date / time field's value. */
     public function setFieldEditable(int $id, SetFieldEditableRequest $request): JsonResponse
     {
         $result = $this->formFieldService->setEditable($this->accessScope(), $id, $request->boolean('editable'), $request->integer('version'));
@@ -46,7 +44,7 @@ class ManagementSettingsController extends Controller
         return response()->json(['data' => $result, 'message' => 'השדה עודכן'], Response::HTTP_OK);
     }
 
-    /** POST /api/bookings-super-admin-management/form-fields/{unitId}/{bookingTypeId} - add a field at the end of the form. @param int $unitId, int $bookingTypeId, StoreFormFieldRequest $request @return JsonResponse */
+    /** Add a field at the end of the form. */
     public function createField(int $unitId, int $bookingTypeId, StoreFormFieldRequest $request): JsonResponse
     {
         $field = $this->formFieldService->create($this->accessScope(), $unitId, $bookingTypeId, $request->validated());
@@ -54,7 +52,7 @@ class ManagementSettingsController extends Controller
         return response()->json(['data' => $field, 'message' => 'השדה נוסף'], Response::HTTP_CREATED);
     }
 
-    /** PUT /api/bookings-super-admin-management/form-fields/{id} - change a field's name, type, required or editable (send the version). @param int $id, UpdateFormFieldRequest $request @return JsonResponse */
+    /** Change a field's name, type, required or editable (send the version). */
     public function updateField(int $id, UpdateFormFieldRequest $request): JsonResponse
     {
         $field = $this->formFieldService->update($this->accessScope(), $id, $request->safe()->except('version'), $request->integer('version'));
@@ -62,7 +60,7 @@ class ManagementSettingsController extends Controller
         return response()->json(['data' => $field, 'message' => 'השדה עודכן'], Response::HTTP_OK);
     }
 
-    /** PUT /api/bookings-super-admin-management/form-fields/{unitId}/{bookingTypeId}/order - the new order of the stand-alone fields of the form. @param int $unitId, int $bookingTypeId, ReorderFormFieldsRequest $request @return JsonResponse */
+    /** The new order of the stand-alone fields of the form. */
     public function reorderFields(int $unitId, int $bookingTypeId, ReorderFormFieldsRequest $request): JsonResponse
     {
         $result = $this->formFieldService->reorder($this->accessScope(), $unitId, $bookingTypeId, $request->input('ids'));
@@ -70,7 +68,7 @@ class ManagementSettingsController extends Controller
         return response()->json(['data' => $result, 'message' => 'סדר השדות נשמר'], Response::HTTP_OK);
     }
 
-    /** DELETE /api/bookings-super-admin-management/form-fields/{id} - take a field out of the form: archived when bookings hold values for it, deleted when none does (?version= optional). @param int $id, Request $request @return JsonResponse */
+    /** Archives the field when bookings hold values for it, deletes it otherwise (?version= optional). */
     public function removeField(int $id, Request $request): JsonResponse
     {
         $version = $request->input('version');
@@ -82,13 +80,13 @@ class ManagementSettingsController extends Controller
         ], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-admin-management/targets - the handling targets of the booking types the user manages. @return JsonResponse */
+    /** The handling targets of the booking types the user manages. */
     public function targets(): JsonResponse
     {
         return response()->json(['data' => $this->slaTargetService->list($this->accessScope())], Response::HTTP_OK);
     }
 
-    /** PUT /api/bookings-admin-management/targets - set (or remove, with target_hours null) the handling target of a booking type. @param SetSlaTargetRequest $request @return JsonResponse */
+    /** Set (or remove, with target_hours null) the handling target of a booking type. */
     public function setTarget(SetSlaTargetRequest $request): JsonResponse
     {
         $result = $this->slaTargetService->set(

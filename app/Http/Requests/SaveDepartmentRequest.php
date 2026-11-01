@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/** POST /org/units/{unitId}/departments (name required) and PUT /org/departments/{id} (name and / or is_active). */
+/** Create (name required) and update (name and/or is_active) of a department. */
 class SaveDepartmentRequest extends FormRequest
 {
     public function authorize(): bool

@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/** POST /api/bookings-approver-management/settings/references/{id}/impact - the full list of blocked dates the setting would hold (it may be empty). */
+/** The full list of blocked dates the setting would hold (may be empty). */
 class RestrictionImpactRequest extends FormRequest
 {
     public function authorize(): bool

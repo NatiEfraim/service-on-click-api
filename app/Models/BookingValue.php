@@ -6,9 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class BookingValue extends Model
 {
-    //
-
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'booking_id',
         'form_field_id',
@@ -16,13 +13,11 @@ class BookingValue extends Model
         'value',
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'created_at',
         'updated_at',
     ];
 
-    /** Attribute casts. @var array<string, string> */
     protected $casts = [
         'value' => 'array',
     ];

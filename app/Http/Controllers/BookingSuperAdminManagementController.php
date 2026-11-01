@@ -19,14 +19,12 @@ use Illuminate\Http\Request;
 class BookingSuperAdminManagementController extends Controller
 {
 
-    // API group: Bookings Super Admin Management - system settings for the super_admin role only.
-
     public function __construct(
         private readonly BookingSuperAdminManagementService $bookingSuperAdminManagementService
     ) {
     }
 
-    /** POST /api/bookings-super-admin-management/assign-admin-role - assign/remove admin roles and permissions per booking type. @param AssignAdminRoleRequest $request @return JsonResponse */
+    /** Assign/remove admin roles and permissions per booking type. */
     public function assignAdminRole(AssignAdminRoleRequest $request): JsonResponse
     {
 
@@ -42,7 +40,7 @@ class BookingSuperAdminManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-super-admin-management/get-admins - list admins, optional ?identifier (personal id or name) filter. @param Request $request @return JsonResponse */
+    /** List admins, optional ?identifier (personal id or name) filter. */
     public function getAdmins(Request $request): JsonResponse
     {
         $result = $this->bookingSuperAdminManagementService->getAdmins(
@@ -59,7 +57,7 @@ class BookingSuperAdminManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-super-admin-management/get-admin-permissions/{userUuid} - booking types with the user's is_admin flag. @param string $userUuid @return JsonResponse */
+    /** Booking types with the user's is_admin flag. */
     public function getAdminPermissions(string $userUuid): JsonResponse
     {
         $result = $this->bookingSuperAdminManagementService->getAdminPermissions(
@@ -77,7 +75,7 @@ class BookingSuperAdminManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-super-admin-management/index-selects/{unitId}/{bookingType} - selectable fields/options of a booking type in a unit. @param int $unitId, string $bookingType @return JsonResponse */
+    /** Selectable fields/options of a booking type in a unit. */
     public function indexSelects(int $unitId, string $bookingType): JsonResponse
     {
         $result = $this->bookingSuperAdminManagementService->indexSelects(
@@ -97,7 +95,7 @@ class BookingSuperAdminManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** GET /api/bookings-super-admin-management/get-select-options/{formFieldId} - fetch a form field with its select options. @param int $formFieldId @return JsonResponse */
+    /** Fetch a form field with its select options. */
     public function getSelectOptions(int $formFieldId): JsonResponse
     {
         $result = $this->bookingSuperAdminManagementService->getSelectOptions(
@@ -117,7 +115,7 @@ class BookingSuperAdminManagementController extends Controller
     }
 
 
-    /** GET /api/bookings-super-admin-management/get-options - option fields of ?formFieldId, optionally under parent ?optionFieldId. @param Request $request @return JsonResponse */
+    /** Option fields of ?formFieldId, optionally under parent ?optionFieldId. */
     public function getOptions(Request $request): JsonResponse
     {
       
@@ -139,7 +137,7 @@ class BookingSuperAdminManagementController extends Controller
     }
 
 
-    /** GET /api/bookings-super-admin-management/get-statement/{bookingTypeId} - fetch the statement of a booking type. @param int $bookingTypeId @return JsonResponse */
+    /** Fetch the statement of a booking type. */
     public function getStatement(int $bookingTypeId): JsonResponse
     {
         $result = $this->bookingSuperAdminManagementService->getStatement(
@@ -159,7 +157,7 @@ class BookingSuperAdminManagementController extends Controller
     }
 
 
-    /** GET /api/bookings-super-admin-management/get-siblings-options/{optionFieldId} - option fields that share the given option's parent. @param int $optionFieldId @return JsonResponse */
+    /** Option fields that share the given option's parent. */
     public function getSiblingsOptions(int $optionFieldId): JsonResponse
     {
         $result = $this->bookingSuperAdminManagementService->getSiblingsOptions(
@@ -178,7 +176,7 @@ class BookingSuperAdminManagementController extends Controller
         return response()->json(['data' => $result], Response::HTTP_OK);
     }
 
-    /** PUT /api/bookings-super-admin-management/update-select-option/{formFieldId} - update option names and categories of a field. @param int $formFieldId, UpdateFormFieldOptionRequest $request @return JsonResponse */
+    /** Update option names and categories of a field. */
     public function updateSelectOptions(int $formFieldId, UpdateFormFieldOptionRequest $request): JsonResponse
     {
 
@@ -193,7 +191,7 @@ class BookingSuperAdminManagementController extends Controller
         };
     }
 
-    /** PUT /api/bookings-super-admin-management/update-options/{formFieldId} - sync the nested option_fields tree of a form field. @param int $formFieldId, UpdateOptionFieldRequest $request @return JsonResponse */
+    /** Sync the nested option_fields tree of a form field. */
     public function updateOptions(int $formFieldId, UpdateOptionFieldRequest $request): JsonResponse
     {
    
@@ -208,7 +206,7 @@ class BookingSuperAdminManagementController extends Controller
         };
     }
 
-    /** PUT /api/bookings-super-admin-management/update-option/{formFieldId} - update an existing option or create a new one. @param int $formFieldId, UpdateOptionFieldRequest $request @return JsonResponse */
+    /** Update an existing option or create a new one. */
     public function updateOption(int $formFieldId, UpdateOptionFieldRequest $request): JsonResponse
     {
   
@@ -228,7 +226,7 @@ class BookingSuperAdminManagementController extends Controller
     }
 
 
-    /** DELETE /api/bookings-super-admin-management/remove-options/{formFieldId} - delete root options and all their children. @param int $formFieldId, RemoveOptionFieldRequest $request @return JsonResponse */
+    /** Delete root options and all their children. */
     public function removeSelectOptions(int $formFieldId, RemoveOptionFieldRequest $request): JsonResponse
     {
         $result = $this->bookingSuperAdminManagementService->removeSelectOptions(formFieldId: $formFieldId, fieldOptions: $request->input('option_fields'));
@@ -241,7 +239,7 @@ class BookingSuperAdminManagementController extends Controller
         };
     }
 
-    /** DELETE /api/bookings-super-admin-management/remove-option/{formFieldId} - delete a single option by option_id. @param int $formFieldId, RemoveOptionFieldRequest $request @return JsonResponse */
+    /** Delete a single option by option_id. */
     public function removeOption(int $formFieldId, RemoveOptionFieldRequest $request): JsonResponse
     {
         $result = $this->bookingSuperAdminManagementService->removeOption(formFieldId: $formFieldId, fieldOptions: $request->validated());
@@ -255,7 +253,7 @@ class BookingSuperAdminManagementController extends Controller
         };
     }
 
-    /** PUT /api/bookings-super-admin-management/update-statement/{unitId}/{bookingTypeId} - set statement, is_active, show_time (omit = keep). @param int $unitId, int $booingTypeId, UpdateStatementRequest $request @return JsonResponse */
+    /** Set statement, is_active, show_time (omit = keep). */
     public function updateStatement(int $unitId,int $booingTypeId, UpdateStatementRequest $request): JsonResponse
     {
        

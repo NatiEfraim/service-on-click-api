@@ -9,13 +9,11 @@ use Spatie\Permission\Models\Role;
 
 class BookingTypeHasRole extends Model
 {
-    /** Mass-assignable attributes. @var array<int, string> */
     protected $fillable = [
         'booking_type_id',
         'role_id',
     ];
 
-    /** Attributes hidden for serialization. @var array<int, string> */
     protected $hidden = [
         'updated_at',
         'created_at',
@@ -31,7 +29,7 @@ class BookingTypeHasRole extends Model
         return $this->belongsTo(Role::class, 'role_id');
     }
 
-    /** Get the role enums used for approver management, excluding SUPER_ADMIN/ADMIN/USER. @return Collection */
+    /** Role enums used for approver management (excludes SUPER_ADMIN, ADMIN, USER). */
     public static function approverManagementRoleEnums(): Collection
     {
         $excludedRoleIds = [

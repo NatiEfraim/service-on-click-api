@@ -4,10 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-/**
- * PUT /api/bookings-approver-management/bookings/{serial}/values. The shape only: which fields may be changed now, and whether each new
- * value is valid, are decided by BookingValueService.
- */
+/** Shape only: which fields may change now and whether a value is valid are decided by BookingValueService. */
 class UpdateBookingValuesRequest extends FormRequest
 {
     public function authorize(): bool

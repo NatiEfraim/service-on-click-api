@@ -9,7 +9,6 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class FormFieldChildResource extends JsonResource
 {
-    /** Transform the resource into an array. @param Request $request @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         return $this->resource instanceof FormField
@@ -17,7 +16,6 @@ class FormFieldChildResource extends JsonResource
             : $this->optionFieldChild($this->resource);
     }
 
-    /** Shape one child FormField record. */
     private function formFieldChild(FormField $formField): array
     {
         return array_filter([
@@ -38,7 +36,6 @@ class FormFieldChildResource extends JsonResource
         ], fn($value) => !is_null($value));
     }
 
-    /** Shape one OptionField record. */
     private function optionFieldChild(OptionField $optionField): array
     {
         return array_filter([

@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('booking_id')->constrained('bookings')->onDelete('cascade');
             $table->foreignId('file_id')->constrained('files')->onDelete('cascade');
-            // FILE form field the upload was sent under (e.g. request_reason_exemption_male_attached_file); null when none.
+            // FILE form field the upload was sent under; null when none.
             $table->foreignId('form_field_id')->nullable()->constrained('form_fields')->nullOnDelete();
             $table->timestamps();
         });
