@@ -1,12 +1,13 @@
 <?php
 
-use App\Console\Commands\DigitalHatchFetchAttachmentsCommand;
-use App\Console\Commands\DigitalHatchFetchCommand;
 use App\Console\Commands\DigitalHatchSendBookingStatusCommand;
 use App\Console\Commands\DigitalHatchSendUsersCommand;
 use App\Console\Commands\ExportBookingStatusJsonCommand;
-use App\Console\Commands\ImportApplicationLogJsonCommand;
-use App\Console\Commands\ImportBookingJsonCommand;
+use App\Console\Commands\ImportApplicationLogJsonBucketCommand;
+use App\Console\Commands\ImportApplicationLogJsonFtpCommand;
+use App\Console\Commands\ImportBookingJsonBucketCommand;
+use App\Console\Commands\ImportBookingJsonFtpCommand;
+use App\Console\Commands\ImportFileFtpCommand;
 use App\Console\Commands\VerifyAuditLogCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -20,14 +21,14 @@ Artisan::command('inspire', function () {
 
 // These commands only queue jobs, so a queue worker must be running.
 
-// Booking files in import-json/booking-data (ImportBookingJsonChunkJob).
-Schedule::command(ImportBookingJsonCommand::class)
+// Booking files in import-json/booking-data (ImportBookingJsonBucketJob, then ImportBookingJsonChunkJob for the rows).
+Schedule::command(ImportBookingJsonBucketCommand::class)
     ->cron(config('app.jobs.import_booking_json.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping();
 
 // Application logs; a minute after the bookings because a log belongs to a booking.
-Schedule::command(ImportApplicationLogJsonCommand::class)
+Schedule::command(ImportApplicationLogJsonBucketCommand::class)
     ->cron(config('app.jobs.import_application_log_json.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping();
@@ -40,8 +41,9 @@ Schedule::command(ExportBookingStatusJsonCommand::class)
     ->withoutOverlapping(10);
 
 // The digital hatch (FTP) between this system and the mobile side; each does nothing while HATCH_ENABLED=false.
-// The two r2b sends only queue a job each (SendHatchUsersJob, SendHatchBookingStatusJob), so a queue worker must be running; the b2r fetches
-// work in the scheduler itself. The lock expires after 10 minutes so a killed run cannot block the schedule.
+// Every one only queues a job (the two r2b sends SendHatchUsersJob and SendHatchBookingStatusJob, the three b2r imports ImportBookingJsonFtpJob,
+// ImportApplicationLogJsonFtpJob and ImportFileFtpJob), so a queue worker must be running. The lock expires after 10 minutes so a killed run cannot
+// block the schedule.
 
 // r2b: today's users file (people with their roles) goes to the FTP.
 Schedule::command(DigitalHatchSendUsersCommand::class)
@@ -55,15 +57,21 @@ Schedule::command(DigitalHatchSendBookingStatusCommand::class)
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(10);
 
-// b2r: new booking and application log files land in the folders the import commands read (a couple of minutes before they run).
-Schedule::command(DigitalHatchFetchCommand::class)
-    ->cron(config('app.jobs.digital_hatch_fetch.cron'))
+// b2r: new booking files are taken from the FTP into the bucket and saved (their rows are queued as chunk jobs).
+Schedule::command(ImportBookingJsonFtpCommand::class)
+    ->cron(config('app.jobs.digital_hatch_import_booking.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(10);
 
-// b2r: the files and images the bookings name.
-Schedule::command(DigitalHatchFetchAttachmentsCommand::class)
-    ->cron(config('app.jobs.digital_hatch_fetch_attachments.cron'))
+// b2r: the same for the application logs, a minute after the bookings because a log belongs to a booking.
+Schedule::command(ImportApplicationLogJsonFtpCommand::class)
+    ->cron(config('app.jobs.digital_hatch_import_application_log.cron'))
+    ->timezone(config('app.timezone'))
+    ->withoutOverlapping(10);
+
+// b2r: the files and images the bookings name are taken into the bucket and linked to them.
+Schedule::command(ImportFileFtpCommand::class)
+    ->cron(config('app.jobs.digital_hatch_import_file.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(10);
 

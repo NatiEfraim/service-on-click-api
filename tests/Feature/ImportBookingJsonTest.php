@@ -487,14 +487,17 @@ class ImportBookingJsonTest extends ImportJsonTestCase
         $this->putBookingFile([$this->foodBooking(16001)]);
 
         config(['app.import_json.enabled' => false]);
-        $this->assertSame(0, Artisan::call('importBookingJson:mysql'));
+        $this->assertSame(0, Artisan::call('importBookingJson:bucket', ['--sync' => true]));
+        $this->assertStringContainsString('switched off', Artisan::output());
         $this->assertSame(0, Booking::count());
         Storage::disk('minio')->assertExists(self::BOOKING_DIRECTORY . '/' . self::BOOKINGS_FILE);
 
         config(['app.import_json.enabled' => true]);
-        $this->assertSame(0, Artisan::call('importBookingJson:mysql'));
-        $this->assertStringContainsString('1 bookings in 1 chunks queued', Artisan::output());
-        $this->assertSame(1, Booking::count(), 'the test queue is sync, so the chunk job ran at once');
+        $this->assertSame(0, Artisan::call('importBookingJson:bucket', ['--sync' => true]));
+        $output = Artisan::output();
+        $this->assertStringContainsString('1 bookings in 1 chunks saved (1 created)', $output);
+        $this->assertStringContainsString('file moved to ' . self::LOADED_DIRECTORY . '/' . self::BOOKINGS_FILE, $output);
+        $this->assertSame(1, Booking::count());
         Storage::disk('minio')->assertExists(self::LOADED_DIRECTORY . '/' . self::BOOKINGS_FILE);
     }
 
@@ -502,7 +505,7 @@ class ImportBookingJsonTest extends ImportJsonTestCase
     {
         Storage::disk('minio')->put(self::BOOKING_DIRECTORY . '/' . self::BOOKINGS_FILE, 'not json');
 
-        $this->assertSame(1, Artisan::call('importBookingJson:mysql'));
+        $this->assertSame(1, Artisan::call('importBookingJson:bucket', ['--sync' => true]));
         Storage::disk('minio')->assertExists(self::BOOKING_DIRECTORY . '/' . self::BOOKINGS_FILE);
     }
 
@@ -513,7 +516,7 @@ class ImportBookingJsonTest extends ImportJsonTestCase
             $mock->shouldReceive('logToS3')->andReturn(200);
         });
 
-        $this->assertSame(1, Artisan::call('importBookingJson:mysql'));
+        $this->assertSame(1, Artisan::call('importBookingJson:bucket', ['--sync' => true]));
         $this->assertStringContainsString('bucket down', Artisan::output());
     }
 }

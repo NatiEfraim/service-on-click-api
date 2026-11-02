@@ -6,9 +6,9 @@ system reads, what it writes, and what the mobile side has to do for each file. 
 
 | File | Direction | Folder in the bucket | Written | Read by |
 |---|---|---|---|---|
-| `SrvOnClick_b2r_export_bookings_<date>.json` | b2r | `import-json/booking-data/` | the mobile app | this system, every 5 min |
-| `SrvOnClick_b2r_application_logs_<date>.json` | b2r | `import-json/application-log/` | the mobile app | this system, every 5 min |
-| `SrvOnClickFiles_<stored name>.<ext>` (the bytes of a file / image) | b2r | `import-files/` (`ATTACHMENTS_FOLDER_NAME`) | the mobile app / Hatch | this system, when somebody opens the booking |
+| `SrvOnClick_b2r_export_bookings_<date>.json` | b2r | `import-json/booking-data/` | the mobile app | this system, every 5 min (`importBookingJson:bucket`) |
+| `SrvOnClick_b2r_application_logs_<date>.json` | b2r | `import-json/application-log/` | the mobile app | this system, every 5 min (`importApplicationLogJson:bucket`) |
+| `SrvOnClickFiles_<stored name>.<ext>` (the bytes of a file / image) | b2r | `import-files/` (`ATTACHMENTS_FOLDER_NAME`) | the mobile app / Hatch | this system, when somebody opens the booking (`importFile:bucket` links them all at once) |
 | `SrvOnClick_r2b_booking_status_<Y-m-d>.json` | r2b | `export-json/booking-status/` | this system, every 2 min | the mobile app (existing importer) |
 | `SrvOnClick_r2b_booking_values_<time>_<id>.json` | r2b | `export-json/booking-values/` | this system | **the mobile app needs an importer** |
 | `SrvOnClick_r2b_system_config_<time>_<sequence>.json` | r2b | `export-json/system-config/` | this system | **the mobile app needs an importer** |
@@ -104,21 +104,24 @@ and every file is checked again before it is written; a file that holds one is h
 
 ## The FTP (digital hatch)
 
-Four scheduler commands, all off while `HATCH_ENABLED=false`; the FTP account is `HATCH_FTP_*`, the folders are in `config/services.php`
+Five scheduler commands of the hatch, all off while `HATCH_ENABLED=false`; the FTP account is `HATCH_FTP_*`, the folders are in `config/services.php`
 (`digital-hatch`). Names are never changed on the way: what is in the bucket is what is on the FTP.
 
-The two **r2b sends are separate streams**, each with its own command, queued job, service and trait, so one can be run (and tested) without the
-other: `digital-hatch:send-users` (`SendHatchUsersJob`, `UsersExportService`) and `digital-hatch:send-booking-status` (`SendHatchBookingStatusJob`,
-`BookingStatusSnapshotService`). They **queue** their job (a queue worker must run; tries / back-off / timeout in `config/app.php` `jobs.digital_hatch_send_*`,
-a run that failed - FTP down - is tried again); `--sync` sends right now in the command and prints what it did, `--force` sends the same content again.
-The two b2r fetches run in the scheduler itself.
+Every stream has its **own command, queued job, service and trait**, so one can be run (and tested) without the others, and the command names where
+the files come from: **`:bucket`** reads the bucket, **`:ftp`** works with the digital hatch. The commands **queue** their job (a queue worker must run;
+tries / back-off / timeout in `config/app.php` `jobs.digital_hatch_send_*` and `jobs.import_job`, a run that failed - FTP down - is tried again);
+`--sync` does the work right now in the command and prints what it did; `--force` sends (r2b) or takes (b2r) the same file again.
 
-| Command | Every | From -> to | Files |
-|---|---|---|---|
-| `digital-hatch:send-users` | 2 min (odd minutes) | bucket `export-json/users` -> FTP `RED_TO_BLACK_FTP_PATH` (`/R2B/Tikshoret-R2B-Prod/`) | `SrvOnClick_r2b_users_<Y-m-d>.json` |
-| `digital-hatch:send-booking-status` | 2 min (odd minutes, after the export) | bucket `export-json/booking-status` -> the same FTP folder | `SrvOnClick_r2b_booking_status_<Y-m-d>.json` |
-| `digital-hatch:fetch` | 5 min | FTP `BLACK_TO_RED_FTP_PATH` (`/Tikshoret-B2R-Prod/`) -> bucket `import-json/booking-data`, `import-json/application-log` | `SrvOnClick_b2r_export_bookings_<Y-m-d_H-i-s>.json`, `SrvOnClick_b2r_application_logs_<Y-m-d_H-i-s>.json` |
-| `digital-hatch:fetch-attachments` | 5 min | FTP `BLACK_TO_RED_FTP_ATTACHMENTS_PATH` (`/DigitalFiles-B2R-Prod/`) -> bucket `import-files` | `SrvOnClickFiles_<stored name>.<ext>` (the name the booking json gives, plus the extension) |
+| Command | Job (service) | Every | From -> to | Files |
+|---|---|---|---|---|
+| `digital-hatch:send-users` | `SendHatchUsersJob` (`UsersExportService`) | 2 min (odd minutes) | bucket `export-json/users` -> FTP `RED_TO_BLACK_FTP_PATH` (`/R2B/Tikshoret-R2B-Prod/`) | `SrvOnClick_r2b_users_<Y-m-d>.json` |
+| `digital-hatch:send-booking-status` | `SendHatchBookingStatusJob` (`BookingStatusSnapshotService`) | 2 min (odd minutes, after the export) | bucket `export-json/booking-status` -> the same FTP folder | `SrvOnClick_r2b_booking_status_<Y-m-d>.json` |
+| `importBookingJson:ftp` | `ImportBookingJsonFtpJob` (`DigitalHatchService`) | 5 min (minute 2) | FTP `BLACK_TO_RED_FTP_PATH` (`/Tikshoret-B2R-Prod/`) -> bucket `import-json/booking-data` -> database -> `loaded-json` | `SrvOnClick_b2r_export_bookings_<Y-m-d_H-i-s>.json` |
+| `importApplicationLogJson:ftp` | `ImportApplicationLogJsonFtpJob` (`DigitalHatchService`) | 5 min (minute 3, after the bookings) | the same for the logs: FTP -> bucket `import-json/application-log` -> database -> `loaded-json` | `SrvOnClick_b2r_application_logs_<Y-m-d_H-i-s>.json` |
+| `importFile:ftp` | `ImportFileFtpJob` (`DigitalHatchService`, `ImportFileService`) | 5 min (minute 4) | FTP `BLACK_TO_RED_FTP_ATTACHMENTS_PATH` (`/DigitalFiles-B2R-Prod/`) -> bucket `import-files`, then linked to the bookings that name them | `SrvOnClickFiles_<stored name>.<ext>` (the name the booking json gives, plus the extension) |
+| `importBookingJson:bucket` | `ImportBookingJsonBucketJob` (`ImportBookingService`) | 5 min | bucket `import-json/booking-data` -> database -> `loaded-json` | the files the mobile app drops there (this command was `importBookingJson:mysql`, which still works) |
+| `importApplicationLogJson:bucket` | `ImportApplicationLogJsonBucketJob` (`ImportApplicationLogService`) | 5 min (minute 1) | bucket `import-json/application-log` -> database -> `loaded-json` | (was `importApplicationLogJson:mysql`, which still works) |
+| `importFile:bucket` | `ImportFileBucketJob` (`ImportFileService`) | by hand | bucket `import-files`: gives every file / image row the key of its bytes | `SrvOnClickFiles_<stored name>.<ext>` |
 
 - **Sending** puts only the **newest** file of each stream (both are cumulative snapshots) and sends the same name again when its content changed
   (remembered by sha256 in `digital_hatch_sent_files`; `--force` sends it again anyway). `booking_values` and `system_config`
@@ -129,10 +132,21 @@ The two b2r fetches run in the scheduler itself.
   keeps what earlier runs of the day put in it (the mobile importer reads one file per day by its exact name) and a booking decided again replaces its
   row. A booking with an open sync conflict waits until a person settles it. While `HATCH_ENABLED=true`, `exportBookingStatusJson:mysql` leaves the
   status to this command (one sender per flag); its `booking_values` and `system_config` files are unaffected.
-- **Local testing**: `DIGITAL_HATCH_EXPORT_PATH=C:/some/folder` makes the two send commands write their files straight into that folder instead of the
-  FTP (the FTP is not touched). Leave it empty on dev and prod, where `RED_TO_BLACK_FTP_PATH` on the FTP is used. Only sending has a local mode.
-- **Fetching** takes a file once (remembered by its name in `digital_hatch_fetched_files`) and never writes to or cleans the FTP folder. A json file that
-  is not valid json yet (still being uploaded) is left for the next run. Names are matched exactly (`SrvOnClick_b2r_...`, case included), like the importers.
-- **Attachments**: only the types this system serves (pdf, docx, xlsx, pptx, jpg, jpeg, png, webp, gif) with a plain name (letters, digits, `_`, `-`, `.`) are taken;
-  there is no TIFF conversion here.
+- **Local testing** (leave all three empty on dev and prod, where the FTP folders are used): `DIGITAL_HATCH_EXPORT_PATH=C:/some/folder` makes the two send
+  commands write their files straight into that folder instead of the FTP; `DIGITAL_HATCH_IMPORT_PATH` (the json files) and
+  `DIGITAL_HATCH_IMPORT_FILES_PATH` (the files and images) make the three `:ftp` imports read those folders instead of the FTP. The import folders
+  must exist (a mistyped path is an error, not a new empty folder) and are never written to or cleaned. Use forward slashes in `.env`.
+- **A `:ftp` import = taking, then the `:bucket` import.** It first takes the new files into the bucket folder the matching `:bucket` command reads, then
+  runs that import, so a json file ends up in the database and in `loaded-json/` (the file is not changed on the way; a name already in `loaded-json/`
+  gets the date and time added). A file is taken once: `digital_hatch_fetched_files` remembers its name, its stream (`export_bookings`,
+  `application_logs`, `attachments`) and where it came from (`ftp` or `local`); `--force` takes it again, and since bookings are found by `serial_number`
+  the second read changes nothing. The ledger is written before the file lands, so a ledger that cannot be written (the migration was not run again)
+  stops the taking instead of repeating it. A json file that is not valid json yet (still being uploaded) is left for the next run; names are matched
+  exactly (`SrvOnClick_b2r_...`, case included), like the importers. The importers read `import-json/booking-data` and `import-json/application-log`:
+  a file put straight into `import-json/` is not read by anything. When the FTP cannot be read the import still runs on what already waits in the bucket.
+- **Files and images** (`importFile:*`): the booking json only names them, so `ImportBookingService` saves a row without a place for the bytes.
+  `ImportFileService` lists the bucket folder once and gives every row the key of its bytes (with the extension) - what `AttachmentService::resolve`
+  does one row at a time when somebody opens a booking - and says how many were linked, how many are still missing and how many no booking names yet.
+  Nothing is created, moved or deleted. Only the types this system serves (pdf, docx, xlsx, pptx, jpg, jpeg, png, webp, gif) with a plain name (letters,
+  digits, `_`, `-`, `.`) and the `SrvOnClickFiles_` prefix are taken from the FTP; there is no TIFF conversion here.
 - An unreachable FTP makes the command fail (exit code 1, logged), it never looks like an empty folder.

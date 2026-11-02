@@ -100,13 +100,27 @@ return [
             'timeout' => (int) env('DIGITAL_HATCH_SEND_BOOKING_STATUS_JOB_TIMEOUT', 300),
         ],
 
-        // The b2r fetches run in the scheduler itself, no queue worker, a minute or two before the imports read the bucket.
-        'digital_hatch_fetch' => [
-            'cron' => env('DIGITAL_HATCH_FETCH_CRON', '3-59/5 * * * *'),
+        // The b2r import commands (importBookingJson, importApplicationLogJson, importFile; each ":bucket" or ":ftp") only queue their own job, so a
+        // queue worker must be running. The job reads the bucket folder (and, for ":ftp", first takes the new files from the digital hatch into it)
+        // and queues the chunk jobs above. A run that fails (FTP down) is tried again after the back-off. All six jobs use these settings.
+        'import_job' => [
+            'tries' => (int) env('IMPORT_JOB_TRIES', 3),
+            'backoff' => (int) env('IMPORT_JOB_BACKOFF', 60),
+            'timeout' => (int) env('IMPORT_JOB_TIMEOUT', 900),
         ],
 
-        'digital_hatch_fetch_attachments' => [
-            'cron' => env('DIGITAL_HATCH_FETCH_ATTACHMENTS_CRON', '3-59/5 * * * *'),
+        // When the ":ftp" imports run (they do nothing while HATCH_ENABLED=false). The ":bucket" ones use the two crons at the top. The logs
+        // come a minute after the bookings because a log belongs to a booking.
+        'digital_hatch_import_booking' => [
+            'cron' => env('DIGITAL_HATCH_IMPORT_BOOKING_CRON', '2-59/5 * * * *'),
+        ],
+
+        'digital_hatch_import_application_log' => [
+            'cron' => env('DIGITAL_HATCH_IMPORT_APPLICATION_LOG_CRON', '3-59/5 * * * *'),
+        ],
+
+        'digital_hatch_import_file' => [
+            'cron' => env('DIGITAL_HATCH_IMPORT_FILE_CRON', '4-59/5 * * * *'),
         ],
     ],
 

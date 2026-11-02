@@ -53,6 +53,32 @@ class AttachmentService
             && !str_contains($name, '..');
     }
 
+    /** The extension of a key or file name when it is a type this serves (lower case), else null. */
+    public static function servedExtension(string $key): ?string
+    {
+        $extension = strtolower(pathinfo($key, PATHINFO_EXTENSION));
+
+        return isset(self::TYPES[$extension]) ? $extension : null;
+    }
+
+    /** The extensions the bytes of an attachment may have, most likely first. @return array<int, string> */
+    public static function extensionsFor(File|Image $attachment): array
+    {
+        return self::EXTENSIONS[$attachment instanceof File ? self::KIND_FILE : self::KIND_IMAGE];
+    }
+
+    /** Whether the row already knows where its bytes are (its path ends in a served extension). */
+    public static function isLinked(File|Image $attachment): bool
+    {
+        return self::servedExtension((string) $attachment->path) !== null;
+    }
+
+    /** Keeps the key the bytes were found at, with its extension, on the row so later calls need not look again. */
+    public function link(File|Image $attachment, string $key): void
+    {
+        $attachment->forceFill(['path' => $key, 'file_name' => basename($key)])->save();
+    }
+
     /**
      * Links a booking to the files and images its json names; names and links already saved are kept, so a re-read changes nothing.
      * @param array<int, string> $files stored names (without extension) @param array<int, string> $images
@@ -102,9 +128,9 @@ class AttachmentService
 
             $base = $this->storage->buildBucketKey((string) config('filesystems.folder_name.attachments'), $name);
 
-            foreach (self::EXTENSIONS[$attachment instanceof File ? self::KIND_FILE : self::KIND_IMAGE] as $extension) {
+            foreach (self::extensionsFor($attachment) as $extension) {
                 if ($disk->exists("{$base}.{$extension}")) {
-                    $attachment->forceFill(['path' => "{$base}.{$extension}", 'file_name' => "{$name}.{$extension}"])->save();
+                    $this->link($attachment, "{$base}.{$extension}");
 
                     return "{$base}.{$extension}";
                 }
@@ -211,8 +237,6 @@ class AttachmentService
     /** The extension of a key when it is a served type, else null. */
     private function extensionOf(string $key): ?string
     {
-        $extension = strtolower(pathinfo($key, PATHINFO_EXTENSION));
-
-        return isset(self::TYPES[$extension]) ? $extension : null;
+        return self::servedExtension($key);
     }
 }

@@ -7,117 +7,85 @@ use App\Enums\DigitalHatchFormatEnum;
 use App\Models\DigitalHatchFetchedFile;
 use App\Services\AttachmentService;
 use App\Services\StorageService;
-use Illuminate\Support\Arr;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Fetches the b2r files the mobile side put on the digital hatch FTP and lands them in the bucket, where the importers
- * (importBookingJson:mysql, importApplicationLogJson:mysql, AttachmentService) read them as if the mobile app had written them there.
- * What was fetched is remembered by its name on the FTP, so nothing is fetched twice; the FTP is never written to or cleaned.
+ * Takes the b2r files the mobile side put on the digital hatch and lands them in the bucket, where the importers (importBookingJson:bucket,
+ * importApplicationLogJson:bucket, importFile:bucket) read them as if the mobile app had written them there. The hatch is the FTP; for local
+ * testing the folders DIGITAL_HATCH_IMPORT_PATH (the json files) and DIGITAL_HATCH_IMPORT_FILES_PATH (the files and images) take its place.
+ * What was taken is remembered by its name in digital_hatch_fetched_files, with its stream and where it came from, so nothing is taken twice
+ * (unless $force); the source is never written to or cleaned.
  */
 trait HatchImportable
 {
     use ResolvesAttachmentStoragePath;
 
-    /**
-     * Fetch every new booking / application log file in one FTP listing: SrvOnClick_b2r_export_bookings_<date>.json and
-     * SrvOnClick_b2r_application_logs_<date>.json. A file that is not valid json yet (still being uploaded) is left for the next run.
-     * @return array{files: array<string, array<int, string>>, errors: array<int, string>} the names landed, by stream
-     */
-    public function downloadFiles(): array
-    {
-        $result = ['files' => [], 'errors' => []];
+    /** The stream the attachments have in digital_hatch_fetched_files (they are not one of the json streams). */
+    public const ATTACHMENTS_STREAM = 'attachments';
 
-        $path = $this->hatchFolder('black_to_red_ftp_path');
-        $extension = '.' . DigitalHatchFormatEnum::current()->extension();
+    /**
+     * Takes the new files of ONE b2r json stream - SrvOnClick_b2r_export_bookings_<date>.json or SrvOnClick_b2r_application_logs_<date>.json - into
+     * the bucket folder its importer reads. A file that is not valid json yet (still being uploaded) is left for the next run.
+     * @param bool $force take the files again even when they were taken before
+     * @return array{source: string, files: array<int, string>, errors: array<int, string>} where they came from, the names landed
+     */
+    public function downloadFiles(DigitalHatchFileEnum $stream, bool $force = false): array
+    {
+        $result = ['source' => '', 'files' => [], 'errors' => []];
 
         try {
-            $names = $this->hatchFileNames($path);
+            $source = $this->hatchSource('black_to_red_ftp_path', 'path');
         } catch (\Throwable $e) {
-            return $this->hatchFailed($result, "listing {$path}", $e);
+            return $this->hatchFailed($result, 'source', $e);
         }
 
-        $byStream = [];
-        foreach ($names as $fileName) {
-            $stream = $this->importableStreamOf($fileName);
+        $result['source'] = $source['label'];
 
-            if ($stream && Str::endsWith(Str::lower($fileName), $extension)) {
-                $byStream[$stream->value][] = $fileName;
-            }
+        try {
+            $names = $this->hatchFileNames($source['disk'], $source['folder']);
+        } catch (\Throwable $e) {
+            return $this->hatchFailed($result, "listing {$source['label']}", $e);
         }
 
-        $fetched = $this->alreadyFetched(Arr::flatten($byStream));
+        $prefix = $stream->fileNamePrefix();
+        $extension = '.' . DigitalHatchFormatEnum::current()->extension();
+
+        // The prefix is matched exactly (as the importers do), the case of the extension is not.
+        $names = array_values(array_filter($names, fn (string $fileName): bool => str_starts_with($fileName, $prefix)
+            && Str::endsWith(Str::lower($fileName), $extension)));
+
+        $fetched = $force ? [] : $this->alreadyFetched($names);
         $storage = app(StorageService::class);
 
         // No order is applied: the importers read the bucket folder oldest name first, whatever order the files landed in.
-        foreach ($byStream as $streamValue => $fileNames) {
-            $stream = DigitalHatchFileEnum::from($streamValue);
-
-            foreach ($fileNames as $fileName) {
-                if (isset($fetched[$fileName])) {
-                    continue;
-                }
-
-                try {
-                    $content = Storage::disk('digital-hatch')->get($path . $fileName);
-
-                    if (!is_array(json_decode((string) preg_replace('/^\xEF\xBB\xBF/', '', (string) $content), true))) {
-                        $result['errors'][] = "{$fileName}: not valid json (yet), left on the FTP for the next run";
-                        continue;
-                    }
-
-                    $storage->putJsonToBucket($fileName, $stream->bucketDirectory(), $content);
-                    static::markProcessed($fileName);
-                    $result['files'][$stream->value][] = $fileName;
-                } catch (\Throwable $e) {
-                    $this->hatchFailed($result, $fileName, $e);
-                }
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Fetch the attachments of the bookings: SrvOnClickFiles_<stored name>.<ext> (pdf, docx, ... images) from the attachments folder.
-     * Only the types AttachmentService serves are taken; they land under their own name in the bucket folder it reads.
-     * @return array{files: array<int, string>, errors: array<int, string>} the names landed
-     */
-    public function downloadAttachments(): array
-    {
-        $result = ['files' => [], 'errors' => []];
-
-        $path = $this->hatchFolder('black_to_red_ftp_attachments_path');
-
-        try {
-            $names = array_values(array_filter($this->hatchFileNames($path), fn (string $fileName): bool => $this->isAttachmentName($fileName)));
-        } catch (\Throwable $e) {
-            return $this->hatchFailed($result, "listing {$path}", $e);
-        }
-
-        $fetched = $this->alreadyFetched($names);
-        $disk = Storage::disk(config('filesystems.storage_service'));
-
         foreach ($names as $fileName) {
             if (isset($fetched[$fileName])) {
                 continue;
             }
 
             try {
-                $content = Storage::disk('digital-hatch')->get($path . $fileName);
+                $content = (string) $source['disk']->get($source['folder'] . $fileName);
 
-                if ($content === null || $content === '') {
-                    $result['errors'][] = "{$fileName}: empty, left on the FTP for the next run";
+                if (!is_array(json_decode((string) preg_replace('/^\xEF\xBB\xBF/', '', $content), true))) {
+                    $result['errors'][] = "{$fileName}: not valid json (yet), left in the source for the next run";
                     continue;
                 }
 
-                if (!$disk->put($this->attachmentStoragePathFor($fileName), $content)) {
-                    throw new \RuntimeException('could not write it to the bucket');
+                // The ledger first: when it cannot be written (the migration was not run) nothing lands, so a file is never taken twice.
+                static::markProcessed($fileName, $stream->value, $source['kind']);
+
+                try {
+                    $storage->putJsonToBucket($fileName, $stream->bucketDirectory(), $content);
+                } catch (\Throwable $e) {
+                    // Not landed: the next run takes it again.
+                    DigitalHatchFetchedFile::where('file_name', $fileName)->delete();
+
+                    throw $e;
                 }
 
-                static::markProcessed($fileName);
                 $result['files'][] = $fileName;
             } catch (\Throwable $e) {
                 $this->hatchFailed($result, $fileName, $e);
@@ -127,14 +95,106 @@ trait HatchImportable
         return $result;
     }
 
-    /** Remembers a file of the FTP as taken, so the next run skips it. */
-    public static function markProcessed(string $fileName): void
+    /**
+     * Takes the new attachments of the bookings - SrvOnClickFiles_<stored name>.<ext> (pdf, docx, ... images) - into the bucket folder AttachmentService
+     * reads. Only the types it serves are taken; they land under their own name.
+     * @param bool $force take the files again even when they were taken before
+     * @return array{source: string, files: array<int, string>, errors: array<int, string>} where they came from, the names landed
+     */
+    public function downloadAttachments(bool $force = false): array
+    {
+        $result = ['source' => '', 'files' => [], 'errors' => []];
+
+        try {
+            $source = $this->hatchSource('black_to_red_ftp_attachments_path', 'files_path');
+        } catch (\Throwable $e) {
+            return $this->hatchFailed($result, 'source', $e);
+        }
+
+        $result['source'] = $source['label'];
+
+        try {
+            $names = array_values(array_filter(
+                $this->hatchFileNames($source['disk'], $source['folder']),
+                fn (string $fileName): bool => $this->isAttachmentName($fileName),
+            ));
+        } catch (\Throwable $e) {
+            return $this->hatchFailed($result, "listing {$source['label']}", $e);
+        }
+
+        $fetched = $force ? [] : $this->alreadyFetched($names);
+        $disk = Storage::disk(config('filesystems.storage_service'));
+
+        foreach ($names as $fileName) {
+            if (isset($fetched[$fileName])) {
+                continue;
+            }
+
+            try {
+                $content = $source['disk']->get($source['folder'] . $fileName);
+
+                if ($content === null || $content === '') {
+                    $result['errors'][] = "{$fileName}: empty, left in the source for the next run";
+                    continue;
+                }
+
+                // The ledger first (see downloadFiles).
+                static::markProcessed($fileName, self::ATTACHMENTS_STREAM, $source['kind']);
+
+                try {
+                    if (!$disk->put($this->attachmentStoragePathFor($fileName), $content)) {
+                        throw new \RuntimeException('could not write it to the bucket');
+                    }
+                } catch (\Throwable $e) {
+                    DigitalHatchFetchedFile::where('file_name', $fileName)->delete();
+
+                    throw $e;
+                }
+
+                $result['files'][] = $fileName;
+            } catch (\Throwable $e) {
+                $this->hatchFailed($result, $fileName, $e);
+            }
+        }
+
+        return $result;
+    }
+
+    /** Remembers a file of the source as taken, with its stream and where it came from, so the next run skips it. Throws when the ledger cannot be written. */
+    public static function markProcessed(string $fileName, string $stream, string $source): void
     {
         try {
-            DigitalHatchFetchedFile::firstOrCreate(['file_name' => $fileName]);
-        } catch (\Exception $e) {
-            Log::error("HatchImportable@markProcessed error: {$e->getMessage()}");
+            DigitalHatchFetchedFile::updateOrCreate(['file_name' => $fileName], ['stream' => $stream, 'source' => $source]);
+        } catch (\Throwable $e) {
+            throw new \RuntimeException("the ledger digital_hatch_fetched_files cannot be written (has its migration been run again?): {$e->getMessage()}", 0, $e);
         }
+    }
+
+    /**
+     * Where the files of a b2r folder are: the local test folder when it is set ($localKey under services.digital-hatch.local.import), else the FTP.
+     * @return array{disk: Filesystem, folder: string, label: string, kind: string} folder is '' or ends with one slash
+     */
+    private function hatchSource(string $ftpFolderKey, string $localKey): array
+    {
+        $local = trim((string) config("services.digital-hatch.local.import.{$localKey}"));
+
+        if ($local !== '') {
+            // Not created when missing (unlike the export folder): a mistyped path must not leave an empty folder behind.
+            if (!is_dir($local)) {
+                throw new \RuntimeException("the local folder {$local} does not exist");
+            }
+
+            return [
+                'disk' => Storage::build(['driver' => 'local', 'root' => $local, 'throw' => true]),
+                'folder' => '',
+                'label' => "local folder {$local}",
+                'kind' => DigitalHatchFetchedFile::SOURCE_LOCAL,
+            ];
+        }
+
+        $folder = $this->hatchFolder($ftpFolderKey);
+
+        return ['disk' => Storage::disk('digital-hatch'), 'folder' => $folder, 'label' => "FTP folder {$folder}", 'kind' => DigitalHatchFetchedFile::SOURCE_FTP];
     }
 
     /** The folder as configured, with exactly one slash at the end. */
@@ -143,10 +203,10 @@ trait HatchImportable
         return rtrim((string) config("services.digital-hatch.{$configKey}"), '/') . '/';
     }
 
-    /** Names (not paths) of the files in an FTP folder, oldest name first. Throws when the FTP cannot be read. @return array<int, string> */
-    private function hatchFileNames(string $path): array
+    /** Names (not paths) of the files in a folder of the source, oldest name first. Throws when the source cannot be read. @return array<int, string> */
+    private function hatchFileNames(Filesystem $disk, string $folder): array
     {
-        return collect(Storage::disk('digital-hatch')->files($path))
+        return collect($disk->files($folder))
             ->map(fn (string $file): string => basename($file))
             ->unique()
             ->sort(SORT_STRING)
@@ -154,24 +214,12 @@ trait HatchImportable
             ->all();
     }
 
-    /** The stream a b2r file name belongs to: the prefix is matched exactly (as the importers do), the case of the extension is not. */
-    private function importableStreamOf(string $fileName): ?DigitalHatchFileEnum
-    {
-        foreach (DigitalHatchFileEnum::importable() as $stream) {
-            if (str_starts_with($fileName, $stream->fileNamePrefix())) {
-                return $stream;
-            }
-        }
-
-        return null;
-    }
-
-    /** A stored attachment name AttachmentService can find and serve; anything else on the FTP is left alone. */
+    /** A stored attachment name AttachmentService can find and serve; anything else in the source is left alone. */
     private function isAttachmentName(string $fileName): bool
     {
         return str_starts_with($fileName, DigitalHatchFileEnum::attachmentFileNamePrefix())
             && AttachmentService::isValidName($fileName)
-            && isset(AttachmentService::TYPES[strtolower(pathinfo($fileName, PATHINFO_EXTENSION))]);
+            && AttachmentService::servedExtension($fileName) !== null;
     }
 
     /** Which of these names were fetched before, in a query per thousand names instead of one per file. @param array<int, string> $names @return array<string, true> */

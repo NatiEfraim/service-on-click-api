@@ -8,11 +8,14 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Files taken from the digital hatch FTP (b2r json files and attachments), by their name there.
+        // Files taken from the digital hatch (b2r json files and attachments), by their name there: the stream they belong to
+        // (export_bookings, application_logs or attachments) and where they came from (the FTP, or the local test folder).
         Schema::create('digital_hatch_fetched_files', function (Blueprint $table) {
             $table->id();
             $table->uuid()->unique();
             $table->string('file_name')->unique();
+            $table->string('stream', 30)->index();
+            $table->string('source', 10);
             $table->timestamps();
         });
 

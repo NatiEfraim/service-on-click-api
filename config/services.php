@@ -44,19 +44,23 @@ return [
         // b2r folders: the booking and application log files, and the attachments, the mobile side puts here.
         'black_to_red_ftp_path' => env('BLACK_TO_RED_FTP_PATH', '/Tikshoret-B2R-Prod/'),
         'black_to_red_ftp_attachments_path' => env('BLACK_TO_RED_FTP_ATTACHMENTS_PATH', '/DigitalFiles-B2R-Prod/'),
-        // false stops the three digital-hatch commands.
+        // false stops the digital-hatch commands: the two r2b sends and the three :ftp imports.
         'enabled' => filter_var(env('HATCH_ENABLED', false), FILTER_VALIDATE_BOOL),
         'format' => env('HATCH_FORMAT', 'json'),
         // Keep SrvOnClick unless the mobile side renamed its files too: the bucket importers look for SrvOnClick_b2r_.
         'prefix' => env('HATCH_PREFIX', 'SrvOnClick'),
         'files_prefix' => env('HATCH_FILES_PREFIX', 'SrvOnClickFiles'),
-        // Local testing without an FTP: when set, digital-hatch:send writes the r2b files straight into this folder (use forward slashes).
+        // Local testing without an FTP (use forward slashes): when set, the two digital-hatch:send-* commands write the r2b files straight into the
+        // export folder, and the importBookingJson:ftp, importApplicationLogJson:ftp and importFile:ftp commands read the b2r files from the import folders.
         'local' => [
             'export' => [
                 'path' => env('DIGITAL_HATCH_EXPORT_PATH'),
             ],
             'import' => [
+                // The booking and application log json files (SrvOnClick_b2r_...) instead of black_to_red_ftp_path.
                 'path' => env('DIGITAL_HATCH_IMPORT_PATH'),
+                // The files and images of the bookings (SrvOnClickFiles_...) instead of black_to_red_ftp_attachments_path.
+                'files_path' => env('DIGITAL_HATCH_IMPORT_FILES_PATH'),
             ],
         ],
     ],

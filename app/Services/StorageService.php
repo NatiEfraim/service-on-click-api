@@ -127,6 +127,12 @@ class StorageService
             ->all();
     }
 
+    /** Object keys of the files directly in a bucket folder (any type). Throws when the disk refuses. @return array<int, string> */
+    public function listBucketFiles(string $remoteDirectory): array
+    {
+        return Storage::disk(config('filesystems.storage_service'))->files($this->buildBucketKey($remoteDirectory));
+    }
+
     /** Reads and decodes a bucket JSON file; throws when it is missing, empty or invalid. */
     public function readJsonFromBucket(string $fileName, string $remoteDirectory): array
     {

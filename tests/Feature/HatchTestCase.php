@@ -19,6 +19,14 @@ abstract class HatchTestCase extends ImportJsonTestCase
     /** A folder of the test's own that takes the place of the FTP (DIGITAL_HATCH_EXPORT_PATH); removed in tearDown. */
     protected ?string $localDir = null;
 
+    /** The folder of the test's own that holds the b2r folders of useLocalImportFolders; removed in tearDown. */
+    protected ?string $localImportBase = null;
+
+    /** The json files (DIGITAL_HATCH_IMPORT_PATH) and the files and images (DIGITAL_HATCH_IMPORT_FILES_PATH) a useLocalImportFolders test reads. */
+    protected string $localJsonDir = '';
+
+    protected string $localFilesDir = '';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -27,9 +35,10 @@ abstract class HatchTestCase extends ImportJsonTestCase
 
         config([
             'services.digital-hatch.enabled' => true,
-            // Whatever the .env says: a test writes to a folder of its own (useLocalFolder) or to the fake FTP, never to a real folder.
+            // Whatever the .env says: a test reads and writes folders of its own (useLocalFolder, useLocalImportFolders) or the fake FTP, never a real folder.
             'services.digital-hatch.local.export.path' => '',
             'services.digital-hatch.local.import.path' => '',
+            'services.digital-hatch.local.import.files_path' => '',
             'services.digital-hatch.red_to_black_ftp_path' => '/' . self::RED_TO_BLACK,
             'services.digital-hatch.black_to_red_ftp_path' => '/' . self::BLACK_TO_RED,
             'services.digital-hatch.black_to_red_ftp_attachments_path' => '/' . self::ATTACHMENTS,
@@ -43,8 +52,10 @@ abstract class HatchTestCase extends ImportJsonTestCase
 
     protected function tearDown(): void
     {
-        if ($this->localDir !== null) {
-            (new \Illuminate\Filesystem\Filesystem())->deleteDirectory($this->localDir);
+        foreach ([$this->localDir, $this->localImportBase] as $dir) {
+            if ($dir !== null) {
+                (new \Illuminate\Filesystem\Filesystem())->deleteDirectory($dir);
+            }
         }
 
         parent::tearDown();
@@ -55,6 +66,22 @@ abstract class HatchTestCase extends ImportJsonTestCase
         $this->localDir = sys_get_temp_dir() . '/hatch-r2b-' . uniqid();
 
         config(['services.digital-hatch.local.export.path' => $this->localDir]);
+    }
+
+    /** Two folders that exist and take the place of the FTP's b2r folders: the json files (like tikshort-ftp/b2r) and the attachments (tikshort-ftp/r2b_files). */
+    protected function useLocalImportFolders(): void
+    {
+        $this->localImportBase = sys_get_temp_dir() . '/hatch-b2r-' . uniqid();
+        $this->localJsonDir = $this->localImportBase . '/b2r';
+        $this->localFilesDir = $this->localImportBase . '/r2b_files';
+
+        mkdir($this->localJsonDir, 0777, true);
+        mkdir($this->localFilesDir, 0777, true);
+
+        config([
+            'services.digital-hatch.local.import.path' => $this->localJsonDir,
+            'services.digital-hatch.local.import.files_path' => $this->localFilesDir,
+        ]);
     }
 
     /** Nothing listens on port 1: the connection to the "FTP" is refused at once. */

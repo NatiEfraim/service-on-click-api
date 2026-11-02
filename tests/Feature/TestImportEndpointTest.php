@@ -244,8 +244,8 @@ class TestImportEndpointTest extends ImportJsonTestCase
         Artisan::call('schedule:list');
 
         $events = collect(app(Schedule::class)->events());
-        $bookings = $events->first(fn ($event) => str_contains($event->command, 'importBookingJson:mysql'));
-        $logs = $events->first(fn ($event) => str_contains($event->command, 'importApplicationLogJson:mysql'));
+        $bookings = $events->first(fn ($event) => str_contains($event->command, 'importBookingJson:bucket'));
+        $logs = $events->first(fn ($event) => str_contains($event->command, 'importApplicationLogJson:bucket'));
 
         $this->assertNotNull($bookings, 'the booking import is scheduled');
         $this->assertNotNull($logs, 'the application log import is scheduled');

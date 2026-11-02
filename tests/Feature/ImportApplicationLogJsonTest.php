@@ -227,13 +227,16 @@ class ImportApplicationLogJsonTest extends ImportJsonTestCase
         $this->putLogFile([$this->logRecord(1001, ActionTypeEnum::STORE_BOOKING->value, self::OWNER)]);
 
         config(['app.import_json.enabled' => false]);
-        $this->assertSame(0, Artisan::call('importApplicationLogJson:mysql'));
+        $this->assertSame(0, Artisan::call('importApplicationLogJson:bucket', ['--sync' => true]));
+        $this->assertStringContainsString('switched off', Artisan::output());
         $this->assertSame(0, ApplicationLog::count());
         Storage::disk('minio')->assertExists(self::LOG_DIRECTORY . '/' . self::LOGS_FILE);
 
         config(['app.import_json.enabled' => true]);
-        $this->assertSame(0, Artisan::call('importApplicationLogJson:mysql'));
-        $this->assertStringContainsString('1 logs in 1 chunks queued', Artisan::output());
+        $this->assertSame(0, Artisan::call('importApplicationLogJson:bucket', ['--sync' => true]));
+        $output = Artisan::output();
+        $this->assertStringContainsString('1 logs in 1 chunks saved (1 created)', $output);
+        $this->assertStringContainsString('file moved to ' . self::LOADED_DIRECTORY . '/' . self::LOGS_FILE, $output);
         $this->assertSame(1, ApplicationLog::count());
         Storage::disk('minio')->assertExists(self::LOADED_DIRECTORY . '/' . self::LOGS_FILE);
     }
@@ -242,7 +245,7 @@ class ImportApplicationLogJsonTest extends ImportJsonTestCase
     {
         Storage::disk('minio')->put(self::LOG_DIRECTORY . '/' . self::LOGS_FILE, json_encode(['rows' => []]));
 
-        $this->assertSame(1, Artisan::call('importApplicationLogJson:mysql'));
+        $this->assertSame(1, Artisan::call('importApplicationLogJson:bucket', ['--sync' => true]));
         Storage::disk('minio')->assertExists(self::LOG_DIRECTORY . '/' . self::LOGS_FILE);
     }
 
@@ -253,7 +256,7 @@ class ImportApplicationLogJsonTest extends ImportJsonTestCase
             $mock->shouldReceive('logToS3')->andReturn(200);
         });
 
-        $this->assertSame(1, Artisan::call('importApplicationLogJson:mysql'));
+        $this->assertSame(1, Artisan::call('importApplicationLogJson:bucket', ['--sync' => true]));
         $this->assertStringContainsString('bucket down', Artisan::output());
     }
 }

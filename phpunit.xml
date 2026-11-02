@@ -34,6 +34,7 @@
         <env name="HATCH_FTP_HOST" value=""/>
         <env name="DIGITAL_HATCH_EXPORT_PATH" value=""/>
         <env name="DIGITAL_HATCH_IMPORT_PATH" value=""/>
+        <env name="DIGITAL_HATCH_IMPORT_FILES_PATH" value=""/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

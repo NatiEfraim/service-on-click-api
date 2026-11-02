@@ -6,7 +6,7 @@ use App\Services\StorageService;
 
 /**
  * Maps an attachment file name to its bucket destination: the folder AttachmentService looks in when somebody opens a booking
- * (ATTACHMENTS_FOLDER_NAME). Used by the automatic FTP fetch (digital-hatch:fetch-attachments).
+ * (ATTACHMENTS_FOLDER_NAME). Used by the FTP import of the files (importFile:ftp).
  */
 trait ResolvesAttachmentStoragePath
 {
