@@ -12,7 +12,7 @@ class RunAllCommands extends Command
     protected $description = 'Run multiple Artisan commands in sequence';
 
        /** Local copy of the preprod DB - must never be wiped by migrate:fresh. */
-    private const PREPROD_DATABASE = 'srvonclick-mobile-db-preprod';
+    private const PREPROD_DATABASE = 'srvonclick-db-preprod';
     public function handle()
     {
         $this->call('optimize:clear');
