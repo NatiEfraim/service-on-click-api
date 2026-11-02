@@ -84,12 +84,23 @@ return [
             'timeout' => (int) env('IMPORT_APPLICATION_LOG_JSON_JOB_TIMEOUT', 900),
         ],
 
-        // The digital-hatch commands (FTP <-> bucket) run in the scheduler itself, no queue worker.
-        // Sending runs on the odd minutes, after the export wrote its files; fetching a minute or two before the imports read the bucket.
-        'digital_hatch_send' => [
-            'cron' => env('DIGITAL_HATCH_SEND_CRON', '1-59/2 * * * *'),
+        // The r2b sends to the digital hatch (FTP), one job per stream. The commands only queue them, so a queue worker must be running.
+        // They run on the odd minutes, after the export wrote its files. A run that fails (FTP down) is tried again after the back-off.
+        'digital_hatch_send_users' => [
+            'cron' => env('DIGITAL_HATCH_SEND_USERS_CRON', '1-59/2 * * * *'),
+            'tries' => (int) env('DIGITAL_HATCH_SEND_USERS_JOB_TRIES', 3),
+            'backoff' => (int) env('DIGITAL_HATCH_SEND_USERS_JOB_BACKOFF', 60),
+            'timeout' => (int) env('DIGITAL_HATCH_SEND_USERS_JOB_TIMEOUT', 300),
         ],
 
+        'digital_hatch_send_booking_status' => [
+            'cron' => env('DIGITAL_HATCH_SEND_BOOKING_STATUS_CRON', '1-59/2 * * * *'),
+            'tries' => (int) env('DIGITAL_HATCH_SEND_BOOKING_STATUS_JOB_TRIES', 3),
+            'backoff' => (int) env('DIGITAL_HATCH_SEND_BOOKING_STATUS_JOB_BACKOFF', 60),
+            'timeout' => (int) env('DIGITAL_HATCH_SEND_BOOKING_STATUS_JOB_TIMEOUT', 300),
+        ],
+
+        // The b2r fetches run in the scheduler itself, no queue worker, a minute or two before the imports read the bucket.
         'digital_hatch_fetch' => [
             'cron' => env('DIGITAL_HATCH_FETCH_CRON', '3-59/5 * * * *'),
         ],

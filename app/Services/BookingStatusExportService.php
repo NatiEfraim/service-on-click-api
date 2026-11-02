@@ -52,6 +52,12 @@ class BookingStatusExportService
     /** Writes today's snapshot of the unconfirmed decisions. @return array{sent: bool, reason?: string, file_id?: int, error?: string} */
     public function exportStatus(): array
     {
+        // With the digital hatch on, the status goes out through digital-hatch:send-booking-status, which works on the same is_status_exported
+        // flag: two senders would take turns clearing it and rewriting the same daily file.
+        if (config('services.digital-hatch.enabled')) {
+            return ['sent' => false, 'reason' => 'digital_hatch'];
+        }
+
         $decisions = $this->unconfirmedDecisions();
 
         if ($decisions->isEmpty()) {
@@ -322,7 +328,7 @@ class BookingStatusExportService
     }
 
     /** Personal ID of whoever made the latest decision on each booking. @return array<int, ?string> booking id => personal_id */
-    private function deciders(array $bookingIds): array
+    public function deciders(array $bookingIds): array
     {
         $deciders = [];
 

@@ -8,16 +8,39 @@ use App\Enums\PermissionEnum;
 use App\Enums\RoleEnum;
 use App\Models\BookingType;
 use App\Models\User;
+use App\Traits\GuardsDigitalHatchRuns;
+use App\Traits\HatchExportable;
 
 /**
- * Writes the r2b users file: the people who have a role and the booking types they hold it on, so the mobile side knows who may do what.
- * One snapshot per day under the day's name (SrvOnClick_r2b_users_<Y-m-d>.json), rewritten while the day goes on only when it changed.
- * It lands in the bucket (export-json/users); HatchExportable puts it on the FTP.
+ * The users stream of the digital hatch (r2b): the people who have a role and the booking types they hold it on, so the mobile side knows
+ * who may do what. One snapshot per day under the day's name (SrvOnClick_r2b_users_<Y-m-d>.json), rewritten while the day goes on only when
+ * it changed. run() writes it to the bucket (export-json/users); export() does that and puts the newest file on the FTP.
+ * Queued by SendHatchUsersJob (command digital-hatch:send-users).
  */
 class UsersExportService
 {
+    use GuardsDigitalHatchRuns, HatchExportable;
+
     public function __construct(private readonly StorageService $storageService)
     {
+    }
+
+    /**
+     * Builds today's users file and sends it. A failure to build still lets the file already in the bucket go out.
+     * @param bool $force send even when this exact content was sent before
+     * @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, errors?: array<int, string>}
+     *         built = what run() did, file = the name sent (null: nothing new)
+     */
+    public function export(bool $force = false): array
+    {
+        return $this->locked('send-users', function () use ($force): array {
+            $errors = [];
+
+            $built = $this->building('users file', fn (): array => $this->run(), $errors);
+            $sent = $this->sendNewestFile(DigitalHatchFileEnum::USERS, $force);
+
+            return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sent['file'], 'errors' => [...$errors, ...$sent['errors']]];
+        });
     }
 
     /** @return array{written: bool, file?: string, users?: int, reason?: string} reason: no_users | unchanged */

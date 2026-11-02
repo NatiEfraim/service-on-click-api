@@ -2,7 +2,8 @@
 
 use App\Console\Commands\DigitalHatchFetchAttachmentsCommand;
 use App\Console\Commands\DigitalHatchFetchCommand;
-use App\Console\Commands\DigitalHatchSendCommand;
+use App\Console\Commands\DigitalHatchSendBookingStatusCommand;
+use App\Console\Commands\DigitalHatchSendUsersCommand;
 use App\Console\Commands\ExportBookingStatusJsonCommand;
 use App\Console\Commands\ImportApplicationLogJsonCommand;
 use App\Console\Commands\ImportBookingJsonCommand;
@@ -39,11 +40,18 @@ Schedule::command(ExportBookingStatusJsonCommand::class)
     ->withoutOverlapping(10);
 
 // The digital hatch (FTP) between this system and the mobile side; each does nothing while HATCH_ENABLED=false.
-// None of them needs a queue worker. The lock expires after 10 minutes so a killed run cannot block the schedule.
+// The two r2b sends only queue a job each (SendHatchUsersJob, SendHatchBookingStatusJob), so a queue worker must be running; the b2r fetches
+// work in the scheduler itself. The lock expires after 10 minutes so a killed run cannot block the schedule.
 
-// r2b: today's users file, then the newest booking status and users files go to the FTP (a minute after the export wrote them).
-Schedule::command(DigitalHatchSendCommand::class)
-    ->cron(config('app.jobs.digital_hatch_send.cron'))
+// r2b: today's users file (people with their roles) goes to the FTP.
+Schedule::command(DigitalHatchSendUsersCommand::class)
+    ->cron(config('app.jobs.digital_hatch_send_users.cron'))
+    ->timezone(config('app.timezone'))
+    ->withoutOverlapping(10);
+
+// r2b: the booking status file goes to the FTP (a minute after the export wrote it).
+Schedule::command(DigitalHatchSendBookingStatusCommand::class)
+    ->cron(config('app.jobs.digital_hatch_send_booking_status.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(10);
 

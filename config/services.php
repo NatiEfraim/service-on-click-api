@@ -50,6 +50,7 @@ return [
         // Keep SrvOnClick unless the mobile side renamed its files too: the bucket importers look for SrvOnClick_b2r_.
         'prefix' => env('HATCH_PREFIX', 'SrvOnClick'),
         'files_prefix' => env('HATCH_FILES_PREFIX', 'SrvOnClickFiles'),
+        // Local testing without an FTP: when set, digital-hatch:send writes the r2b files straight into this folder (use forward slashes).
         'local' => [
             'export' => [
                 'path' => env('DIGITAL_HATCH_EXPORT_PATH'),

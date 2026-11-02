@@ -2,54 +2,68 @@
 
 namespace App\Console\Commands;
 
-use App\Services\DigitalHatchService;
 use App\Services\StorageService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
-class DigitalHatchSendCommand extends Command
+/**
+ * What the two r2b send commands share (one per stream: digital-hatch:send-users, digital-hatch:send-booking-status): by default the stream's
+ * job is queued and a queue worker sends it; --sync runs it here and shows what it did, so each stream can be tested alone.
+ */
+abstract class DigitalHatchSendCommand extends Command
 {
-    protected $signature = 'digital-hatch:send';
+    /** Queues this stream's job, or with $sync runs it here. @return array{enabled: bool, queued?: bool, result?: array<string, mixed>} */
+    abstract protected function sendToHatch(bool $force, bool $sync): array;
 
-    protected $description = 'Write today\'s users file to the bucket and put the newest r2b files (SrvOnClick_r2b_booking_status_*, SrvOnClick_r2b_users_*) on the digital hatch FTP';
+    /** One line about what building this stream's file did. @param array<string, mixed> $built */
+    abstract protected function describeBuilt(array $built): string;
 
-    public function handle(DigitalHatchService $hatch): int
+    /** @return class-string the job that sends this stream */
+    abstract protected function jobClass(): string;
+
+    public function handle(): int
     {
         try {
-            $result = $hatch->export();
+            $outcome = $this->sendToHatch((bool) $this->option('force'), (bool) $this->option('sync'));
 
-            if (!$result['enabled']) {
+            if (!$outcome['enabled']) {
                 $this->info('Nothing sent: the digital hatch is disabled (HATCH_ENABLED=false).');
 
                 return self::SUCCESS;
             }
 
-            if ($result['busy']) {
-                $this->info('Nothing sent: another run is putting the files on the FTP.');
+            if ($outcome['queued']) {
+                $this->info(class_basename($this->jobClass()) . ' queued: a queue worker (php artisan queue:work) sends it. Add --sync to send it here and see the result.');
 
                 return self::SUCCESS;
             }
 
-            $users = $result['users'];
-            $this->info($users['written'] ? "Users file written ({$users['users']} users): {$users['file']}." : 'Users file: nothing written' . (isset($users['reason']) ? " ({$users['reason']})" : '') . '.');
+            $result = $outcome['result'];
 
-            foreach ($result['files'] as $stream => $fileName) {
-                $this->info("Sent {$stream}: {$fileName}");
+            if ($result['busy']) {
+                $this->info('Nothing sent: another run is putting this file on the FTP.');
+
+                return self::SUCCESS;
             }
 
-            if ($result['files'] === []) {
-                $this->info('Nothing new to send.');
+            $this->info("Destination: {$result['destination']}");
+            $this->info($this->describeBuilt($result['built']));
+            $this->info($result['file'] !== null ? "Sent: {$result['file']}" : 'Nothing new to send (the same content was sent before; --force sends it again).');
+
+            // Only the booking status stream has a flag to set once its file has gone.
+            if (isset($result['marked'])) {
+                $this->info("Marked as exported (is_status_exported = 1): {$result['marked']} bookings.");
             }
 
             foreach ($result['errors'] as $error) {
                 $this->error($error);
             }
 
-            Log::info('DigitalHatchSendCommand: ' . count($result['files']) . ' files sent, ' . count($result['errors']) . ' failed.');
+            Log::info(static::class . ': ' . ($result['file'] !== null ? '1 file sent' : 'nothing sent') . ', ' . count($result['errors']) . ' failed.');
 
             return $result['errors'] === [] ? self::SUCCESS : self::FAILURE;
         } catch (\Exception $e) {
-            Log::error('DigitalHatchSendCommand: failed: ' . $e->getMessage());
+            Log::error(static::class . ': failed: ' . $e->getMessage());
             $this->error($e->getMessage());
 
             return self::FAILURE;

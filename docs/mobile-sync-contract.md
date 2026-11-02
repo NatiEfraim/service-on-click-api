@@ -104,17 +104,33 @@ and every file is checked again before it is written; a file that holds one is h
 
 ## The FTP (digital hatch)
 
-Three scheduler commands (no queue worker), all off while `HATCH_ENABLED=false`; the FTP account is `HATCH_FTP_*`, the folders are in `config/services.php`
+Four scheduler commands, all off while `HATCH_ENABLED=false`; the FTP account is `HATCH_FTP_*`, the folders are in `config/services.php`
 (`digital-hatch`). Names are never changed on the way: what is in the bucket is what is on the FTP.
+
+The two **r2b sends are separate streams**, each with its own command, queued job, service and trait, so one can be run (and tested) without the
+other: `digital-hatch:send-users` (`SendHatchUsersJob`, `UsersExportService`) and `digital-hatch:send-booking-status` (`SendHatchBookingStatusJob`,
+`BookingStatusSnapshotService`). They **queue** their job (a queue worker must run; tries / back-off / timeout in `config/app.php` `jobs.digital_hatch_send_*`,
+a run that failed - FTP down - is tried again); `--sync` sends right now in the command and prints what it did, `--force` sends the same content again.
+The two b2r fetches run in the scheduler itself.
 
 | Command | Every | From -> to | Files |
 |---|---|---|---|
-| `digital-hatch:send` | 2 min (odd minutes, after the export) | bucket `export-json/booking-status`, `export-json/users` -> FTP `RED_TO_BLACK_FTP_PATH` (`/R2B/Tikshoret-R2B-Prod/`) | `SrvOnClick_r2b_booking_status_<Y-m-d>.json`, `SrvOnClick_r2b_users_<Y-m-d>.json` |
+| `digital-hatch:send-users` | 2 min (odd minutes) | bucket `export-json/users` -> FTP `RED_TO_BLACK_FTP_PATH` (`/R2B/Tikshoret-R2B-Prod/`) | `SrvOnClick_r2b_users_<Y-m-d>.json` |
+| `digital-hatch:send-booking-status` | 2 min (odd minutes, after the export) | bucket `export-json/booking-status` -> the same FTP folder | `SrvOnClick_r2b_booking_status_<Y-m-d>.json` |
 | `digital-hatch:fetch` | 5 min | FTP `BLACK_TO_RED_FTP_PATH` (`/Tikshoret-B2R-Prod/`) -> bucket `import-json/booking-data`, `import-json/application-log` | `SrvOnClick_b2r_export_bookings_<Y-m-d_H-i-s>.json`, `SrvOnClick_b2r_application_logs_<Y-m-d_H-i-s>.json` |
 | `digital-hatch:fetch-attachments` | 5 min | FTP `BLACK_TO_RED_FTP_ATTACHMENTS_PATH` (`/DigitalFiles-B2R-Prod/`) -> bucket `import-files` | `SrvOnClickFiles_<stored name>.<ext>` (the name the booking json gives, plus the extension) |
 
 - **Sending** puts only the **newest** file of each stream (both are cumulative snapshots) and sends the same name again when its content changed
-  (remembered by sha256 in `digital_hatch_sent_files`). `booking_values` and `system_config` files are not sent through the FTP.
+  (remembered by sha256 in `digital_hatch_sent_files`; `--force` sends it again anyway). `booking_values` and `system_config`
+  files are not sent through the FTP.
+- **Booking status = the `bookings.is_status_exported` flag.** `changeStatus` sets the new `status_id` and `is_status_exported = 0` together (the
+  decision waits); `digital-hatch:send-booking-status` puts every waiting booking in the day's file (`serial_number`, `status_id`, `personal_id` = who
+  decided here, `updated_at`), sends it, and only then sets `is_status_exported = 1`. A failed send leaves them at 0 for the next run. The day's file
+  keeps what earlier runs of the day put in it (the mobile importer reads one file per day by its exact name) and a booking decided again replaces its
+  row. A booking with an open sync conflict waits until a person settles it. While `HATCH_ENABLED=true`, `exportBookingStatusJson:mysql` leaves the
+  status to this command (one sender per flag); its `booking_values` and `system_config` files are unaffected.
+- **Local testing**: `DIGITAL_HATCH_EXPORT_PATH=C:/some/folder` makes the two send commands write their files straight into that folder instead of the
+  FTP (the FTP is not touched). Leave it empty on dev and prod, where `RED_TO_BLACK_FTP_PATH` on the FTP is used. Only sending has a local mode.
 - **Fetching** takes a file once (remembered by its name in `digital_hatch_fetched_files`) and never writes to or cleans the FTP folder. A json file that
   is not valid json yet (still being uploaded) is left for the next run. Names are matched exactly (`SrvOnClick_b2r_...`, case included), like the importers.
 - **Attachments**: only the types this system serves (pdf, docx, xlsx, pptx, jpg, jpeg, png, webp, gif) with a plain name (letters, digits, `_`, `-`, `.`) are taken;
