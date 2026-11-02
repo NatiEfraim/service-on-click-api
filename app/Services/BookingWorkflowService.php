@@ -148,7 +148,7 @@ class BookingWorkflowService
             throw new DomainError('ביטול על ידי המזמין מתבצע באפליקציה בלבד', 403);
         }
 
-        if (!$scope->workflow()->canChangeTo($current, $target, $scope->permissions, (int) $booking->booking_type_id)) {
+        if (!$scope->workflow()->canChangeTo($current, $target, $scope->actingPermissions,(int) $booking->booking_type_id)) {
             $audit && $this->audit->denied('booking.status_change', 'booking', $serial, "transition {$current->value}->{$target->value} not allowed", $user, $context);
 
             throw new DomainError('הפעולה אינה זמינה עבורך בשלב הנוכחי של הקריאה', 403);

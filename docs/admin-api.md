@@ -16,8 +16,8 @@ The role names are Spatie roles. **What a user may do inside a booking type come
 
 | Role | Hebrew | Route groups | Acts on bookings? |
 |---|---|---|---|
-| `super_admin` | מנהל מערכת | all three below | no (sees everything, acts only if it also holds a per-type permission) |
-| `admin` | מפקד מחנה | `bookings-approver-management`, `bookings-admin-management` | **no** - views and manages, never decides |
+| `super_admin` | מנהל מערכת | all three below | **yes, everywhere** - acts as the admin of every booking type, in every unit (no per-type permission needed) |
+| `admin` | מפקד מחנה | `bookings-approver-management`, `bookings-admin-management` | **yes, every turn** - on the booking types it holds `admin_{type}` for, in its own unit: acts as control officer, vice approver and approver, and manages their roles |
 | `approver` | מפקד תחום | `bookings-approver-management` | yes - the final decision |
 | `vice_approver` | גורם מטפל | `bookings-approver-management` | yes - the first decision |
 | `transportation_control_officer` | רמ"ד תו"ב | `bookings-approver-management` | yes - only where that role is linked to the booking type (not seeded today) |
@@ -34,7 +34,7 @@ another unit or type behaves as if it did not exist (**404**).
 
 ### Turn-based route (important for the buttons)
 
-A booking moves through the roles in turn, and only the role whose turn it is may act:
+A booking moves through the roles in turn, and only the role whose turn it is may act (the admin of the type holds every turn):
 
 ```
 received ──vice approver──▶ 15 / 16 ──approver──▶ approved(3) / rejected(4)
@@ -43,7 +43,10 @@ received ──vice approver──▶ 15 / 16 ──approver──▶ approved(3
 (transportation, when a control officer exists) received ──control officer──▶ 17 / 18 ──vice approver──▶ ...
 ```
 
-- The **admin never acts.** The **approver waits** until the vice approver has passed the booking on.
+- The **admin of the type (and the super admin) holds every turn**: at each stage they get the same buttons as the role whose turn it is, so
+  `actions` is never empty for them on an open booking, and `can_edit_values` follows the same rule. They still go through the route (no jumping
+  from "received" to the final approval), cannot set the requester's own cancellation, and a closed booking has no actions for anyone. Their
+  name goes on the timeline and in the audit log as the one who acted. The **approver waits** until the vice approver has passed the booking on.
 - A **vice approver / control officer sees only the bookings at their own stage.** Anything else is a 404 for them. This is decided **per booking
   type**: someone who is vice approver of type 1 and approver of type 2 sees only their own stage in type 1 and everything in type 2.
 - The requester's own cancellation (status 6) is never done here.

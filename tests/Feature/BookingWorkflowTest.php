@@ -94,24 +94,84 @@ class BookingWorkflowTest extends ManagementTestCase
         $this->assertSame('transition 1->3 not allowed', $denied->reason);
     }
 
-    public function test_the_admin_only_views_and_the_approver_waits_for_the_vice_approver(): void
+    public function test_the_approver_waits_for_the_vice_approver(): void
     {
         $this->booking();
-
-        $this->as(self::ADMIN)
-            ->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])
-            ->assertForbidden();
 
         $this->as(self::APPROVER)
             ->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])
             ->assertForbidden();
 
-        $this->as(self::ADMIN)
+        $this->as(self::APPROVER)
             ->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)
             ->assertOk()
             ->assertJsonPath('data.actions', []);
 
         $this->assertSame(1, (int) Booking::where('serial_number', self::SERIAL)->value('status_id'));
+    }
+
+    public function test_the_admin_takes_every_turn_but_cannot_skip_one(): void
+    {
+        $booking = $this->booking();
+        $admin = User::where('personal_number', self::ADMIN)->firstOrFail();
+
+        // Received is the vice approver's turn: the admin sees the same buttons, and cannot jump to the final approval.
+        $this->as(self::ADMIN)
+            ->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)
+            ->assertOk()
+            ->assertJsonPath('data.actions.0.status_id', 15)
+            ->assertJsonPath('data.actions.1.status_id', 16);
+
+        $this->as(self::ADMIN)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])->assertForbidden();
+        $this->assertSame(1, (int) $booking->fresh()->status_id);
+
+        // The whole route, one turn after the other: vice approver, approver, approver again.
+        $this->as(self::ADMIN)->postJson(self::STATUS_URL, ['status_id' => 15, 'version' => 1])->assertOk()->assertJsonPath('data.status_id', 15);
+        $this->as(self::ADMIN)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 2])->assertOk()->assertJsonPath('data.status_id', 3);
+        $this->as(self::ADMIN)->postJson(self::STATUS_URL, ['status_id' => 5, 'version' => 3])->assertOk()->assertJsonPath('data.status_id', 5);
+
+        // Closed: nothing more to do, not even for the admin.
+        $this->as(self::ADMIN)->postJson(self::STATUS_URL, ['status_id' => 7, 'version' => 4, 'comment' => 'ביטול'])->assertForbidden();
+
+        $this->assertSame([15, 3, 5], ApplicationLog::where('booking_id', $booking->id)->orderBy('id')->pluck('status_id')->map(fn ($id): int => (int) $id)->all());
+        $this->assertSame([$admin->id], ApplicationLog::where('booking_id', $booking->id)->pluck('user_id')->unique()->values()->all(), 'the timeline names the admin');
+        $this->assertSame(3, AuditLog::where('action', 'booking.status_change')->where('result', 'success')->where('actor_id', self::ADMIN)->count());
+        $this->assertDatabaseHas('vice_approver_has_bookings', ['booking_id' => $booking->id, 'user_id' => $admin->id]);
+    }
+
+    public function test_an_admin_acts_only_on_the_types_and_the_unit_they_administer(): void
+    {
+        $this->booking();
+
+        $otherUnit = User::factory()->create(['personal_number' => '1000098', 'unit_id' => 2]);
+        $otherUnit->assignRole('admin');
+        $otherUnit->givePermissionTo('admin_1');
+
+        $otherType = User::factory()->create(['personal_number' => '1000097', 'unit_id' => 1]);
+        $otherType->assignRole('admin');
+        $otherType->givePermissionTo('admin_2');
+
+        foreach (['1000098', '1000097'] as $stranger) {
+            $this->as($stranger)->postJson(self::STATUS_URL, ['status_id' => 15, 'version' => 1])->assertNotFound();
+        }
+
+        $this->assertSame(1, (int) Booking::where('serial_number', self::SERIAL)->value('status_id'));
+    }
+
+    public function test_the_super_admin_acts_on_every_booking_of_every_unit(): void
+    {
+        $this->booking(['unit_id' => 2]);
+        $url = '/api/bookings-approver-management/bookings?ids=' . self::SERIAL . '&mine=1';
+
+        // The super admin holds no per-type permission, yet the buttons are there and the "mine" tab lists the booking.
+        $this->as(self::SUPER_ADMIN)->getJson($url)->assertOk()->assertJsonPath('data.0.actions.0.status_id', 15);
+        $this->as(self::SUPER_ADMIN)->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)->assertOk()->assertJsonPath('data.can_edit_values', true);
+
+        $this->as(self::SUPER_ADMIN)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])->assertForbidden();
+        $this->as(self::SUPER_ADMIN)->postJson(self::STATUS_URL, ['status_id' => 15, 'version' => 1])->assertOk();
+        $this->as(self::SUPER_ADMIN)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 2])->assertOk();
+
+        $this->assertSame(3, (int) Booking::where('serial_number', self::SERIAL)->value('status_id'));
     }
 
     public function test_the_approver_decides_once_the_vice_approver_has_passed_the_booking_on(): void
@@ -363,15 +423,19 @@ class BookingWorkflowTest extends ManagementTestCase
         $this->assertSame(1, Booking::where('serial_number', self::SERIAL)->value('version'));
     }
 
-    public function test_only_the_role_whose_turn_it_is_corrects_values(): void
+    public function test_values_are_corrected_by_whoever_has_the_turn_and_by_the_admin(): void
     {
         $this->bookingWithDateAndTime();
-        $body = ['values' => ['3' => '12:00'], 'version' => 1];
+        $url = '/api/bookings-approver-management/bookings/800000001/values';
 
-        // The booking is at the approver's stage: the vice approver (a handler) does not even see it, and the admin sees it but has no turn.
-        $this->as(self::VICE_APPROVER)->putJson('/api/bookings-approver-management/bookings/800000001/values', $body)->assertNotFound();
-        $this->as(self::ADMIN)->putJson('/api/bookings-approver-management/bookings/800000001/values', $body)->assertForbidden();
-        $this->as(self::APPROVER)->putJson('/api/bookings-approver-management/bookings/800000001/values', $body)->assertOk();
+        // The booking is at the approver's stage: the vice approver (a handler) does not even see it, and the admin holds the turn.
+        $this->as(self::VICE_APPROVER)->putJson($url, ['values' => ['3' => '12:00'], 'version' => 1])->assertNotFound();
+        $this->as(self::ADMIN)->putJson($url, ['values' => ['3' => '12:00'], 'version' => 1])->assertOk();
+
+        // Back at the vice approver's stage: the approver sees the booking but has no turn; the vice approver has.
+        Booking::where('serial_number', self::SERIAL)->update(['status_id' => 1]);
+        $this->as(self::APPROVER)->putJson($url, ['values' => ['3' => '13:00'], 'version' => 2])->assertForbidden();
+        $this->as(self::VICE_APPROVER)->putJson($url, ['values' => ['3' => '13:00'], 'version' => 2])->assertOk();
     }
 
     //----------------------------- Audit -------------------------------------//

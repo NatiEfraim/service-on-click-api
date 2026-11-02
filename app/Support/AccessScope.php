@@ -14,11 +14,16 @@ use Illuminate\Database\Eloquent\Builder;
  * Capabilities: audit.view, sync.view, sync.operate, sla.manage, config.global (super admin);
  * users.manage, reports.view, targets.manage (super admin or any admin); dashboard.view (also approvers).
  * A handler (control officer or vice approver) only sees bookings at their own stage, per booking type.
+ * What the user may do to a booking is decided by the Workflow from $actingPermissions: the admin of a type (and the super admin, on every
+ * type) acts at every stage.
  */
 final class AccessScope
 {
-    /** @var array<int, string> */
+    /** @var array<int, string> The user's own permissions. */
     public readonly array $permissions;
+
+    /** @var array<int, string> What the Workflow sees: the same, plus "admin_N" for every type when the user is the super admin. */
+    public readonly array $actingPermissions;
 
     /** @var ?array<int, array<int, int>> */
     private ?array $actionableStatuses = null;
@@ -26,6 +31,7 @@ final class AccessScope
     public function __construct(public readonly User $user, private readonly ?Workflow $workflow = null)
     {
         $this->permissions = $user->getAllPermissions()->pluck('name')->all();
+        $this->actingPermissions = $user->workflowPermissionNames();
     }
 
     public function workflow(): Workflow
@@ -104,9 +110,12 @@ final class AccessScope
 
         $byType = [];
 
-        foreach ($this->managedBookingTypeIds() as $bookingTypeId) {
+        // The super admin holds no per-type permission but acts on every type.
+        $bookingTypeIds = $this->isSuperAdmin() ? $this->allManageableBookingTypeIds() : $this->managedBookingTypeIds();
+
+        foreach ($bookingTypeIds as $bookingTypeId) {
             foreach (StatusBookingEnum::cases() as $status) {
-                if ($this->workflow()->availableActions($status, $this->permissions, $bookingTypeId) !== []) {
+                if ($this->workflow()->availableActions($status, $this->actingPermissions, $bookingTypeId) !== []) {
                     $byType[$bookingTypeId][] = $status->value;
                 }
             }

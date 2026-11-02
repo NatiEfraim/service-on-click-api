@@ -8,7 +8,8 @@ use App\Enums\StatusBookingEnum as Status;
 
 /**
  * The booking route rules, shared by the UI buttons (BookingResource::next_actions) and the server checks (BookingWorkflowService).
- * Turn-based: only the role whose turn it is may act; the admin never acts. Status ids are the mobile app's - never renumber.
+ * Turn-based: only the role whose turn it is may act, except the admin of the booking type, who holds every turn (control officer, vice approver
+ * and approver). Status ids are the mobile app's - never renumber.
  */
 final class Workflow
 {
@@ -33,7 +34,7 @@ final class Workflow
             'isControlOfficer' => $has(PermissionEnum::TRANSPORTATION_CONTROL_OFFICER),
             'isViceApprover' => $has(PermissionEnum::VICE_APPROVER),
             'isApprover' => $has(PermissionEnum::APPROVER),
-            // View and manage only - an admin never acts on a booking.
+            // The strongest role of the type: acts at every stage, as whoever's turn it is.
             'isAdmin' => $has(PermissionEnum::ADMIN),
         ];
     }
@@ -69,6 +70,11 @@ final class Workflow
         $transitions = [];
         $isTransportation = $this->transportationBookingTypeId !== null && $bookingTypeId === $this->transportationBookingTypeId;
 
+        $isAdmin = !empty($flags['isAdmin']);
+        $isControlOfficer = $isAdmin || !empty($flags['isControlOfficer']);
+        $isViceApprover = $isAdmin || !empty($flags['isViceApprover']);
+        $isApprover = $isAdmin || !empty($flags['isApprover']);
+
         $holds = function (array &$transitions) use ($current, $isTransportation): void {
             if (!$isTransportation) {
                 return;
@@ -89,7 +95,7 @@ final class Workflow
 
         switch ($this->stageOf($current, $bookingTypeId)) {
             case BookingStageEnum::CONTROL_OFFICER:
-                if (!empty($flags['isControlOfficer'])) {
+                if ($isControlOfficer) {
                     $transitions[] = ['status' => Status::CONTROL_OFFICER_APPROVED, 'label' => 'אישור והעברה לגורם המטפל'];
                     $transitions[] = ['status' => Status::CONTROL_OFFICER_REJECTED, 'label' => 'דחייה'];
                     $holds($transitions);
@@ -97,7 +103,7 @@ final class Workflow
                 break;
 
             case BookingStageEnum::VICE_APPROVER:
-                if (!empty($flags['isViceApprover'])) {
+                if ($isViceApprover) {
                     $transitions[] = ['status' => Status::VICE_APPROVER_APPROVED, 'label' => 'אישור והעברה למפקד התחום'];
                     $transitions[] = ['status' => Status::VICE_APPROVER_REJECTED, 'label' => 'דחייה'];
                     $holds($transitions);
@@ -108,7 +114,7 @@ final class Workflow
             case BookingStageEnum::SUPPLIER_FILES:
             case BookingStageEnum::SUPPLIER_APPROVAL:
             case BookingStageEnum::SUPPLIER_NUMBER:
-                if (!empty($flags['isApprover'])) {
+                if ($isApprover) {
                     $transitions[] = ['status' => Status::APPROVED, 'label' => 'אישור סופי'];
                     $transitions[] = ['status' => Status::REJECTED, 'label' => 'דחייה סופית'];
                     $holds($transitions);
@@ -116,11 +122,11 @@ final class Workflow
                 break;
 
             case BookingStageEnum::REALIZATION:
-                if ($this->barberBookingTypeId !== null && $bookingTypeId === $this->barberBookingTypeId && !empty($flags['isViceApprover'])) {
+                if ($this->barberBookingTypeId !== null && $bookingTypeId === $this->barberBookingTypeId && $isViceApprover) {
                     $transitions[] = ['status' => Status::APPROVED_BY_BARBER, 'label' => 'אישור על ידי הספר'];
                 }
 
-                if (!empty($flags['isApprover'])) {
+                if ($isApprover) {
                     if ($bookingTypeId !== $this->barberBookingTypeId) {
                         $transitions[] = ['status' => Status::COMPLETED, 'label' => 'סיום קריאה'];
                     }
@@ -130,7 +136,7 @@ final class Workflow
                 break;
 
             case BookingStageEnum::BARBER_DONE:
-                if (!empty($flags['isApprover'])) {
+                if ($isApprover) {
                     $transitions[] = ['status' => Status::COMPLETED, 'label' => 'סיום קריאה'];
                     $transitions[] = ['status' => Status::CANCELED_BY_APPROVER, 'label' => 'ביטול קריאה'];
                 }

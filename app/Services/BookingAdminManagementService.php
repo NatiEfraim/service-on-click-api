@@ -266,7 +266,7 @@ class BookingAdminManagementService
             throw new DomainError('ניתן להקצות הרשאות רק בתחומים שבניהולך ולמשתמשי היחידה שלך', 403);
         }
 
-        // The admin only views and manages: a self-granted role would let them take approver decisions too.
+        // An admin never changes their own roles (they could widen their reach or lock themselves out).
         if ($target !== null && (int) $target->id === (int) $admin->id) {
             app(AuditService::class)->denied('user.permissions.change', 'user', $admin->actorId(), 'self_grant', $admin, ['unit_id' => $admin->unit_id]);
 

@@ -154,7 +154,7 @@ class BookingQueryService
                 'occurred_at' => $log->created_at?->toIso8601String(),
                 'correlation_id' => $log->correlation_id,
             ])->values()->all(),
-            'can_edit_values' => $scope->workflow()->canEditValues($booking->statusEnum(), $scope->permissions, (int) $booking->booking_type_id),
+            'can_edit_values' => $scope->workflow()->canEditValues($booking->statusEnum(), $scope->actingPermissions,(int) $booking->booking_type_id),
             'editable_fields' => FormField::query()
                 ->where('unit_id', $booking->unit_id)
                 ->where('booking_type_id', $booking->booking_type_id)
@@ -235,7 +235,7 @@ class BookingQueryService
                 'status_id' => $action['status']->value,
                 'label' => $action['label'],
                 'comment_required' => Workflow::validateComment($action['status'], '') !== null,
-            ], $scope->workflow()->availableActions($status, $scope->permissions, $bookingTypeId)),
+            ], $scope->workflow()->availableActions($status, $scope->actingPermissions, $bookingTypeId)),
         ];
     }
 
