@@ -12,8 +12,12 @@ system reads, what it writes, and what the mobile side has to do for each file. 
 | `SrvOnClick_r2b_booking_status_<Y-m-d>.json` | r2b | `export-json/booking-status/` | this system, every 2 min | the mobile app (existing importer) |
 | `SrvOnClick_r2b_booking_values_<time>_<id>.json` | r2b | `export-json/booking-values/` | this system | **the mobile app needs an importer** |
 | `SrvOnClick_r2b_system_config_<time>_<sequence>.json` | r2b | `export-json/system-config/` | this system | **the mobile app needs an importer** |
+| `SrvOnClick_r2b_users_<Y-m-d>.json` | r2b | `export-json/users/` (`USERS_JSON_FOLDER_NAME`) | this system, with the digital hatch | **the mobile app needs an importer** |
 
 A file that was read moves to `loaded-json/`. Reading a file twice changes nothing (bookings are found by `serial_number`).
+
+**The digital hatch (FTP).** When the two systems do not share a bucket, the files cross an FTP instead (`HATCH_ENABLED=true`, see "The FTP" at the
+end). The bucket stays the working area on both sides; the FTP only carries `booking_status`, `users`, the two b2r json files and the attachments.
 
 ## b2r: what this system reads
 
@@ -48,6 +52,18 @@ overtakes an earlier one that has not gone (the sync screen shows the state).
 One **cumulative snapshot per day** under the day's name (the existing importer reads one file by its exact name): every decision the mobile app has
 not shown back yet. `personal_id` = the ID number of whoever decided; `updated_at` = unix seconds. The prefix and the timezone that names "today" are
 configurable (`EXPORT_BOOKING_STATUS_PREFIX`, `EXPORT_JSON_TIMEZONE`) because the mobile configuration says `r2b` and its importer looks for `b2r`.
+
+### `users` - who may do what
+```json
+{ "users": [ { "personal_id": "206094468", "phone": "0545452493", "unit_id": 1,
+               "booking_type_roles": [ { "role_id": 4, "booking_type_ids": [1, 2, 3] }, { "role_id": 5, "booking_type_ids": [8] } ],
+               "created_at": "1790151370", "updated_at": "1790151370" } ] }
+```
+One **snapshot per day** under the day's name, rewritten during the day only when something changed. `personal_id` = the nine-digit ID number (the key
+the mobile app knows people by), `role_id` = the `RoleEnum` value both systems share (1 super admin, 2 admin, 3 approver, 4 vice approver, 5 user,
+6 transport control officer), `booking_type_ids` = the booking types the person holds that role on, `created_at` / `updated_at` = unix seconds as
+strings (a role change moves `updated_at`). A **super admin holds the role on every booking type**. Only people with an ID number, not deleted and with at
+least one role are listed: **a person who lost every role is simply missing from the next snapshot**, so treat the file as the full list.
 
 ### `booking_values` - a date / time corrected while a booking was handled
 ```json
@@ -85,3 +101,22 @@ instead**, and add `is_active` to `form_fields` and `option_fields`, and `positi
 ### What never leaves
 The display name of a unit, the name of a department, and any reference to a department. A text with such a name is refused when it is saved (422),
 and every file is checked again before it is written; a file that holds one is held back (state `blocked`) and the changes after it wait.
+
+## The FTP (digital hatch)
+
+Three scheduler commands (no queue worker), all off while `HATCH_ENABLED=false`; the FTP account is `HATCH_FTP_*`, the folders are in `config/services.php`
+(`digital-hatch`). Names are never changed on the way: what is in the bucket is what is on the FTP.
+
+| Command | Every | From -> to | Files |
+|---|---|---|---|
+| `digital-hatch:send` | 2 min (odd minutes, after the export) | bucket `export-json/booking-status`, `export-json/users` -> FTP `RED_TO_BLACK_FTP_PATH` (`/R2B/Tikshoret-R2B-Prod/`) | `SrvOnClick_r2b_booking_status_<Y-m-d>.json`, `SrvOnClick_r2b_users_<Y-m-d>.json` |
+| `digital-hatch:fetch` | 5 min | FTP `BLACK_TO_RED_FTP_PATH` (`/Tikshoret-B2R-Prod/`) -> bucket `import-json/booking-data`, `import-json/application-log` | `SrvOnClick_b2r_export_bookings_<Y-m-d_H-i-s>.json`, `SrvOnClick_b2r_application_logs_<Y-m-d_H-i-s>.json` |
+| `digital-hatch:fetch-attachments` | 5 min | FTP `BLACK_TO_RED_FTP_ATTACHMENTS_PATH` (`/DigitalFiles-B2R-Prod/`) -> bucket `import-files` | `SrvOnClickFiles_<stored name>.<ext>` (the name the booking json gives, plus the extension) |
+
+- **Sending** puts only the **newest** file of each stream (both are cumulative snapshots) and sends the same name again when its content changed
+  (remembered by sha256 in `digital_hatch_sent_files`). `booking_values` and `system_config` files are not sent through the FTP.
+- **Fetching** takes a file once (remembered by its name in `digital_hatch_fetched_files`) and never writes to or cleans the FTP folder. A json file that
+  is not valid json yet (still being uploaded) is left for the next run. Names are matched exactly (`SrvOnClick_b2r_...`, case included), like the importers.
+- **Attachments**: only the types this system serves (pdf, docx, xlsx, pptx, jpg, jpeg, png, webp, gif) with a plain name (letters, digits, `_`, `-`, `.`) are taken;
+  there is no TIFF conversion here.
+- An unreachable FTP makes the command fail (exit code 1, logged), it never looks like an empty folder.

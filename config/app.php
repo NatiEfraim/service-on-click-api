@@ -83,6 +83,20 @@ return [
             'backoff' => (int) env('IMPORT_APPLICATION_LOG_JSON_JOB_BACKOFF', 60),
             'timeout' => (int) env('IMPORT_APPLICATION_LOG_JSON_JOB_TIMEOUT', 900),
         ],
+
+        // The digital-hatch commands (FTP <-> bucket) run in the scheduler itself, no queue worker.
+        // Sending runs on the odd minutes, after the export wrote its files; fetching a minute or two before the imports read the bucket.
+        'digital_hatch_send' => [
+            'cron' => env('DIGITAL_HATCH_SEND_CRON', '1-59/2 * * * *'),
+        ],
+
+        'digital_hatch_fetch' => [
+            'cron' => env('DIGITAL_HATCH_FETCH_CRON', '3-59/5 * * * *'),
+        ],
+
+        'digital_hatch_fetch_attachments' => [
+            'cron' => env('DIGITAL_HATCH_FETCH_ATTACHMENTS_CRON', '3-59/5 * * * *'),
+        ],
     ],
 
     // Defaults used when no system reference overrides them.

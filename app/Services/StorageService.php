@@ -165,6 +165,15 @@ class StorageService
         return $fileKey;
     }
 
+    /** The bytes of a bucket file; null when it is not there. */
+    public function bucketFileContents(string $fileName, string $remoteDirectory): ?string
+    {
+        $disk = Storage::disk(config('filesystems.storage_service'));
+        $fileKey = $this->buildBucketKey($remoteDirectory, $fileName);
+
+        return $disk->exists($fileKey) ? (string) $disk->get($fileKey) : null;
+    }
+
     /** Moves a file to another bucket folder (copy, then delete). If the name exists there, the moved file gets the date and time before ".json". @return string the name in $toDirectory */
     public function moveBucketFile(string $fileName, string $fromDirectory, string $toDirectory): string
     {

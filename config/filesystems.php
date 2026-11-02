@@ -50,6 +50,22 @@ return [
             'report' => false,
         ],
 
+        // The digital hatch: the FTP the two systems exchange their files through (DigitalHatchService).
+        // "throw" is on so an unreachable server fails the run instead of looking like an empty folder.
+        'digital-hatch' => [
+            'driver' => 'ftp',
+            'host' => env('HATCH_FTP_HOST'),
+            'username' => env('HATCH_FTP_USERNAME'),
+            'password' => env('HATCH_FTP_PASSWORD'),
+            'root' => env('FTP_ROOT', ''), // e.g. /path/to/root
+            'ignorePassiveAddress' => true,
+            'passive' => true,
+            'ssl' => false,
+            'timeout' => 30,
+            'throw' => true,
+            'report' => false,
+        ],
+
     ],
 
     'links' => [
@@ -89,6 +105,7 @@ return [
             'booking_status' => (string) env('BOOKING_STATUS_JSON_FOLDER_NAME', 'booking-status'),
             'booking_values' => (string) env('BOOKING_VALUES_JSON_FOLDER_NAME', 'booking-values'),
             'system_config' => (string) env('SYSTEM_CONFIG_JSON_FOLDER_NAME', 'system-config'),
+            'users' => (string) env('USERS_JSON_FOLDER_NAME', 'users'),
         ],
     ],
 

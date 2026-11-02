@@ -27,6 +27,9 @@ trait AuditsPermissionChanges
             return;
         }
 
+        // The users file for the mobile side carries updated_at; a role change is a change of the person.
+        $user->touch();
+
         app(AuditService::class)->record([
             'action' => 'user.permissions.change',
             'entity_type' => 'user',

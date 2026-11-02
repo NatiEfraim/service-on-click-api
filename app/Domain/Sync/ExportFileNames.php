@@ -16,6 +16,12 @@ final class ExportFileNames
         return ($prefix ?? self::R2B_PREFIX . 'booking_status_') . $day->format('Y-m-d') . '.json';
     }
 
+    /** One snapshot of the people and their roles per day, e.g. SrvOnClick_r2b_users_2026-09-23.json (rewritten during the day when a role changes). */
+    public static function usersFile(\DateTimeInterface $day, ?string $prefix = null): string
+    {
+        return ($prefix ?? self::R2B_PREFIX . 'users_') . $day->format('Y-m-d') . '.json';
+    }
+
     /** $uniqueId keeps two corrections made in the same second from overwriting each other in the bucket. */
     public static function bookingValuesFile(\DateTimeInterface $at, ?string $uniqueId = null): string
     {
