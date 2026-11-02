@@ -27,6 +27,7 @@ Dockerfile
 README.md
 AGENTS.md
 CLAUDE.md
+docs/
 tests/
 phpunit.xml
 .phpunit.cache/
