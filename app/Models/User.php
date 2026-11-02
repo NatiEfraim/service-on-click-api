@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PermissionEnum;
 use App\Enums\RoleEnum;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -16,6 +17,9 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
     protected string $guard_name = "passport";
+
+    /** @var ?array<int, string> */
+    private ?array $workflowPermissionNames = null;
 
     protected $fillable = [
         'uuid',
@@ -88,5 +92,27 @@ class User extends Authenticatable
         $role = $this->getRoleNames()->first();
 
         return $role ? RoleEnum::fromSpatieRole($role) : null;
+    }
+
+    /**
+     * The permission names that decide what the user may do to a booking (Workflow). The super admin holds no "{role}_{type}" permissions,
+     * so it acts as the admin of every booking type that has bookings. Read once per user instance: a resource calls this for every row.
+     * @return array<int, string>
+     */
+    public function workflowPermissionNames(): array
+    {
+        if ($this->workflowPermissionNames !== null) {
+            return $this->workflowPermissionNames;
+        }
+
+        $names = $this->getAllPermissions()->pluck('name')->all();
+
+        if ($this->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName())) {
+            foreach (BookingType::query()->where('is_outsource', false)->pluck('id') as $bookingTypeId) {
+                $names[] = PermissionEnum::ADMIN->keyForId((int) $bookingTypeId);
+            }
+        }
+
+        return $this->workflowPermissionNames = array_values(array_unique($names));
     }
 }

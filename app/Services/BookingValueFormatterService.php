@@ -201,7 +201,7 @@ class BookingValueFormatterService
         // Uses the user's own permission names: hasPermissionTo() throws for a permission that does not exist.
         return app(Workflow::class)->canEditValues(
             $status,
-            $user->getAllPermissions()->pluck('name'),
+            $user->workflowPermissionNames(),
             (int) $booking->booking_type_id,
         );
     }

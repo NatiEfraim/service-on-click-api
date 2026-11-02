@@ -44,17 +44,34 @@ class WorkflowTest extends TestCase
         $this->assertSame([], $this->targets(S::VICE_APPROVER_APPROVED, ['approver_2'], 1));
     }
 
-    public function test_the_admin_views_and_manages_but_never_acts(): void
+    public function test_the_admin_holds_every_turn_of_the_type_they_administer(): void
     {
-        $total = 0;
+        // The same moves as whoever's turn it is: vice approver, approver and (in transportation) control officer.
+        $this->assertSame([15, 16], $this->targets(S::RECEIVED, ['admin_1'], 1));
+        $this->assertSame([3, 4], $this->targets(S::VICE_APPROVER_APPROVED, ['admin_1'], 1));
+        $this->assertSame([5, 7], $this->targets(S::APPROVED, ['admin_1'], 1));
+        $this->assertSame([17, 18, 8, 9, 10], $this->targets(S::RECEIVED, ['admin_8'], 8));
+        $this->assertSame([15, 16, 8, 9, 10], $this->targets(S::CONTROL_OFFICER_APPROVED, ['admin_8'], 8));
+        $this->assertSame([3, 4, 8, 10], $this->targets(S::PENDING_PROCESSING, ['admin_8'], 8));
 
-        foreach (S::cases() as $status) {
-            foreach ([1, 5, 8, 11] as $bookingTypeId) {
-                $total += count($this->workflow->availableActions($status, ['admin_1', 'admin_5', 'admin_8', 'admin_11'], $bookingTypeId));
-            }
+        // The barber route: done by the barber (vice approver's move) first, then completed by the approver's move.
+        $this->assertTrue($this->workflow->canChangeTo(S::APPROVED, S::APPROVED_BY_BARBER, ['admin_5'], 5));
+        $this->assertFalse($this->workflow->canChangeTo(S::APPROVED, S::COMPLETED, ['admin_5'], 5));
+        $this->assertTrue($this->workflow->canChangeTo(S::APPROVED_BY_BARBER, S::COMPLETED, ['admin_5'], 5));
+    }
+
+    public function test_the_admin_is_strongest_in_the_roles_but_still_goes_through_the_route(): void
+    {
+        $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::APPROVED, ['admin_1'], 1), 'no skipping the vice approver');
+        $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::CANCELED_BY_USER, ['admin_1'], 1), 'the requester cancels in the app');
+
+        foreach ([S::REJECTED, S::COMPLETED, S::CANCELED_BY_APPROVER, S::CANCELED_BY_USER] as $closed) {
+            $this->assertSame([], $this->targets($closed, ['admin_1'], 1), $closed->name . ' is closed for the admin too');
         }
 
-        $this->assertSame(0, $total);
+        // The permission is per booking type.
+        $this->assertSame([], $this->targets(S::RECEIVED, ['admin_2'], 1));
+        $this->assertSame([], $this->targets(S::RECEIVED, ['admin_1'], 2));
     }
 
     public function test_a_person_with_two_roles_on_one_type_acts_on_each_own_turn(): void
@@ -68,8 +85,8 @@ class WorkflowTest extends TestCase
     public function test_transportation_starts_at_the_control_officer_who_may_also_put_it_on_hold(): void
     {
         $this->assertSame([17, 18, 8, 9, 10], $this->targets(S::RECEIVED, ['transportation_control_officer_8'], 8));
-        // Nobody else acts at that stage, and the control officer has no say on a car.
-        $this->assertSame([], $this->targets(S::RECEIVED, ['vice_approver_8', 'approver_8', 'admin_8'], 8));
+        // Nobody else acts at that stage (except the admin of the type), and the control officer has no say on a car.
+        $this->assertSame([], $this->targets(S::RECEIVED, ['vice_approver_8', 'approver_8'], 8));
         $this->assertSame([], $this->targets(S::RECEIVED, ['transportation_control_officer_1'], 1));
     }
 
@@ -128,7 +145,10 @@ class WorkflowTest extends TestCase
         $this->assertTrue($this->workflow->canEditValues(S::PENDING_PROCESSING, ['approver_8'], 8));
         $this->assertFalse($this->workflow->canEditValues(S::APPROVED, ['approver_1'], 1));
         $this->assertFalse($this->workflow->canEditValues(S::COMPLETED, ['approver_1'], 1));
-        $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['admin_1'], 1), 'the admin never edits');
+        $this->assertTrue($this->workflow->canEditValues(S::RECEIVED, ['admin_1'], 1), 'the admin holds every turn');
+        $this->assertTrue($this->workflow->canEditValues(S::VICE_APPROVER_APPROVED, ['admin_1'], 1));
+        $this->assertFalse($this->workflow->canEditValues(S::APPROVED, ['admin_1'], 1), 'not after the final approval, not even for the admin');
+        $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['admin_2'], 1), 'the admin of another type');
         $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['approver_1'], 1), 'not on the vice approver turn');
         $this->assertTrue($this->workflow->canEditValues(S::RECEIVED, ['vice_approver_1'], 1));
         $this->assertFalse($this->workflow->canEditValues(S::VICE_APPROVER_APPROVED, ['vice_approver_1'], 1));

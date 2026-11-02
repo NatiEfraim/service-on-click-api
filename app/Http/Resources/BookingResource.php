@@ -78,7 +78,7 @@ class BookingResource extends JsonResource
         $bookingTypeId = (int) $this->booking_type_id;
 
         $roleFlags = StatusBookingEnum::resolveRoleFlags(
-            permissionNames: $user->getAllPermissions()->pluck('name'),
+            permissionNames: $user->workflowPermissionNames(),
             bookingTypeId: $bookingTypeId,
         );
 
