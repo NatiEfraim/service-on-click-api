@@ -84,19 +84,24 @@ return [
     'folder_name' => [
         'log_folder_name' => (string) env('LOG_FOLDER_NAME', 'logs'),
 
-        // b2r files dropped by the mobile side.
+        // b2r json files dropped by the mobile side: SrvOnClick_b2r_export_bookings_* and SrvOnClick_b2r_application_logs_*. Both kinds go straight into
+        // "base", told apart by their names; fill the two folders below to read them from subfolders of it instead (e.g. booking-data, application-log).
         'import_json' => [
             'base' => (string) env('IMPORT_JSON', 'import-json'),
 
-            'booking_data' => (string) env('BOOKING_DATA_JSON_FOLDER_NAME', 'booking-data'),
-            'application_log' => (string) env('APPLICATION_LOG_JSON_FOLDER_NAME', 'application-log'),
+            'booking_data' => (string) env('BOOKING_DATA_JSON_FOLDER_NAME', ''),
+            'application_log' => (string) env('APPLICATION_LOG_JSON_FOLDER_NAME', ''),
         ],
 
-        // Processed files are moved here.
+        // A json file that was saved in the database moves here (a backup of what was read).
         'loaded_json' => (string) env('LOADED_JSON_FOLDER_NAME', 'loaded-json'),
 
-        // Set ATTACHMENTS_FOLDER_NAME=export-files to read the mobile backup folder directly.
-        'attachments' => (string) env('ATTACHMENTS_FOLDER_NAME', 'import-files'),
+        // b2r files and images, SrvOnClickFiles_<stored name>.<ext>: they arrive in "import_files". Once one is saved in the database - linked to the
+        // booking whose json names it - it is copied to "attachments" (where the bookings serve their files and images from, all of them in one
+        // folder) and the received file moves to "loaded_files" (a backup, like loaded_json).
+        'import_files' => (string) env('IMPORT_FILES_FOLDER_NAME', 'import-files'),
+        'loaded_files' => (string) env('LOADED_FILES_FOLDER_NAME', 'loaded-files'),
+        'attachments' => (string) env('ATTACHMENTS_FOLDER_NAME', 'files'),
 
         // r2b files written for the mobile side.
         'export_json' => [

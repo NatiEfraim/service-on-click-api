@@ -79,9 +79,9 @@ class HatchImportCommandsTest extends HatchTestCase
         $this->assertStringContainsString('file moved to loaded-json/' . self::BOOKINGS_FILE_ON_DISK, $output);
 
         $this->assertSame(2, Booking::count());
-        $this->assertSame([], $this->bucket()->files('import-json/booking-data'));
+        $this->assertSame([], $this->bucket()->files('import-json'));
         $this->assertSame(['loaded-json/' . self::BOOKINGS_FILE_ON_DISK], $this->bucket()->files('loaded-json'));
-        $this->assertFalse($this->bucket()->exists('import-json/application-log/' . self::LOGS_FILE_ON_DISK), 'the log file is for the other command');
+        $this->assertFalse($this->bucket()->exists('import-json/' . self::LOGS_FILE_ON_DISK), 'the log file is for the other command');
 
         $this->assertSame(
             ['file_name' => self::BOOKINGS_FILE_ON_DISK, 'stream' => 'export_bookings', 'source' => 'local'],
@@ -103,7 +103,7 @@ class HatchImportCommandsTest extends HatchTestCase
         $this->assertSame(0, Artisan::call('importBookingJson:ftp', ['--sync' => true]));
         $output = Artisan::output();
         $this->assertStringContainsString('No new file in the source', $output);
-        $this->assertStringContainsString('Nothing to import: no file is waiting in import-json/booking-data', $output);
+        $this->assertStringContainsString('Nothing to import: no file is waiting in import-json', $output);
 
         $this->assertSame(0, Artisan::call('importBookingJson:ftp', ['--sync' => true, '--force' => true]));
         $this->assertStringContainsString('Taken into the bucket: ' . self::BOOKINGS_FILE_ON_DISK, Artisan::output());
@@ -135,7 +135,7 @@ class HatchImportCommandsTest extends HatchTestCase
         $this->assertSame('application_logs', DigitalHatchFetchedFile::where('file_name', self::LOGS_FILE_ON_DISK)->value('stream'));
     }
 
-    public function test_importFile_ftp_takes_the_prefixed_files_from_the_local_folder_and_links_them_to_the_bookings_that_name_them(): void
+    public function test_importFile_ftp_takes_the_prefixed_files_from_the_local_folder_and_saves_them_with_the_bookings_that_name_them(): void
     {
         $this->useLocalImportFolders();
         $this->putBookingWithAttachments(6401);
@@ -154,24 +154,25 @@ class HatchImportCommandsTest extends HatchTestCase
         $this->assertStringContainsString('Source: local folder ' . $this->localFilesDir, $output);
         $this->assertStringContainsString('Taken into the bucket: ' . self::PDF . '.pdf', $output);
         $this->assertStringContainsString('Taken into the bucket: ' . self::PHOTO . '.jpg', $output);
-        $this->assertStringContainsString(
-            'Linked to their booking now: 2, linked before: 0, named by a booking but not in the bucket yet: 1, in the bucket but not named by a booking yet: 0.',
-            $output
-        );
+        $this->assertStringContainsString('Files received in import-files: 2. Saved now: 2 (copied to files, the received files moved to loaded-files), 2 file / image rows linked.', $output);
+        $this->assertStringContainsString('Linked before: 0. Named by a booking but not received yet: 1. Received but not named by a booking yet: 0', $output);
+        $this->assertStringContainsString('Not received yet: ' . self::DOC, $output);
 
-        $this->assertSame('import-files/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
-        $this->assertSame('import-files/' . self::PHOTO . '.jpg', Image::where('name', self::PHOTO)->value('path'));
-        $this->assertSame('import-files/' . self::DOC, File::where('name', self::DOC)->value('path'), 'its bytes have not arrived');
-        $this->assertEqualsCanonicalizing(
-            ['import-files/' . self::PDF . '.pdf', 'import-files/' . self::PHOTO . '.jpg'],
-            $this->bucket()->files('import-files')
-        );
-        $this->assertSame('jpeg bytes', $this->bucket()->get('import-files/' . self::PHOTO . '.jpg'));
+        // The rows point at the copies in files, which hold the bytes; the received files are in loaded-files and the inbox is empty again.
+        $this->assertSame('files/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
+        $this->assertSame('files/' . self::PHOTO . '.jpg', Image::where('name', self::PHOTO)->value('path'));
+        $this->assertSame('files/' . self::DOC, File::where('name', self::DOC)->value('path'), 'its bytes have not arrived');
+        $this->assertSame('%PDF-1.4 a', $this->bucket()->get('files/' . self::PDF . '.pdf'));
+        $this->assertSame('jpeg bytes', $this->bucket()->get('files/' . self::PHOTO . '.jpg'));
+        $this->assertEqualsCanonicalizing(['files/' . self::PDF . '.pdf', 'files/' . self::PHOTO . '.jpg'], $this->bucket()->files('files'));
+        $this->assertEqualsCanonicalizing(['loaded-files/' . self::PDF . '.pdf', 'loaded-files/' . self::PHOTO . '.jpg'], $this->bucket()->files('loaded-files'));
+        $this->assertSame([], $this->bucket()->files('import-files'));
 
+        // The ledger knows how each came (the landing says "local"; the save that followed keeps that row).
         $this->assertEqualsCanonicalizing([
             ['file_name' => self::PDF . '.pdf', 'stream' => 'attachments', 'source' => 'local'],
             ['file_name' => self::PHOTO . '.jpg', 'stream' => 'attachments', 'source' => 'local'],
-        ], DigitalHatchFetchedFile::get(['file_name', 'stream', 'source'])->toArray());
+        ], DigitalHatchFetchedFile::where('stream', 'attachments')->get(['file_name', 'stream', 'source'])->toArray());
         $this->assertTrue(is_file($this->localFilesDir . '/' . self::PDF . '.pdf'), 'the folder is never cleaned');
     }
 
@@ -190,31 +191,45 @@ class HatchImportCommandsTest extends HatchTestCase
 
     //----------------------------- ":bucket" ------------------------------------//
 
-    public function test_importFile_bucket_links_what_is_in_the_bucket_folder_and_moves_nothing(): void
+    public function test_importFile_bucket_saves_what_the_bookings_name_and_leaves_the_rest_in_the_inbox(): void
     {
         $this->putBookingWithAttachments(6501);
         $this->assertSame(0, Artisan::call('importBookingJson:bucket', ['--sync' => true]));
 
-        $this->bucket()->put('import-files/' . self::PDF . '.pdf', 'pdf');
-        $this->bucket()->put('import-files/SrvOnClickFiles_nobody_names_me.png', 'png');
-        $this->bucket()->put('import-files/notes.txt', 'x');
+        $this->receiveFile(self::PDF, 'pdf', 'pdf');
+        $this->receiveFile('SrvOnClickFiles_nobody_names_me', 'png', 'png');
         // An image row cannot take a pdf: the photo keeps waiting for a picture.
-        $this->bucket()->put('import-files/' . self::PHOTO . '.pdf', 'x');
+        $this->receiveFile(self::PHOTO, 'pdf', 'x');
+        // Not read at all: no system prefix.
+        $this->bucket()->put('import-files/notes.txt', 'x');
+        $this->bucket()->put('import-files/Other_abc.pdf', 'x');
 
         $this->assertSame(0, Artisan::call('importFile:bucket', ['--sync' => true]));
+        $output = Artisan::output();
 
-        $this->assertStringContainsString(
-            'Files in the bucket folder import-files: 3. Linked to their booking now: 1, linked before: 0, named by a booking but not in the bucket yet: 2, in the bucket but not named by a booking yet: 1.',
-            Artisan::output()
+        $this->assertStringContainsString('Files received in import-files: 3. Saved now: 1 (copied to files, the received files moved to loaded-files), 1 file / image rows linked.', $output);
+        $this->assertStringContainsString('Linked before: 0. Named by a booking but not received yet: 2. Received but not named by a booking yet: 2 (they stay in import-files).', $output);
+
+        $this->assertSame('files/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
+        $this->assertSame('files/' . self::DOC, File::where('name', self::DOC)->value('path'));
+        $this->assertSame('files/' . self::PHOTO, Image::where('name', self::PHOTO)->value('path'));
+        $this->assertSame(['files/' . self::PDF . '.pdf'], $this->bucket()->files('files'));
+        $this->assertSame(['loaded-files/' . self::PDF . '.pdf'], $this->bucket()->files('loaded-files'));
+        $this->assertEqualsCanonicalizing(
+            ['import-files/SrvOnClickFiles_nobody_names_me.png', 'import-files/' . self::PHOTO . '.pdf', 'import-files/notes.txt', 'import-files/Other_abc.pdf'],
+            $this->bucket()->files('import-files'),
+            'what nobody takes, and what is not ours, stays where it is'
         );
-        $this->assertSame('import-files/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
-        $this->assertSame('import-files/' . self::DOC, File::where('name', self::DOC)->value('path'));
-        $this->assertSame('import-files/' . self::PHOTO, Image::where('name', self::PHOTO)->value('path'));
+        $this->assertSame(
+            ['file_name' => self::PDF . '.pdf', 'stream' => 'attachments', 'source' => 'bucket'],
+            DigitalHatchFetchedFile::where('stream', 'attachments')->firstOrFail()->only(['file_name', 'stream', 'source'])
+        );
 
-        // Run again: what was linked is not linked twice. Nothing in the folder was moved or deleted.
+        // Run again: nothing new is saved.
         $this->assertSame(0, Artisan::call('importFile:bucket', ['--sync' => true]));
-        $this->assertStringContainsString('Linked to their booking now: 0, linked before: 1, named by a booking but not in the bucket yet: 2', Artisan::output());
-        $this->assertCount(4, $this->bucket()->files('import-files'));
+        $output = Artisan::output();
+        $this->assertStringContainsString('Saved now: 0 (copied to files, the received files moved to loaded-files), 0 file / image rows linked.', $output);
+        $this->assertStringContainsString('Linked before: 1. Named by a booking but not received yet: 2.', $output);
     }
 
     public function test_the_old_mysql_names_still_run_the_bucket_imports(): void
@@ -352,17 +367,23 @@ class HatchImportCommandsTest extends HatchTestCase
 
     //----------------------------- The schedule ------------------------------------//
 
-    public function test_the_ftp_imports_are_scheduled_the_logs_after_the_bookings_and_the_fetch_only_commands_are_gone(): void
+    public function test_the_imports_are_scheduled_in_order_bookings_then_logs_then_files_and_the_fetch_only_commands_are_gone(): void
     {
         Artisan::call('schedule:list');
 
         $events = collect(app(Schedule::class)->events());
         $find = fn (string $name) => $events->first(fn ($event) => str_contains($event->command, $name));
 
+        // From the bucket: the booking files, the logs a minute later, the files and images after them (a log and a file belong to a booking).
+        $this->assertSame('*/5 * * * *', $find('importBookingJson:bucket')->expression);
+        $this->assertSame('1-59/5 * * * *', $find('importApplicationLogJson:bucket')->expression);
+        $this->assertSame('4-59/5 * * * *', $find('importFile:bucket')->expression);
+
+        // From the digital hatch, in the same order.
         $this->assertSame('2-59/5 * * * *', $find('importBookingJson:ftp')->expression);
         $this->assertSame('3-59/5 * * * *', $find('importApplicationLogJson:ftp')->expression);
         $this->assertSame('4-59/5 * * * *', $find('importFile:ftp')->expression);
-        $this->assertNull($find('importFile:bucket'), 'linking what is in the bucket is run by hand');
+
         $this->assertNull($find('digital-hatch:fetch'), 'the :ftp imports take the files themselves');
     }
 }

@@ -14,17 +14,15 @@ use Illuminate\Support\Str;
 
 /**
  * Takes the b2r files the mobile side put on the digital hatch and lands them in the bucket, where the importers (importBookingJson:bucket,
- * importApplicationLogJson:bucket, importFile:bucket) read them as if the mobile app had written them there. The hatch is the FTP; for local
- * testing the folders DIGITAL_HATCH_IMPORT_PATH (the json files) and DIGITAL_HATCH_IMPORT_FILES_PATH (the files and images) take its place.
- * What was taken is remembered by its name in digital_hatch_fetched_files, with its stream and where it came from, so nothing is taken twice
- * (unless $force); the source is never written to or cleaned.
+ * importApplicationLogJson:bucket, importFile:bucket) read them as if the mobile app had written them there: the json files in import-json, the
+ * files and images in import-files. The hatch is the FTP; for local testing the folders DIGITAL_HATCH_IMPORT_PATH (the json files) and
+ * DIGITAL_HATCH_IMPORT_FILES_PATH (the files and images) take its place. Only names with the system prefixes are taken (SrvOnClick_b2r_...,
+ * SrvOnClickFiles_...). What was taken is remembered by its name in digital_hatch_fetched_files, with its stream and where it came from, so
+ * nothing is taken twice (unless $force); the source is never written to or cleaned.
  */
 trait HatchImportable
 {
     use ResolvesAttachmentStoragePath;
-
-    /** The stream the attachments have in digital_hatch_fetched_files (they are not one of the json streams). */
-    public const ATTACHMENTS_STREAM = 'attachments';
 
     /**
      * Takes the new files of ONE b2r json stream - SrvOnClick_b2r_export_bookings_<date>.json or SrvOnClick_b2r_application_logs_<date>.json - into
@@ -96,8 +94,8 @@ trait HatchImportable
     }
 
     /**
-     * Takes the new attachments of the bookings - SrvOnClickFiles_<stored name>.<ext> (pdf, docx, ... images) - into the bucket folder AttachmentService
-     * reads. Only the types it serves are taken; they land under their own name.
+     * Takes the new attachments of the bookings - SrvOnClickFiles_<stored name>.<ext> (pdf, docx, ... images) - into the bucket folder the received
+     * files wait in (import-files). Only the types AttachmentService serves are taken; they land under their own name.
      * @param bool $force take the files again even when they were taken before
      * @return array{source: string, files: array<int, string>, errors: array<int, string>} where they came from, the names landed
      */
@@ -139,7 +137,7 @@ trait HatchImportable
                 }
 
                 // The ledger first (see downloadFiles).
-                static::markProcessed($fileName, self::ATTACHMENTS_STREAM, $source['kind']);
+                static::markProcessed($fileName, DigitalHatchFetchedFile::STREAM_ATTACHMENTS, $source['kind']);
 
                 try {
                     if (!$disk->put($this->attachmentStoragePathFor($fileName), $content)) {
@@ -160,14 +158,13 @@ trait HatchImportable
         return $result;
     }
 
-    /** Remembers a file of the source as taken, with its stream and where it came from, so the next run skips it. Throws when the ledger cannot be written. */
+    /**
+     * Remembers a file of the source as taken, with its stream and where it came from, so the next run skips it (a file taken again on purpose,
+     * --force, has its row refreshed). Throws when the ledger cannot be written.
+     */
     public static function markProcessed(string $fileName, string $stream, string $source): void
     {
-        try {
-            DigitalHatchFetchedFile::updateOrCreate(['file_name' => $fileName], ['stream' => $stream, 'source' => $source]);
-        } catch (\Throwable $e) {
-            throw new \RuntimeException("the ledger digital_hatch_fetched_files cannot be written (has its migration been run again?): {$e->getMessage()}", 0, $e);
-        }
+        DigitalHatchFetchedFile::record($fileName, $stream, $source, replace: true);
     }
 
     /**

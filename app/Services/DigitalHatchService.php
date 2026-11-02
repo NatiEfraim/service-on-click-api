@@ -10,9 +10,9 @@ use App\Traits\HatchImportable;
  * The b2r side of the digital hatch, what the ":ftp" import commands do: the new files the mobile side put on the FTP (or in the local test
  * folders) are taken into the bucket, then imported from there by the same services the ":bucket" commands use, so a json file ends up in the
  * database and in loaded-json:
- *  - importBookings: SrvOnClick_b2r_export_bookings_* -> import-json/booking-data -> ImportBookingService;
- *  - importApplicationLogs: SrvOnClick_b2r_application_logs_* -> import-json/application-log -> ImportApplicationLogService;
- *  - importFiles: SrvOnClickFiles_* -> import-files -> ImportFileService (links them to the bookings that name them).
+ *  - importBookings: SrvOnClick_b2r_export_bookings_* -> import-json -> ImportBookingService -> loaded-json;
+ *  - importApplicationLogs: SrvOnClick_b2r_application_logs_* -> import-json -> ImportApplicationLogService -> loaded-json;
+ *  - importFiles: SrvOnClickFiles_* -> import-files -> ImportFileService (saved with the bookings that name them, copied to files, moved to loaded-files).
  * (The r2b side is one service per stream: UsersExportService and BookingStatusSnapshotService.)
  * Each run is serialized by a lock, so the scheduler and a manual run cannot overlap. HATCH_ENABLED=false turns it off.
  */

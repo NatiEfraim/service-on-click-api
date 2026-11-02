@@ -62,6 +62,7 @@ class UsersExportService
         }
 
         $this->storageService->putJsonToBucket($fileName, $directory, $json);
+        $this->noteWrittenToBucket($fileName, $json);
 
         return ['written' => true, 'file' => $fileName, 'users' => count($users)];
     }

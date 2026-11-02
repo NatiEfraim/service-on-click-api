@@ -118,7 +118,8 @@ class DigitalHatchSendTest extends HatchTestCase
         $this->assertFalse($again['built']['written']);
         $this->assertSame('unchanged', $again['built']['reason']);
         $this->assertNull($again['file']);
-        $this->assertSame(1, DigitalHatchSentFile::count());
+        $this->assertSame(1, DigitalHatchSentFile::where('destination', 'ftp')->count());
+        $this->assertSame(1, DigitalHatchSentFile::where('destination', 'bucket')->count(), 'what was written to the bucket is remembered too');
 
         // A role is taken away: the day's file is rewritten and goes again under the same name.
         User::where('personal_number', self::PLAIN_USER)->firstOrFail()->revokePermissionTo('user_1');
@@ -128,7 +129,15 @@ class DigitalHatchSendTest extends HatchTestCase
         $this->assertSame($name, $third['file']);
         $this->assertNotSame($json, $this->ftp()->get(self::RED_TO_BLACK . $name));
         $this->assertSame($this->bucket()->get('export-json/users/' . $name), $this->ftp()->get(self::RED_TO_BLACK . $name));
-        $this->assertSame(2, DigitalHatchSentFile::count());
+        $this->assertSame(2, DigitalHatchSentFile::where('destination', 'ftp')->count());
+        $this->assertSame(2, DigitalHatchSentFile::where('destination', 'bucket')->count());
+
+        // The same version went to both places: its name and sha256 are the same in the two rows.
+        $this->assertSame(
+            DigitalHatchSentFile::where('destination', 'ftp')->orderBy('id')->get(['file_name', 'sha256'])->toArray(),
+            DigitalHatchSentFile::where('destination', 'bucket')->orderBy('id')->get(['file_name', 'sha256'])->toArray()
+        );
+        $this->assertSame(hash('sha256', $this->ftp()->get(self::RED_TO_BLACK . $name)), DigitalHatchSentFile::where('destination', 'ftp')->latest('id')->value('sha256'));
     }
 
     //----------------------------- The booking status file ------------------------------------//
@@ -347,7 +356,8 @@ class DigitalHatchSendTest extends HatchTestCase
 
         $this->assertSame($this->usersFileName(), app(UsersExportService::class)->export(force: true)['file']);
         $this->assertFileExists($file);
-        $this->assertSame(1, DigitalHatchSentFile::count(), 'a version is remembered once');
+        $this->assertSame(1, DigitalHatchSentFile::where('destination', 'local')->count(), 'a version is remembered once per place it went to');
+        $this->assertSame(0, DigitalHatchSentFile::where('destination', 'ftp')->count(), 'the local folder took the FTP\'s place');
     }
 
     //----------------------------- Commands and jobs ------------------------------------//
@@ -433,7 +443,7 @@ class DigitalHatchSendTest extends HatchTestCase
 
         $this->assertNotSame([], app(UsersExportService::class)->export()['errors']);
         $this->assertNotSame([], app(BookingStatusSnapshotService::class)->export()['errors']);
-        $this->assertSame(0, DigitalHatchSentFile::count(), 'a file that did not go is not remembered as sent');
+        $this->assertSame(0, DigitalHatchSentFile::whereIn('destination', ['ftp', 'local'])->count(), 'a file that did not go is not remembered as sent');
 
         $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(1);
         $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])->assertExitCode(1);

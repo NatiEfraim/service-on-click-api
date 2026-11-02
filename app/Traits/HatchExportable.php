@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Storage;
  * under the name it has in the bucket: SrvOnClick_r2b_booking_status_<date>.json, SrvOnClick_r2b_users_<date>.json.
  * Each stream has its own service, job and command (UsersExportService, BookingStatusSnapshotService); this is what they share.
  * For local testing DIGITAL_HATCH_EXPORT_PATH names a folder that takes the place of the FTP: the files are written straight into it.
+ * digital_hatch_sent_files remembers every version of a file by its name and sha256 for each place it went to (bucket, ftp, local), so the same
+ * content is never sent to a place twice.
  */
 trait HatchExportable
 {
@@ -71,8 +73,9 @@ trait HatchExportable
     protected function send(string $fileName, string $contents, bool $force = false): bool
     {
         $sha256 = hash('sha256', $contents);
+        $destination = $this->localExportPath() !== '' ? DigitalHatchSentFile::DESTINATION_LOCAL : DigitalHatchSentFile::DESTINATION_FTP;
 
-        if (!$force && DigitalHatchSentFile::where('file_name', $fileName)->where('sha256', $sha256)->exists()) {
+        if (!$force && DigitalHatchSentFile::wasSent($fileName, $sha256, $destination)) {
             return false;
         }
 
@@ -82,9 +85,15 @@ trait HatchExportable
             throw new \RuntimeException("could not put {$fileName} in {$this->exportDestination()}");
         }
 
-        DigitalHatchSentFile::updateOrCreate(['file_name' => $fileName, 'sha256' => $sha256], ['sent_at' => now()]);
+        DigitalHatchSentFile::record($fileName, $sha256, $destination);
 
         return true;
+    }
+
+    /** Notes in the ledger that this content of the file was written to the bucket (where the mobile side may read it), as the send notes the FTP. */
+    protected function noteWrittenToBucket(string $fileName, string $contents): void
+    {
+        DigitalHatchSentFile::record($fileName, hash('sha256', $contents), DigitalHatchSentFile::DESTINATION_BUCKET);
     }
 
     /** @return array{0: Filesystem, 1: string} the disk and the folder (empty, or with one slash at the end) the files are written to */

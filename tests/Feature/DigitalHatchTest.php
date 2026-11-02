@@ -62,9 +62,8 @@ class DigitalHatchTest extends HatchTestCase
         $this->assertSame([self::LOGS_ON_FTP], $taken['fetched']);
         $this->assertSame(1, ApplicationLog::count());
 
-        // The bucket folders the importers read are empty again, the files are in loaded-json under the names they had on the FTP.
-        $this->assertSame([], $this->bucket()->files('import-json/booking-data'));
-        $this->assertSame([], $this->bucket()->files('import-json/application-log'));
+        // The folder the importers read is empty again, the files are in loaded-json under the names they had on the FTP.
+        $this->assertSame([], $this->bucket()->files('import-json'));
         $this->assertEqualsCanonicalizing(
             ['loaded-json/' . self::BOOKINGS_ON_FTP, 'loaded-json/' . self::LOGS_ON_FTP],
             $this->bucket()->files('loaded-json')
@@ -92,7 +91,7 @@ class DigitalHatchTest extends HatchTestCase
 
         $this->assertSame([], $first['fetched']);
         $this->assertStringContainsString($partial, $first['errors'][0]);
-        $this->assertSame([], $this->bucket()->files('import-json/booking-data'));
+        $this->assertSame([], $this->bucket()->files('import-json'));
         $this->assertSame(0, DigitalHatchFetchedFile::count(), 'not marked, so it is tried again');
 
         $this->ftp()->put(self::BLACK_TO_RED . $partial, json_encode(['bookings' => []]));
@@ -118,6 +117,30 @@ class DigitalHatchTest extends HatchTestCase
         $this->assertSame(1, Booking::where('serial_number', 5201)->count());
         $this->assertSame(1, DigitalHatchFetchedFile::count(), 'one row per file name');
         $this->assertCount(2, $this->bucket()->files('loaded-json'), 'the second copy got the time in its name');
+    }
+
+    public function test_a_file_imported_from_the_bucket_is_noted_in_the_ledger_and_a_later_ftp_take_of_that_name_is_skipped(): void
+    {
+        $this->putBookingFile([$this->foodBooking(5701)], self::BOOKINGS_ON_FTP);
+        $this->putLogFile([$this->logRecord(5701, ActionTypeEnum::STORE_BOOKING->value, self::OWNER)], self::LOGS_ON_FTP);
+
+        app(ImportBookingService::class)->importFromBucket(sync: true);
+        app(\App\Services\ImportApplicationLogService::class)->importFromBucket(sync: true);
+
+        $this->assertEqualsCanonicalizing([
+            ['file_name' => self::BOOKINGS_ON_FTP, 'stream' => 'export_bookings', 'source' => 'bucket'],
+            ['file_name' => self::LOGS_ON_FTP, 'stream' => 'application_logs', 'source' => 'bucket'],
+        ], DigitalHatchFetchedFile::get(['file_name', 'stream', 'source'])->toArray());
+
+        // The same name on the FTP was imported already: it is not taken again, unless that is asked for.
+        $this->ftp()->put(self::BLACK_TO_RED . self::BOOKINGS_ON_FTP, json_encode(['bookings' => [$this->foodBooking(5701)]]));
+        $service = app(DigitalHatchService::class);
+
+        $this->assertSame([], $service->importBookings(sync: true)['fetched']);
+
+        $this->assertSame([self::BOOKINGS_ON_FTP], $service->importBookings(force: true, sync: true)['fetched']);
+        $this->assertSame('ftp', DigitalHatchFetchedFile::where('file_name', self::BOOKINGS_ON_FTP)->value('source'), 'taken again on purpose: the row says how it came now');
+        $this->assertSame(2, DigitalHatchFetchedFile::count());
     }
 
     public function test_the_import_still_reads_the_bucket_when_the_ftp_cannot_be_reached(): void
@@ -152,7 +175,7 @@ class DigitalHatchTest extends HatchTestCase
 
         $this->assertSame([], $result['fetched']);
         $this->assertStringContainsString('digital_hatch_fetched_files cannot be written', $result['errors'][0]);
-        $this->assertSame([], $this->bucket()->files('import-json/booking-data'), 'nothing landed, so nothing is taken twice');
+        $this->assertSame([], $this->bucket()->files('import-json'), 'nothing landed, so nothing is taken twice');
         $this->assertSame([], $result['imported']['files']);
         $this->assertSame(0, Booking::count());
     }
@@ -173,7 +196,7 @@ class DigitalHatchTest extends HatchTestCase
 
     //----------------------------- The files and images ------------------------------------//
 
-    public function test_the_ftp_import_of_files_takes_only_the_files_the_bookings_can_name_and_serve_and_links_them(): void
+    public function test_the_ftp_import_of_files_takes_only_the_files_the_bookings_can_name_and_serve_and_saves_them_when_their_booking_is_there(): void
     {
         $this->putBookingFile([$this->foodBooking(5401, ['files' => [['file_id' => 7, 'path' => self::PDF]]])]);
         app(ImportBookingService::class)->importFromBucket(sync: true);
@@ -190,22 +213,36 @@ class DigitalHatchTest extends HatchTestCase
         $this->assertSame([], $result['errors']);
         $this->assertSame('FTP folder /' . self::ATTACHMENTS, $result['source']);
         $this->assertSame([self::DOC . '.docx', self::PDF . '.pdf'], $result['fetched']);
-        $this->assertSame('%PDF-1.4 a', $this->bucket()->get('import-files/' . self::PDF . '.pdf'));
-        $this->assertSame('PK docx', $this->bucket()->get('import-files/' . self::DOC . '.docx'));
-        $this->assertEqualsCanonicalizing(['import-files/' . self::PDF . '.pdf', 'import-files/' . self::DOC . '.docx'], $this->bucket()->files('import-files'));
 
-        // The row the booking json created now knows where its bytes are; the document no booking names yet waits in the bucket.
-        $this->assertSame('import-files/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
+        // The file a booking names is saved: copied to files, the received one moved to loaded-files, the row knows where its bytes are.
+        $this->assertSame('%PDF-1.4 a', $this->bucket()->get('files/' . self::PDF . '.pdf'));
+        $this->assertSame('%PDF-1.4 a', $this->bucket()->get('loaded-files/' . self::PDF . '.pdf'));
+        $this->assertSame('files/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
         $this->assertSame(1, $result['imported']['linked']);
+        $this->assertSame(1, $result['imported']['moved']);
         $this->assertSame(2, $result['imported']['in_bucket']);
+
+        // The document no booking names yet waits in the inbox, copied nowhere.
         $this->assertSame(1, $result['imported']['unclaimed']);
+        $this->assertSame(['import-files/' . self::DOC . '.docx'], $this->bucket()->files('import-files'));
+        $this->assertSame(['files/' . self::PDF . '.pdf'], $this->bucket()->files('files'));
 
         $this->assertEqualsCanonicalizing([
             ['file_name' => self::PDF . '.pdf', 'stream' => 'attachments', 'source' => 'ftp'],
             ['file_name' => self::DOC . '.docx', 'stream' => 'attachments', 'source' => 'ftp'],
-        ], DigitalHatchFetchedFile::get(['file_name', 'stream', 'source'])->toArray());
+        ], DigitalHatchFetchedFile::where('stream', 'attachments')->get(['file_name', 'stream', 'source'])->toArray());
 
-        $this->assertSame([], app(DigitalHatchService::class)->importFiles()['fetched'], 'taken once');
+        // Its booking arrives later: the next run saves it from the inbox, nothing is taken from the FTP again.
+        $this->putBookingFile([$this->foodBooking(5402, ['files' => [['file_id' => 8, 'path' => self::DOC]]])]);
+        app(ImportBookingService::class)->importFromBucket(sync: true);
+
+        $again = app(DigitalHatchService::class)->importFiles();
+
+        $this->assertSame([], $again['fetched'], 'taken once');
+        $this->assertSame(1, $again['imported']['moved']);
+        $this->assertSame('files/' . self::DOC . '.docx', File::where('name', self::DOC)->value('path'));
+        $this->assertSame([], $this->bucket()->files('import-files'));
+        $this->assertSame('PK docx', $this->bucket()->get('loaded-files/' . self::DOC . '.docx'));
     }
 
     //----------------------------- Switches, output and failures ------------------------------------//
@@ -243,12 +280,12 @@ class DigitalHatchTest extends HatchTestCase
         $this->assertSame(0, Artisan::call('importFile:ftp', ['--sync' => true]));
         $output = Artisan::output();
         $this->assertStringContainsString('Taken into the bucket: ' . self::PDF . '.pdf', $output);
-        $this->assertStringContainsString('Files in the bucket folder import-files: 1.', $output);
+        $this->assertStringContainsString('Files received in import-files: 1.', $output);
 
         $this->assertSame(0, Artisan::call('importApplicationLogJson:ftp', ['--sync' => true]));
         $output = Artisan::output();
         $this->assertStringContainsString('No new file in the source', $output);
-        $this->assertStringContainsString('no file is waiting in import-json/application-log', $output);
+        $this->assertStringContainsString('no file is waiting in import-json', $output);
         $this->assertSame(0, Artisan::call('importFile:ftp', ['--sync' => true]));
         $this->assertStringContainsString('No new file in the source', Artisan::output());
     }

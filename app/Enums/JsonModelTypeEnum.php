@@ -35,7 +35,7 @@ enum JsonModelTypeEnum: int
         };
     }
 
-    /** Bucket folder where this type's files are dropped. */
+    /** Bucket folder where this type's files are dropped: the base folder itself (import-json) unless a subfolder is configured for the type. */
     public function importRemoteDirectory(): string
     {
         $folder = match ($this) {
@@ -43,7 +43,16 @@ enum JsonModelTypeEnum: int
             self::APPLICATION_LOG => config('filesystems.folder_name.import_json.application_log'),
         };
 
-        return trim((string) config('filesystems.folder_name.import_json.base'), '/') . '/' . $folder;
+        return trim(trim((string) config('filesystems.folder_name.import_json.base'), '/') . '/' . trim((string) $folder, '/'), '/');
+    }
+
+    /** The stream of the digital hatch this type's files belong to (how the fetched-files ledger names it). */
+    public function hatchStream(): DigitalHatchFileEnum
+    {
+        return match ($this) {
+            self::EXPORT_BOOKING => DigitalHatchFileEnum::EXPORT_BOOKINGS,
+            self::APPLICATION_LOG => DigitalHatchFileEnum::APPLICATION_LOGS,
+        };
     }
 
     /** Bucket folder a file is moved to once read. */

@@ -91,6 +91,30 @@ class TestImportEndpointTest extends ImportJsonTestCase
         $this->assertSame('09:00', substr($barber['barber_slot']['start_time'], 0, 5));
     }
 
+    public function test_it_saves_the_received_files_too_after_the_bookings_that_name_them(): void
+    {
+        $this->putBookingFile([$this->foodBooking(1101, ['files' => [['file_id' => 1, 'path' => 'SrvOnClickFiles_aa11_form']], 'images' => [['image_id' => 1, 'path' => 'SrvOnClickFiles_bb22_photo']]])]);
+        $this->receiveFile('SrvOnClickFiles_aa11_form', 'pdf', '%PDF-1.4');
+        $this->receiveFile('SrvOnClickFiles_bb22_photo', 'png', 'PNGDATA');
+        $this->receiveFile('SrvOnClickFiles_cc33_nobody', 'png', 'x');
+
+        $this->callAsSuperAdmin()
+            ->assertOk()
+            ->assertJsonPath('data.import.files.in_bucket', 3)
+            ->assertJsonPath('data.import.files.moved', 2)
+            ->assertJsonPath('data.import.files.linked', 2)
+            ->assertJsonPath('data.import.files.unclaimed', 1)
+            ->assertJsonPath('data.import.files.errors', [])
+            ->assertJsonPath('data.totals.files', 1)
+            ->assertJsonPath('data.totals.images', 1);
+
+        Storage::disk('minio')->assertExists(self::FILES_DIRECTORY . '/SrvOnClickFiles_aa11_form.pdf');
+        Storage::disk('minio')->assertExists(self::FILES_DIRECTORY . '/SrvOnClickFiles_bb22_photo.png');
+        Storage::disk('minio')->assertExists(self::LOADED_FILES_DIRECTORY . '/SrvOnClickFiles_aa11_form.pdf');
+        Storage::disk('minio')->assertMissing(self::FILES_INBOX . '/SrvOnClickFiles_aa11_form.pdf');
+        Storage::disk('minio')->assertExists(self::FILES_INBOX . '/SrvOnClickFiles_cc33_nobody.png');
+    }
+
     public function test_the_logs_are_saved_after_the_bookings_they_belong_to(): void
     {
         $this->putFiles();
@@ -202,6 +226,7 @@ class TestImportEndpointTest extends ImportJsonTestCase
             ->assertOk()
             ->assertJsonPath('data.import.bookings.disabled', true)
             ->assertJsonPath('data.import.application_logs.disabled', true)
+            ->assertJsonPath('data.import.files.disabled', true)
             ->assertJsonPath('data.totals.bookings', 0);
 
         Storage::disk('minio')->assertExists(self::BOOKING_DIRECTORY . '/' . self::BOOKINGS_FILE);

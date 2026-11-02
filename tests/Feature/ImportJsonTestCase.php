@@ -14,9 +14,15 @@ use Illuminate\Support\Facades\Storage;
  */
 abstract class ImportJsonTestCase extends ManagementTestCase
 {
-    protected const BOOKING_DIRECTORY = 'import-json/booking-data';
-    protected const LOG_DIRECTORY = 'import-json/application-log';
+    /** The booking and the log files are dropped in the same folder, told apart by their names. */
+    protected const BOOKING_DIRECTORY = 'import-json';
+    protected const LOG_DIRECTORY = 'import-json';
     protected const LOADED_DIRECTORY = 'loaded-json';
+
+    /** Files and images: received in the first, copied to the second (where the bookings serve them from), the received ones moved to the third. */
+    protected const FILES_INBOX = 'import-files';
+    protected const FILES_DIRECTORY = 'files';
+    protected const LOADED_FILES_DIRECTORY = 'loaded-files';
 
     protected const BOOKINGS_FILE = 'SrvOnClick_b2r_export_bookings_2026-10-29.json';
     protected const LOGS_FILE = 'SrvOnClick_b2r_application_logs_2026-10-29.json';
@@ -157,5 +163,11 @@ abstract class ImportJsonTestCase extends ManagementTestCase
     protected function putLogFile(array $logs, string $name = self::LOGS_FILE): void
     {
         Storage::disk('minio')->put(self::LOG_DIRECTORY . '/' . $name, json_encode(['application_logs' => $logs], JSON_UNESCAPED_UNICODE));
+    }
+
+    /** The bytes of a file or an image as the mobile side delivers them: SrvOnClickFiles_<stored name>.<ext> in the inbox. */
+    protected function receiveFile(string $storedName, string $extension, string $bytes = 'bytes'): void
+    {
+        Storage::disk('minio')->put(self::FILES_INBOX . "/{$storedName}.{$extension}", $bytes);
     }
 }

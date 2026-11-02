@@ -7,6 +7,7 @@ use App\Console\Commands\ImportApplicationLogJsonBucketCommand;
 use App\Console\Commands\ImportApplicationLogJsonFtpCommand;
 use App\Console\Commands\ImportBookingJsonBucketCommand;
 use App\Console\Commands\ImportBookingJsonFtpCommand;
+use App\Console\Commands\ImportFileBucketCommand;
 use App\Console\Commands\ImportFileFtpCommand;
 use App\Console\Commands\VerifyAuditLogCommand;
 use Illuminate\Foundation\Inspiring;
@@ -21,15 +22,21 @@ Artisan::command('inspire', function () {
 
 // These commands only queue jobs, so a queue worker must be running.
 
-// Booking files in import-json/booking-data (ImportBookingJsonBucketJob, then ImportBookingJsonChunkJob for the rows).
+// Booking files in import-json (ImportBookingJsonBucketJob, then ImportBookingJsonChunkJob for the rows).
 Schedule::command(ImportBookingJsonBucketCommand::class)
     ->cron(config('app.jobs.import_booking_json.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping();
 
-// Application logs; a minute after the bookings because a log belongs to a booking.
+// Application logs, also in import-json; a minute after the bookings because a log belongs to a booking.
 Schedule::command(ImportApplicationLogJsonBucketCommand::class)
     ->cron(config('app.jobs.import_application_log_json.cron'))
+    ->timezone(config('app.timezone'))
+    ->withoutOverlapping();
+
+// Files and images in import-files: saved, copied to files and moved to loaded-files (ImportFileBucketJob); after the bookings they belong to.
+Schedule::command(ImportFileBucketCommand::class)
+    ->cron(config('app.jobs.import_file.cron'))
     ->timezone(config('app.timezone'))
     ->withoutOverlapping();
 

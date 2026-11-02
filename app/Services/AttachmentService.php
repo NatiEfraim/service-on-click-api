@@ -14,7 +14,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Files and images of bookings. The booking json only names them ("SrvOnClickFiles_<stored name>", no extension) and the bytes arrive
- * separately in one bucket folder, so register() links them when the json is read and resolve() finds the object when it is wanted.
+ * separately, so register() saves the row when the json is read, ImportFileService gives it the key of its bytes once they are received
+ * (a copy in the folder the bookings serve their attachments from, "files"), and resolve() finds the object when it is wanted.
  * Served only through the API, to users who may see the booking, and only the types below.
  */
 class AttachmentService

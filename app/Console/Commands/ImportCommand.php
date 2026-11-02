@@ -151,16 +151,26 @@ abstract class ImportCommand extends Command
     /** @param array<string, mixed> $imported ImportFileService::importFromBucket @return array<int, string> */
     private function describeFiles(array $imported): array
     {
-        $folder = (string) config('filesystems.folder_name.attachments');
+        $inbox = (string) config('filesystems.folder_name.import_files');
+        $live = (string) config('filesystems.folder_name.attachments');
+        $loaded = (string) config('filesystems.folder_name.loaded_files');
 
         if ($imported['busy']) {
-            $this->info("Nothing imported: another run is reading {$folder}.");
+            $this->info("Nothing imported: another run is reading {$inbox}.");
 
             return [];
         }
 
-        $this->info("Files in the bucket folder {$folder}: {$imported['in_bucket']}. Linked to their booking now: {$imported['linked']}, linked before: "
-            . "{$imported['already_linked']}, named by a booking but not in the bucket yet: {$imported['waiting']}, in the bucket but not named by a booking yet: {$imported['unclaimed']}.");
+        $this->info("Files received in {$inbox}: {$imported['in_bucket']}. Saved now: {$imported['moved']} (copied to {$live}, the received files moved to {$loaded}), "
+            . "{$imported['linked']} file / image rows linked.");
+        $this->info("Linked before: {$imported['already_linked']}. Named by a booking but not received yet: {$imported['waiting']}. "
+            . "Received but not named by a booking yet: {$imported['unclaimed']} (they stay in {$inbox}).");
+
+        foreach ([['waiting_names', 'waiting', 'Not received yet'], ['unclaimed_names', 'unclaimed', "Waiting in {$inbox} for their booking"]] as [$names, $total, $label]) {
+            if ($imported[$names] !== []) {
+                $this->info("{$label}: " . implode(', ', $imported[$names]) . ($imported[$total] > count($imported[$names]) ? ', ...' : ''));
+            }
+        }
 
         return $imported['errors'];
     }

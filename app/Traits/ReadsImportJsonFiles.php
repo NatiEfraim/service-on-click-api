@@ -3,12 +3,14 @@
 namespace App\Traits;
 
 use App\Enums\JsonModelTypeEnum;
+use App\Models\DigitalHatchFetchedFile;
 use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Shared import step: reads waiting bucket files, queues their rows as chunk jobs, moves the file to loaded-json.
+ * Shared import step: reads the waiting files of this type in the bucket's import-json folder (only those with the system prefix, e.g.
+ * SrvOnClick_b2r_export_bookings_), queues their rows as chunk jobs, moves the file to loaded-json and notes it in digital_hatch_fetched_files.
  * The using service needs a StorageService in $this->storageService.
  */
 trait ReadsImportJsonFiles
@@ -96,6 +98,7 @@ trait ReadsImportJsonFiles
         if ($errors === []) {
             $loadedDirectory = JsonModelTypeEnum::loadedRemoteDirectory();
             $movedTo = $loadedDirectory . '/' . $this->storageService->moveBucketFile($fileName, $directory, $loadedDirectory);
+            $this->noteImported($type, $fileName);
         }
 
         Log::info("Import of {$fileName}: " . count($rows) . ' rows in ' . count($chunks) . ' chunks ' . ($sync ? 'saved' : 'queued')
@@ -109,5 +112,18 @@ trait ReadsImportJsonFiles
             'stats' => $stats,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Notes in the ledger of the digital hatch that this file was imported from the bucket (a file a ":ftp" import took there first keeps its row).
+     * The ledger only records; the import does not depend on it.
+     */
+    private function noteImported(JsonModelTypeEnum $type, string $fileName): void
+    {
+        try {
+            DigitalHatchFetchedFile::record($fileName, $type->hatchStream()->value, DigitalHatchFetchedFile::SOURCE_BUCKET);
+        } catch (\Throwable $e) {
+            Log::warning("Import of {$fileName} was saved but could not be noted in the ledger: " . $e->getMessage());
+        }
     }
 }

@@ -180,7 +180,25 @@ class StorageService
         return $disk->exists($fileKey) ? (string) $disk->get($fileKey) : null;
     }
 
-    /** Moves a file to another bucket folder (copy, then delete). If the name exists there, the moved file gets the date and time before ".json". @return string the name in $toDirectory */
+    /** Copies a file to another bucket folder under the same name, replacing the one that is there; the original stays. @return string the object key written */
+    public function copyBucketFile(string $fileName, string $fromDirectory, string $toDirectory): string
+    {
+        $disk = Storage::disk(config('filesystems.storage_service'));
+        $from = $this->buildBucketKey($fromDirectory, $fileName);
+        $to = $this->buildBucketKey($toDirectory, $fileName);
+
+        if (!$disk->exists($from)) {
+            throw new \RuntimeException("File {$from} not found in the bucket");
+        }
+
+        if (!$disk->copy($from, $to)) {
+            throw new \RuntimeException("Could not copy {$from} to {$toDirectory}");
+        }
+
+        return $to;
+    }
+
+    /** Moves a file to another bucket folder (copy, then delete). If the name exists there, the moved file gets the date and time before its extension. @return string the name in $toDirectory */
     public function moveBucketFile(string $fileName, string $fromDirectory, string $toDirectory): string
     {
         $disk = Storage::disk(config('filesystems.storage_service'));

@@ -8,11 +8,26 @@ use App\Services\DigitalHatchService;
 use App\Services\ImportFileService;
 use Illuminate\Support\Facades\Log;
 
-/** The files and images of the bookings (SrvOnClickFiles_<stored name>.<ext>): the bytes sit in one bucket folder and are linked to the rows the booking json created. */
+/**
+ * The files and images of the bookings (SrvOnClickFiles_<stored name>.<ext>): the bytes wait in one bucket folder (import-files) and are saved
+ * in the database - linked to the rows the booking json created - copied to the folder the bookings serve them from and moved to loaded-files.
+ */
 trait ImportsFile
 {
+    /** Saves the received files and images when enabled. (What GET /api/test-import runs, after the bookings, because a file belongs to a booking.) */
+    protected function importFile(): array
+    {
+        if (!config('app.import_json.enabled', true)) {
+            Log::info('File import is disabled (IMPORT_JSON_ENABLED=false).');
+
+            return ['disabled' => true, 'busy' => false, 'errors' => []];
+        }
+
+        return app(ImportFileService::class)->importFromBucket();
+    }
+
     /**
-     * importFile:bucket - queues ImportFileBucketJob (a queue worker runs it), or with $sync links the files in the bucket folder here and returns
+     * importFile:bucket - queues ImportFileBucketJob (a queue worker runs it), or with $sync saves the files waiting in the bucket here and returns
      * what it did.
      * @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>}
      */
@@ -34,8 +49,8 @@ trait ImportsFile
     }
 
     /**
-     * importFile:ftp - queues ImportFileFtpJob, or with $sync takes the new files and images from the digital hatch into the bucket folder and
-     * links them here. Off while HATCH_ENABLED=false.
+     * importFile:ftp - queues ImportFileFtpJob, or with $sync takes the new files and images from the digital hatch into the bucket and saves them
+     * here. Off while HATCH_ENABLED=false.
      * @param bool $force take the files again even when they were taken before
      * @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>}
      */

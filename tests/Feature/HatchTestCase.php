@@ -68,12 +68,12 @@ abstract class HatchTestCase extends ImportJsonTestCase
         config(['services.digital-hatch.local.export.path' => $this->localDir]);
     }
 
-    /** Two folders that exist and take the place of the FTP's b2r folders: the json files (like tikshort-ftp/b2r) and the attachments (tikshort-ftp/r2b_files). */
+    /** Two folders that exist and take the place of the FTP's b2r folders: the json files (like tikshort-ftp/b2r) and the attachments (tikshort-ftp/b2r_files). */
     protected function useLocalImportFolders(): void
     {
         $this->localImportBase = sys_get_temp_dir() . '/hatch-b2r-' . uniqid();
         $this->localJsonDir = $this->localImportBase . '/b2r';
-        $this->localFilesDir = $this->localImportBase . '/r2b_files';
+        $this->localFilesDir = $this->localImportBase . '/b2r_files';
 
         mkdir($this->localJsonDir, 0777, true);
         mkdir($this->localFilesDir, 0777, true);

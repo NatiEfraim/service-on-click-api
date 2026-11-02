@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Mockery\MockInterface;
 
-/** The application log files in import-json/application-log: a log belongs to a booking, so the bookings come first. */
+/** The application log files in import-json (next to the booking files, told apart by their names): a log belongs to a booking, so the bookings come first. */
 class ImportApplicationLogJsonTest extends ImportJsonTestCase
 {
     private function importLogs(): array
@@ -206,11 +206,11 @@ class ImportApplicationLogJsonTest extends ImportJsonTestCase
         $this->assertSame(5, ApplicationLog::count());
     }
 
-    public function test_the_log_folder_and_the_booking_folder_are_read_separately(): void
+    public function test_the_log_import_leaves_the_booking_files_that_share_its_folder_alone(): void
     {
         $this->saveBookings();
 
-        // A booking file dropped in the log folder (and the other way round) is not what that folder's import reads.
+        // Booking and log files wait in the same folder: each import reads only the names of its own kind.
         Storage::disk('minio')->put(self::LOG_DIRECTORY . '/SrvOnClick_b2r_export_bookings_2026-10-30.json', json_encode(['bookings' => [$this->foodBooking(4004)]]));
         $this->putLogFile([$this->logRecord(1001, ActionTypeEnum::STORE_BOOKING->value, self::OWNER)]);
 

@@ -100,6 +100,11 @@ return [
             'timeout' => (int) env('DIGITAL_HATCH_SEND_BOOKING_STATUS_JOB_TIMEOUT', 300),
         ],
 
+        // The files and images wait in the bucket folder import-files; a file belongs to a booking, so this comes after the two crons above.
+        'import_file' => [
+            'cron' => env('IMPORT_FILE_CRON', '4-59/5 * * * *'),
+        ],
+
         // The b2r import commands (importBookingJson, importApplicationLogJson, importFile; each ":bucket" or ":ftp") only queue their own job, so a
         // queue worker must be running. The job reads the bucket folder (and, for ":ftp", first takes the new files from the digital hatch into it)
         // and queues the chunk jobs above. A run that fails (FTP down) is tried again after the back-off. All six jobs use these settings.

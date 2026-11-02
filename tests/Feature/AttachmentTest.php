@@ -43,9 +43,10 @@ class AttachmentTest extends ImportJsonTestCase
         ]);
     }
 
+    /** The bytes where the bookings serve their files from (what the file import saves there; ImportFileTest tests the import itself). */
     private function deliver(string $name, string $extension, string $bytes = 'bytes'): void
     {
-        Storage::disk('minio')->put("import-files/{$name}.{$extension}", $bytes);
+        Storage::disk('minio')->put(self::FILES_DIRECTORY . "/{$name}.{$extension}", $bytes);
     }
 
     public function test_the_import_links_the_files_and_images_a_booking_names_and_reading_it_again_adds_nothing(): void
@@ -63,8 +64,8 @@ class AttachmentTest extends ImportJsonTestCase
         $this->assertEqualsCanonicalizing([self::PDF, self::DOC], $booking->files->pluck('name')->all());
         $this->assertSame([self::PHOTO], $booking->images->pluck('name')->all());
 
-        // The bytes are not there yet: the row keeps the key without an extension.
-        $this->assertSame('import-files/' . self::PDF, File::where('name', self::PDF)->value('path'));
+        // The bytes are not there yet: the row keeps the key without an extension, in the folder the bookings serve their files from.
+        $this->assertSame(self::FILES_DIRECTORY . '/' . self::PDF, File::where('name', self::PDF)->value('path'));
 
         // The same file read again (the mobile side sends full records again after a restart): nothing is added, nothing changes.
         $this->putBookingWithAttachments();
@@ -131,8 +132,8 @@ class AttachmentTest extends ImportJsonTestCase
         $this->assertFalse($attachments[self::PHOTO]['available']);
 
         // The key that was found is kept (with its extension); the others still wait.
-        $this->assertSame('import-files/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
-        $this->assertSame('import-files/' . self::DOC, File::where('name', self::DOC)->value('path'));
+        $this->assertSame(self::FILES_DIRECTORY . '/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
+        $this->assertSame(self::FILES_DIRECTORY . '/' . self::DOC, File::where('name', self::DOC)->value('path'));
 
         $row = collect($this->as(self::SUPER_ADMIN)->getJson(self::API . '/bookings')->assertOk()->json('data'))->firstWhere('serial_number', 2001);
         $this->assertSame(3, $row['attachments_count']);
@@ -150,7 +151,7 @@ class AttachmentTest extends ImportJsonTestCase
 
         $this->deliver(self::PDF, 'pdf');
 
-        $this->assertSame('import-files/' . self::PDF . '.pdf', $service->resolve($file->fresh()));
+        $this->assertSame(self::FILES_DIRECTORY . '/' . self::PDF . '.pdf', $service->resolve($file->fresh()));
         $this->assertSame(self::PDF . '.pdf', $file->fresh()->file_name);
     }
 

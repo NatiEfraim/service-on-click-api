@@ -35,6 +35,14 @@
         <env name="DIGITAL_HATCH_EXPORT_PATH" value=""/>
         <env name="DIGITAL_HATCH_IMPORT_PATH" value=""/>
         <env name="DIGITAL_HATCH_IMPORT_FILES_PATH" value=""/>
+        <!-- The bucket folders: a .env that renames one must not change what the tests read and write. -->
+        <env name="IMPORT_JSON" value="import-json"/>
+        <env name="BOOKING_DATA_JSON_FOLDER_NAME" value=""/>
+        <env name="APPLICATION_LOG_JSON_FOLDER_NAME" value=""/>
+        <env name="LOADED_JSON_FOLDER_NAME" value="loaded-json"/>
+        <env name="IMPORT_FILES_FOLDER_NAME" value="import-files"/>
+        <env name="LOADED_FILES_FOLDER_NAME" value="loaded-files"/>
+        <env name="ATTACHMENTS_FOLDER_NAME" value="files"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

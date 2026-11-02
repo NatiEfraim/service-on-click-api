@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Mockery\MockInterface;
 
-/** The booking files in import-json/booking-data: what is saved, what is skipped, and that reading a file twice changes nothing. */
+/** The booking files in import-json: what is saved, what is skipped, and that reading a file twice changes nothing. */
 class ImportBookingJsonTest extends ImportJsonTestCase
 {
     private function import(): array

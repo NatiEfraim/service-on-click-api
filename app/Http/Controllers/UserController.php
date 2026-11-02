@@ -10,6 +10,7 @@ use App\Services\StorageService;
 use App\Services\UserService;
 use App\Traits\ImportsApplicationLogJson;
 use App\Traits\ImportsBookingJson;
+use App\Traits\ImportsFile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,6 +19,7 @@ class UserController extends Controller
 {
     use ImportsApplicationLogJson;
     use ImportsBookingJson;
+    use ImportsFile;
 
     public function __construct(
         private readonly UserService $userService,
@@ -82,16 +84,17 @@ class UserController extends Controller
     }
 
     /**
-     * Runs the scheduled import commands' work (bookings, then logs) inside this request, chunk jobs included, and returns the imported data.
-     * ?page, ?per_page (max 50), ?booking_type_id and ?serial_number (or its start) choose which bookings are shown.
+     * Runs the scheduled import commands' work (bookings, then logs, then files and images) inside this request, chunk jobs included, and returns
+     * the imported data. ?page, ?per_page (max 50), ?booking_type_id and ?serial_number (or its start) choose which bookings are shown.
      */
     public function testImport(TestImportRequest $request): JsonResponse
     {
         try {
-            // The bookings first: a log belongs to a booking.
+            // The bookings first: a log and a file belong to a booking.
             $import = [
                 'bookings' => $this->importBookingJson(sync: true),
                 'application_logs' => $this->importApplicationLogJson(sync: true),
+                'files' => $this->importFile(),
             ];
 
             $imported = $this->importBookingService->importedData(

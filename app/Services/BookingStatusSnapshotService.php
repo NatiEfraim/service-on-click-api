@@ -92,6 +92,7 @@ class BookingStatusSnapshotService
         }
 
         $this->storageService->putJsonToBucket($fileName, $directory, $json);
+        $this->noteWrittenToBucket($fileName, $json);
 
         return ['written' => true, ...$result];
     }
