@@ -47,8 +47,10 @@ class UserService
             $query = User::with(['roles', 'permissions', 'unit', 'department'])->where('is_deleted', false);
 
             // Admins manage their own unit's people (assertMayManage); the super admin everybody.
-            if (!Auth::user()->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName())) {
-                $query->where('unit_id', Auth::user()->unit_id);
+            /** @var User $actor Auth::user() is typed as the Authenticatable contract, which has no hasRole(). */
+            $actor = Auth::user();
+            if (!$actor->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName())) {
+                $query->where('unit_id', $actor->unit_id);
             }
 
             if (!is_null($identifier)) {
@@ -125,7 +127,7 @@ class UserService
         return User::whereIn('personal_number', array_values(array_unique(array_filter($personalNumbers))))
             ->with('roles')
             ->get()
-            ->sortBy(fn (User $user) => [
+            ->sortBy(fn ($user) => [
                 (int) $user->is_deleted,
                 $user->roles->map(fn ($role) => $priority[$role->name] ?? 5)->min() ?? 5,
             ])
@@ -134,41 +136,47 @@ class UserService
 
     /**
      * The user of an ADFS login, from the database only (nobody is created). Found by personal number, else by the ID number Vatican holds
-     * for it; whichever of the two the row lacks is filled in from Vatican.
+     * for it; whatever the row lacks (personal number, ID number, full name) is filled in from Vatican, so a bare row the mobile app
+     * created from an ID number alone becomes the full person instead of a duplicate.
      * @param ?string $usernameNumber the number the ADFS user name ends with (ARMY\c9810738)
      */
     public function findForAdfsLogin(string $personalNumber, ?string $usernameNumber = null): ?User
     {
         $user = $this->findForLogin([$personalNumber, $usernameNumber]);
 
-        // Vatican is asked only when it can matter: no row has this personal number, or the row lacks an ID number.
-        $vatican = is_null($user) || is_null($user->personal_id) ? $this->getUserFromVatican($personalNumber) : null;
+        // Vatican is asked only when it can matter: no row has this personal number, or the row lacks an ID number or a name.
+        $vatican = is_null($user) || is_null($user->personal_id) || blank($user->full_name) ? $this->getUserFromVatican($personalNumber) : null;
 
         if (is_null($user) && !is_null($vatican['personal_id'] ?? null)) {
             $user = User::where('personal_id', $vatican['personal_id'])->first();
         }
 
         if ($user && $vatican) {
-            $this->fillMissingIdentifiers($user, $vatican);
+            $this->fillMissingDetails($user, $vatican);
         }
 
         return $user;
     }
 
-    /** Fills in the personal/ID number the row lacks from Vatican, skipping a value another row holds (both columns are unique). @param array{personal_number: string, personal_id: ?string} $vatican */
-    private function fillMissingIdentifiers(User $user, array $vatican): void
+    /**
+     * Fills in what the row lacks from Vatican, never overwriting a value the row has. The personal/ID number is skipped when another row
+     * holds it (both columns are unique).
+     * @param array{personal_number: string, personal_id: ?string, full_name: ?string} $vatican
+     */
+    private function fillMissingDetails(User $user, array $vatican): void
     {
         $fromVatican = [
             'personal_number' => preg_match('/^\d{7,8}$/', $vatican['personal_number']) === 1 ? $vatican['personal_number'] : null,
             'personal_id' => $vatican['personal_id'],
+            'full_name' => $vatican['full_name'],
         ];
 
         foreach ($fromVatican as $column => $value) {
-            if (!is_null($user->{$column}) || is_null($value)) {
+            if (!blank($user->{$column}) || blank($value)) {
                 continue;
             }
 
-            if (User::where($column, $value)->exists()) {
+            if ($column !== 'full_name' && User::where($column, $value)->exists()) {
                 Log::warning("Login: the {$column} Vatican gave for user {$user->id} belongs to another user, so it was not filled in.");
                 continue;
             }
@@ -189,7 +197,7 @@ class UserService
         }
     }
 
-    /** Looks a person up in Vatican for their ID number; null when unknown or unreachable. @return ?array{personal_number: string, personal_id: ?string} */
+    /** Looks a person up in Vatican for their ID number and name; null when unknown or unreachable. @return ?array{personal_number: string, personal_id: ?string, full_name: ?string} */
     private function getUserFromVatican(string $personalNumber): ?array
     {
         try {
@@ -201,6 +209,8 @@ class UserService
                 'columns' => implode(',', [
                     AdfsColumnsEnum::PERSONAL_NUMBER->value,
                     AdfsColumnsEnum::PERSONAL_ID->value,
+                    AdfsColumnsEnum::FIRST_NAME->value,
+                    AdfsColumnsEnum::SURNAME->value,
                 ]),
             ];
 
@@ -241,6 +251,7 @@ class UserService
             return [
                 'personal_number' => (string) $userFromVatican['personal_number'],
                 'personal_id' => $this->normalizePersonalId($userFromVatican['personal_id'] ?? null),
+                'full_name' => $this->fullName($userFromVatican['first_name'] ?? null, $userFromVatican['surname'] ?? null),
             ];
         } catch (ResponseException $e) {
             if ($e->getResponse()->getStatusCode() !== 404) {
@@ -289,6 +300,14 @@ class UserService
         }
 
         return $userIds;
+    }
+
+    /** First name and surname as one name; null when Vatican gave neither. */
+    private function fullName(mixed $firstName, mixed $surname): ?string
+    {
+        $parts = array_filter([$firstName, $surname], fn ($part) => is_string($part) && trim($part) !== '');
+
+        return $parts === [] ? null : implode(' ', array_map('trim', $parts));
     }
 
     /** An ID number as stored: nine digits with leading zeros; null for anything else (empty, too long, not digits, all zeros). @return ?string */

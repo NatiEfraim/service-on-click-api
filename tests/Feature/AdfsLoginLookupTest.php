@@ -58,7 +58,7 @@ class AdfsLoginLookupTest extends TestCase
         $this->assertTrue($user->is($this->findForAdfsLogin('8000002')));
         $this->assertSame('123456782', $user->fresh()->personal_id);
 
-        // The systems login first, then the person, asking only for the two numbers.
+        // The systems login first, then the person, asking only for the numbers and the name.
         $this->assertCount(2, $this->vaticanRequests);
         $login = $this->vaticanRequests[0]['request'];
         $lookup = $this->vaticanRequests[1]['request'];
@@ -66,7 +66,46 @@ class AdfsLoginLookupTest extends TestCase
         $this->assertSame('/api/users/8000002', $lookup->getUri()->getPath());
         $this->assertSame('Bearer vatican-token', $lookup->getHeaderLine('Authorization'));
         parse_str($lookup->getUri()->getQuery(), $query);
-        $this->assertSame('personalNumber,personalId', $query['columns']);
+        $this->assertSame('personalNumber,personalId,firstName,surname', $query['columns']);
+    }
+
+    public function test_a_bare_row_found_by_the_id_number_gets_the_personal_number_and_name_without_a_duplicate(): void
+    {
+        // Created from an ID number alone: no personal number, no name, no phone.
+        $bare = User::factory()->bookingOwner()->create(['personal_id' => '315552810', 'full_name' => null, 'phone' => '0532157802']);
+
+        $this->vaticanKnows('9910738', '315552810', 'נתנאל', 'אפרים');
+
+        $found = $this->findForAdfsLogin('9910738');
+
+        $this->assertTrue($bare->is($found));
+        $bare->refresh();
+        $this->assertSame('9910738', $bare->personal_number);
+        $this->assertSame('נתנאל אפרים', $bare->full_name);
+        $this->assertSame('0532157802', $bare->phone, 'what the row already has stays');
+        $this->assertSame(1, User::count());
+    }
+
+    public function test_a_row_with_both_numbers_but_no_name_gets_the_name_from_vatican(): void
+    {
+        $user = User::factory()->create(['personal_number' => '8000017', 'personal_id' => '123456782', 'full_name' => null]);
+
+        $this->vaticanKnows('8000017', '123456782', 'רועי', 'סחייק');
+
+        $this->assertTrue($user->is($this->findForAdfsLogin('8000017')));
+        $this->assertSame('רועי סחייק', $user->fresh()->full_name);
+    }
+
+    public function test_a_name_the_row_already_has_is_never_overwritten(): void
+    {
+        $user = User::factory()->create(['personal_number' => '8000018', 'personal_id' => null, 'full_name' => 'שם שנערך ידנית']);
+
+        $this->vaticanKnows('8000018', '123456782', 'רועי', 'סחייק');
+
+        $this->findForAdfsLogin('8000018');
+
+        $this->assertSame('שם שנערך ידנית', $user->fresh()->full_name);
+        $this->assertSame('123456782', $user->fresh()->personal_id);
     }
 
     public function test_an_id_number_vatican_holds_without_its_leading_zero_is_padded_to_nine_digits(): void
@@ -220,11 +259,16 @@ class AdfsLoginLookupTest extends TestCase
     }
 
     /** Vatican knows the person: it logs the app in, then returns the record with this ID number. */
-    private function vaticanKnows(string $personalNumber, mixed $personalId): void
+    private function vaticanKnows(string $personalNumber, mixed $personalId, ?string $firstName = null, ?string $surname = null): void
     {
         $this->vaticanAnswers([
             new Response(200, [], json_encode(['access_token' => 'vatican-token'])),
-            new Response(200, [], json_encode([['personal_number' => $personalNumber, 'personal_id' => $personalId]])),
+            new Response(200, [], json_encode([[
+                'personal_number' => $personalNumber,
+                'personal_id' => $personalId,
+                'first_name' => $firstName,
+                'surname' => $surname,
+            ]])),
         ]);
     }
 
