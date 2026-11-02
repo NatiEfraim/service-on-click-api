@@ -218,7 +218,15 @@ class StorageService
 
     private function temporaryUrl(string $path): string
     {
-        return Storage::disk(config('filesystems.storage_service'))->temporaryUrl(
+        $diskName = config('filesystems.storage_service');
+        $disk = Storage::disk($diskName);
+
+        // Only some drivers (s3, minio) can sign a URL, and the Filesystem contract does not declare the method.
+        if (!method_exists($disk, 'temporaryUrl')) {
+            throw new \RuntimeException("The storage disk \"{$diskName}\" cannot create temporary URLs.");
+        }
+
+        return $disk->temporaryUrl(
             $path,
             now()->addMinutes((int) config('filesystems.temp_url_lifetime', 30))
         );
