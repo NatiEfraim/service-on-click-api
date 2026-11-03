@@ -18,9 +18,9 @@ The role names are Spatie roles. **What a user may do inside a booking type come
 |---|---|---|---|
 | `super_admin` | מנהל מערכת | all three below | **yes, everywhere** - acts as the admin of every booking type, in every unit (no per-type permission needed) |
 | `admin` | מפקד מחנה | `bookings-approver-management`, `bookings-admin-management` | **yes, every turn** - on the booking types it holds `admin_{type}` for, in its own unit: acts as control officer, vice approver and approver, and manages their roles |
-| `approver` | מפקד תחום | `bookings-approver-management` | yes - the final decision |
-| `vice_approver` | גורם מטפל | `bookings-approver-management` | yes - the first decision |
-| `transportation_control_officer` | רמ"ד תו"ב | `bookings-approver-management` | yes - only where that role is linked to the booking type (not seeded today) |
+| `approver` | מפקד תחום | `bookings-approver-management` | yes - the final decision, and the shortcut to it from the stages below (see the route) |
+| `vice_approver` | גורם מטפל | `bookings-approver-management` | yes - the first decision (the second on transportation) |
+| `transportation_control_officer` | רמ"ד תו"ב | `bookings-approver-management` | yes - the first decision, on **transportation (8) only**: the seeders link the role to that booking type and create `transportation_control_officer_8`, so it can be granted with `assign-approver-role` |
 | `user` | משתמש | none of these | no |
 
 Route groups (prefixes under `/api`):
@@ -34,19 +34,27 @@ another unit or type behaves as if it did not exist (**404**).
 
 ### Turn-based route (important for the buttons)
 
-A booking moves through the roles in turn, and only the role whose turn it is may act (the admin of the type holds every turn):
+A booking moves up through the roles in turn, and the role whose turn it is acts (the admin of the type holds every turn). The approver and the
+admin may also skip the stages below them with the final approval:
 
 ```
-received ──vice approver──▶ 15 / 16 ──approver──▶ approved(3) / rejected(4)
+(transportation) received ──control officer──▶ 17 / 18 ──vice approver──▶ 15 / 16 ──approver──▶ approved(3) / rejected(4)
+(every other type)                            received ──vice approver──▶ 15 / 16 ──approver──▶ approved(3) / rejected(4)
                                    approved(3) ──approver──▶ completed(5) / canceled by approver(7)
 (barber)  approved(3) ──vice approver "barber done"──▶ 11 ──approver──▶ 5 / 7
-(transportation, when a control officer exists) received ──control officer──▶ 17 / 18 ──vice approver──▶ ...
+(shortcut) received / 17 / 18 ──approver or admin: "אישור סופי"──▶ approved(3)      (no status of the skipped stages in between)
 ```
 
+- The route starts at the **control officer on transportation (type 8) only**: the seeders link that role to the booking type
+  (`booking_type_has_roles`) and create the permission `transportation_control_officer_8`. On every other type it starts at the vice approver.
 - The **admin of the type (and the super admin) holds every turn**: at each stage they get the same buttons as the role whose turn it is, so
-  `actions` is never empty for them on an open booking, and `can_edit_values` follows the same rule. They still go through the route (no jumping
-  from "received" to the final approval), cannot set the requester's own cancellation, and a closed booking has no actions for anyone. Their
-  name goes on the timeline and in the audit log as the one who acted. The **approver waits** until the vice approver has passed the booking on.
+  `actions` is never empty for them on an open booking, and `can_edit_values` follows the same rule. They cannot set the requester's own
+  cancellation, and a closed booking has no actions for anyone. Their name goes on the timeline and in the audit log as the one who acted.
+- **Skipping ahead.** While a booking is with the control officer or the vice approver, the **approver and the admin of the type (and the super
+  admin)** get one extra button after their own: `{ "status_id": 3, "label": "אישור סופי" }`. It moves the booking straight to *approved* - the
+  realization stage ("מימוש וסגירה") - with a single timeline row and no vice approver status in between. Such bookings are on their `mine=1`
+  list ("waiting for me") and in `awaiting_me`. This is only the approval: the final rejection (4) still comes after the stage below, and the
+  approver does not get `can_edit_values` on a stage they skip (the values stay with that stage's own role).
 - A **vice approver / control officer sees only the bookings at their own stage.** Anything else is a 404 for them. This is decided **per booking
   type**: someone who is vice approver of type 1 and approver of type 2 sees only their own stage in type 1 and everything in type 2.
 - The requester's own cancellation (status 6) is never done here.
@@ -346,7 +354,7 @@ A decision made here is saved at once and **sent to the mobile app by a schedule
 
 | Endpoint | Change |
 |---|---|
-| `get-bookings/{type}` -> `next_actions` | now follows the turn-based rule above (an admin gets none; an approver gets none before the vice approver acted). Prefer `actions` of the new list. |
+| `get-bookings/{type}` -> `next_actions` | now follows the turn-based rule above, shortcut included (the same moves as `actions`). Prefer `actions` of the new list. |
 | booking values -> `editable` flag | now true only for date / time fields the user may correct **now** (it used to be "status below 3"). |
 | `PUT .../system-references` | blocking a date cancels the bookings on it through the normal decision path (timeline, audit, sent back). Use `.../impact` first. Requires a managing role on the booking type in the body (403 otherwise); audited. |
 | `PUT .../update-options`, `update-select-option`, `update-option`, `update-statement`; `DELETE .../remove-options`, `remove-option` | now audited, with the values before and after, and queued for the mobile app (`system_config`). **Removing an option that bookings chose archives it** (it used to delete the bookings' values with it); a text that holds a unit or department name is refused (422). |
@@ -395,5 +403,7 @@ A decision made here is saved at once and **sent to the mobile app by a schedule
   day in Israeli time, set it, or decisions made in the first hours after local midnight go into a file it no longer reads. `EXPORT_JSON_CRON`,
   `EXPORT_JSON_MAX_ATTEMPTS` tune the schedule and retries.
 - Control officer: the stage exists only for booking types that have the `transportation_control_officer` role linked in `booking_type_has_roles`.
-  Nothing is linked by default, so every booking starts at the vice approver. Link the role (and seed `transportation_control_officer_{id}`
-  permissions) to switch the stage on for a type.
+  `RoleAndPermissionSeeder` / `BookingTypeHasRoleSeeder` link it to transportation (8) and create `transportation_control_officer_8`; a database
+  seeded before that gets it with `php artisan db:seed --class=ProdSeeder --force` (safe to repeat). **Transportation bookings still in "received"
+  then wait for the control officer** - grant the role to someone with `assign-approver-role` (`is_transportation_control_officer`), or the
+  approver / admin skips ahead. Link the role to another type (and seed its permission) to switch the stage on there.

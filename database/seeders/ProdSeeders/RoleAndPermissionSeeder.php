@@ -24,6 +24,8 @@ class RoleAndPermissionSeeder extends Seeder
         RoleEnum::VICE_APPROVER,
         // Everyone else: sees only their own bookings.
         RoleEnum::USER,
+        // Linked to the transportation booking type only (BookingTypeHasRoleSeeder): the first stage of its route.
+        RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
     ];
 
     public function run(): void

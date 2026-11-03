@@ -22,7 +22,7 @@ class DatabaseStructureTest extends ManagementTestCase
         13 => 'construction_booking',
     ];
 
-    public function test_the_five_roles_are_seeded_with_the_ids_of_the_role_enum(): void
+    public function test_the_six_roles_are_seeded_with_the_ids_of_the_role_enum(): void
     {
         $roles = DB::table('roles')->orderBy('id')->pluck('name', 'id')->all();
 
@@ -32,6 +32,7 @@ class DatabaseStructureTest extends ManagementTestCase
             RoleEnum::APPROVER->value => 'approver',
             RoleEnum::VICE_APPROVER->value => 'vice_approver',
             RoleEnum::USER->value => 'user',
+            RoleEnum::TRANSPORTATION_CONTROL_OFFICER->value => 'transportation_control_officer',
         ], $roles);
 
         $this->assertSame(['passport'], DB::table('roles')->distinct()->pluck('guard_name')->all());
@@ -55,7 +56,9 @@ class DatabaseStructureTest extends ManagementTestCase
             }
         }
 
-        $this->assertCount(count(self::BOOKING_TYPES) * 4, $permissions);
+        // Plus the control officer's, which only the transportation booking type (8) has.
+        $this->assertContains('transportation_control_officer_8', $permissions);
+        $this->assertCount(count(self::BOOKING_TYPES) * 4 + 1, $permissions);
     }
 
     public function test_the_super_admin_has_no_per_booking_type_permission(): void
@@ -76,11 +79,14 @@ class DatabaseStructureTest extends ManagementTestCase
                 ->map(fn($id) => (int) $id)
                 ->all();
 
-            $this->assertSame(
-                [RoleEnum::ADMIN->value, RoleEnum::APPROVER->value, RoleEnum::VICE_APPROVER->value, RoleEnum::USER->value],
-                $roleIds,
-                'booking type ' . $bookingTypeId
-            );
+            // The route of the transportation booking starts at the control officer: it alone has that role as well.
+            $expected = [RoleEnum::ADMIN->value, RoleEnum::APPROVER->value, RoleEnum::VICE_APPROVER->value, RoleEnum::USER->value];
+
+            if ($bookingTypeId === 8) {
+                $expected[] = RoleEnum::TRANSPORTATION_CONTROL_OFFICER->value;
+            }
+
+            $this->assertSame($expected, $roleIds, 'booking type ' . $bookingTypeId);
         }
     }
 

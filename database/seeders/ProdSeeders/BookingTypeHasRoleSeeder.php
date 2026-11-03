@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\ProdSeeders;
 
+use App\Enums\BookingTypeEnum;
 use App\Enums\RoleEnum;
 use App\Models\BookingType;
 use App\Models\BookingTypeHasRole;
@@ -22,12 +23,28 @@ class BookingTypeHasRoleSeeder extends Seeder
         $bookingTypes = BookingType::query()->get(['id']);
 
         foreach ($bookingTypes as $bookingType) {
-            foreach ($this->commonRoleIds as $roleId) {
+            $roleIds = [
+                ...$this->commonRoleIds,
+                ...$this->extraRoleIdsByBookingType((int) $bookingType->id),
+            ];
+
+            foreach ($roleIds as $roleId) {
                 BookingTypeHasRole::query()->updateOrCreate([
                     'booking_type_id' => $bookingType->id,
                     'role_id' => $roleId,
                 ]);
             }
         }
+    }
+
+    /** @return array<int> Roles on top of $commonRoleIds, only for specific booking types. */
+    private function extraRoleIdsByBookingType(int $bookingTypeId): array
+    {
+        return match ($bookingTypeId) {
+            // Its route starts at the control officer: Workflow::hasControlOfficerStage reads this link.
+            BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId() => [RoleEnum::TRANSPORTATION_CONTROL_OFFICER->value],
+
+            default => [],
+        };
     }
 }

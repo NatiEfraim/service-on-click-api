@@ -8,8 +8,10 @@ use App\Enums\StatusBookingEnum as Status;
 
 /**
  * The booking route rules, shared by the UI buttons (BookingResource::next_actions) and the server checks (BookingWorkflowService).
+ * The route runs from the bottom up: control officer (only on the types that have the role), vice approver, approver.
  * Turn-based: only the role whose turn it is may act, except the admin of the booking type, who holds every turn (control officer, vice approver
- * and approver). Status ids are the mobile app's - never renumber.
+ * and approver). The approver and the admin may also skip the stages below them with the final approval (shortcutTransitions).
+ * Status ids are the mobile app's - never renumber.
  */
 final class Workflow
 {
@@ -62,10 +64,24 @@ final class Workflow
     }
 
     /**
+     * The moves of the role whose turn it is, then the shortcut to the final approval for the approver and the admin.
      * @param array{isControlOfficer?: bool, isViceApprover?: bool, isApprover?: bool, isAdmin?: bool} $flags
      * @return array<int, array{status: Status, label: string}>
      */
     public function allowedTransitions(Status $current, array $flags, int $bookingTypeId): array
+    {
+        return [
+            ...$this->turnTransitions($current, $flags, $bookingTypeId),
+            ...$this->shortcutTransitions($current, $flags, $bookingTypeId),
+        ];
+    }
+
+    /**
+     * The moves of the role whose turn it is (the admin holds every turn).
+     * @param array{isControlOfficer?: bool, isViceApprover?: bool, isApprover?: bool, isAdmin?: bool} $flags
+     * @return array<int, array{status: Status, label: string}>
+     */
+    private function turnTransitions(Status $current, array $flags, int $bookingTypeId): array
     {
         $transitions = [];
         $isTransportation = $this->transportationBookingTypeId !== null && $bookingTypeId === $this->transportationBookingTypeId;
@@ -149,6 +165,21 @@ final class Workflow
         return $transitions;
     }
 
+    /**
+     * The approver and the admin of the type need not wait for the stages below them: from the control officer's or the vice approver's stage
+     * they approve finally, straight to the realization stage (no status of the stages they skip in between). Only the approval: a final
+     * rejection still comes after the stages below.
+     * @param array{isControlOfficer?: bool, isViceApprover?: bool, isApprover?: bool, isAdmin?: bool} $flags
+     * @return array<int, array{status: Status, label: string}>
+     */
+    private function shortcutTransitions(Status $current, array $flags, int $bookingTypeId): array
+    {
+        $mayApprove = !empty($flags['isAdmin']) || !empty($flags['isApprover']);
+        $below = in_array($this->stageOf($current, $bookingTypeId), [BookingStageEnum::CONTROL_OFFICER, BookingStageEnum::VICE_APPROVER], true);
+
+        return $mayApprove && $below ? [['status' => Status::APPROVED, 'label' => 'אישור סופי']] : [];
+    }
+
     /** Single source for the UI buttons and the server check. @param iterable<string> $permissionNames @return array<int, array{status: Status, label: string}> */
     public function availableActions(Status $current, iterable $permissionNames, int $bookingTypeId): array
     {
@@ -168,7 +199,8 @@ final class Workflow
     }
 
     /**
-     * Date/time value correction: whoever's turn it is, until the final approval.
+     * Date/time value correction: whoever's turn it is, until the final approval. Skipping ahead with the shortcut does not make the stages
+     * below it the approver's turn.
      * @param iterable<string> $permissionNames
      */
     public function canEditValues(Status $current, iterable $permissionNames, int $bookingTypeId): bool
@@ -177,7 +209,7 @@ final class Workflow
             return false;
         }
 
-        return $this->availableActions($current, $permissionNames, $bookingTypeId) !== [];
+        return $this->turnTransitions($current, self::roleFlags($permissionNames, $bookingTypeId), $bookingTypeId) !== [];
     }
 
     /** Statuses only the requester may set (mobile app only). */

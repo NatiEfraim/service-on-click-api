@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\HttpStatusCodeEnum;
+use App\Enums\RoleEnum;
 use App\Models\ApplicationLog;
 use App\Models\AuditLog;
 use App\Models\Booking;
@@ -94,35 +95,73 @@ class BookingWorkflowTest extends ManagementTestCase
         $this->assertSame('transition 1->3 not allowed', $denied->reason);
     }
 
-    public function test_the_approver_waits_for_the_vice_approver(): void
+    public function test_the_approver_may_skip_the_vice_approver_and_approve_finally(): void
     {
-        $this->booking();
+        $booking = $this->booking();
 
+        // The vice approver has not answered, yet the approver is offered the final approval - and only that.
+        $this->as(self::APPROVER)
+            ->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.actions')
+            ->assertJsonPath('data.actions.0.status_id', 3)
+            ->assertJsonPath('data.actions.0.label', 'אישור סופי')
+            ->assertJsonPath('data.actions.0.comment_required', false);
+
+        $this->as(self::APPROVER)->postJson(self::STATUS_URL, ['status_id' => 4, 'version' => 1, 'comment' => 'חסר מידע'])->assertForbidden();
+        $this->assertSame(1, (int) $booking->fresh()->status_id, 'a final rejection still waits for the stage below');
+
+        // Straight to the realization stage: one timeline row, nothing of the vice approver in between.
         $this->as(self::APPROVER)
             ->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])
-            ->assertForbidden();
+            ->assertOk()
+            ->assertJsonPath('data.status_id', 3)
+            ->assertJsonPath('data.sync_state', 'pending');
+
+        $booking = $booking->fresh();
+        $this->assertSame(3, (int) $booking->status_id);
+        $this->assertFalse($booking->is_status_exported, 'the decision is waiting to be sent back');
+        $this->assertSame([3], ApplicationLog::where('booking_id', $booking->id)->pluck('status_id')->map(fn ($id): int => (int) $id)->all());
+        $this->assertDatabaseMissing('vice_approver_has_bookings', ['booking_id' => $booking->id]);
+        $this->assertDatabaseHas('audit_log', ['action' => 'booking.status_change', 'result' => 'success', 'booking_serial' => self::SERIAL]);
 
         $this->as(self::APPROVER)
             ->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)
             ->assertOk()
-            ->assertJsonPath('data.actions', []);
-
-        $this->assertSame(1, (int) Booking::where('serial_number', self::SERIAL)->value('status_id'));
+            ->assertJsonPath('data.stage', 'realization')
+            ->assertJsonPath('data.actions.0.status_id', 5);
     }
 
-    public function test_the_admin_takes_every_turn_but_cannot_skip_one(): void
+    public function test_the_approver_does_not_correct_the_values_of_a_stage_they_skip(): void
+    {
+        $this->bookingWithDateAndTime();
+        Booking::where('serial_number', self::SERIAL)->update(['status_id' => 1]);
+
+        // The shortcut is there, the vice approver's turn to correct a date or a time is not.
+        $this->as(self::APPROVER)
+            ->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)
+            ->assertOk()
+            ->assertJsonPath('data.actions.0.status_id', 3)
+            ->assertJsonPath('data.can_edit_values', false);
+    }
+
+    public function test_the_admin_takes_every_turn_and_may_skip_ahead(): void
     {
         $booking = $this->booking();
         $admin = User::where('personal_number', self::ADMIN)->firstOrFail();
 
-        // Received is the vice approver's turn: the admin sees the same buttons, and cannot jump to the final approval.
+        // Received is the vice approver's turn: the admin sees the same buttons, then the shortcut to the final approval.
         $this->as(self::ADMIN)
             ->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)
             ->assertOk()
+            ->assertJsonCount(3, 'data.actions')
             ->assertJsonPath('data.actions.0.status_id', 15)
-            ->assertJsonPath('data.actions.1.status_id', 16);
+            ->assertJsonPath('data.actions.1.status_id', 16)
+            ->assertJsonPath('data.actions.2.status_id', 3);
 
-        $this->as(self::ADMIN)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])->assertForbidden();
+        // Skipping is only the approval: no final rejection from a stage below, and never the requester's own cancellation.
+        $this->as(self::ADMIN)->postJson(self::STATUS_URL, ['status_id' => 4, 'version' => 1, 'comment' => 'חסר מידע'])->assertForbidden();
+        $this->as(self::ADMIN)->postJson(self::STATUS_URL, ['status_id' => 6, 'version' => 1])->assertForbidden();
         $this->assertSame(1, (int) $booking->fresh()->status_id);
 
         // The whole route, one turn after the other: vice approver, approver, approver again.
@@ -167,11 +206,98 @@ class BookingWorkflowTest extends ManagementTestCase
         $this->as(self::SUPER_ADMIN)->getJson($url)->assertOk()->assertJsonPath('data.0.actions.0.status_id', 15);
         $this->as(self::SUPER_ADMIN)->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)->assertOk()->assertJsonPath('data.can_edit_values', true);
 
-        $this->as(self::SUPER_ADMIN)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])->assertForbidden();
-        $this->as(self::SUPER_ADMIN)->postJson(self::STATUS_URL, ['status_id' => 15, 'version' => 1])->assertOk();
-        $this->as(self::SUPER_ADMIN)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 2])->assertOk();
+        // As the admin of the type, the super admin may also skip the vice approver with the final approval.
+        $this->as(self::SUPER_ADMIN)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])->assertOk();
 
         $this->assertSame(3, (int) Booking::where('serial_number', self::SERIAL)->value('status_id'));
+    }
+
+    public function test_the_awaiting_me_queue_holds_the_bookings_still_with_the_stages_below_the_approver(): void
+    {
+        $this->booking(['serial_number' => 800000001, 'status_id' => 1]);                            // the vice approver's stage
+        $this->booking(['serial_number' => 800000002, 'status_id' => 17, 'booking_type_id' => 8]);   // transport: the control officer passed it on
+        $this->booking(['serial_number' => 800000003, 'status_id' => 1, 'booking_type_id' => 8]);    // transport: the control officer's stage
+        $this->booking(['serial_number' => 800000004, 'status_id' => 15]);                           // the approver's own stage
+        $this->booking(['serial_number' => 800000005, 'status_id' => 5]);                            // closed
+        $url = '/api/bookings-approver-management/bookings?mine=1&sort=serial_number&dir=asc&ids=800000001,800000002,800000003,800000004,800000005';
+
+        // Everything open is on the approver's list, each with the final approval (the one waiting for the approver also has the rejection).
+        $rows = $this->as(self::APPROVER)->getJson($url)->assertOk()->json('data');
+        $this->assertSame([800000001, 800000002, 800000003, 800000004], array_column($rows, 'serial_number'));
+        $this->assertSame([[3], [3], [3], [3, 4]], array_map(fn (array $row): array => array_column($row['actions'], 'status_id'), $rows));
+        $this->assertSame(['vice_approver', 'vice_approver', 'control_officer', 'approver'], array_column($rows, 'stage'));
+
+        foreach ([self::ADMIN, self::SUPER_ADMIN] as $person) {
+            $this->assertSame([800000001, 800000002, 800000003, 800000004], $this->as($person)->getJson($url)->assertOk()->json('data.*.serial_number'), $person);
+        }
+
+        // The handlers keep to their own stage: the vice approver has the first two, and nothing of the control officer's stage.
+        $this->assertSame([800000001, 800000002], $this->as(self::VICE_APPROVER)->getJson($url)->assertOk()->json('data.*.serial_number'));
+    }
+
+    /** A person who is only the control officer of the transportation type, as the seeded system has them: the role and that type's permission. */
+    private function controlOfficer(): string
+    {
+        $officer = User::factory()->create(['personal_number' => '1000008', 'unit_id' => 1]);
+        $officer->assignRole(RoleEnum::TRANSPORTATION_CONTROL_OFFICER->value);
+        $officer->givePermissionTo('transportation_control_officer_8');
+
+        return '1000008';
+    }
+
+    public function test_a_transportation_booking_goes_from_the_control_officer_to_the_vice_approver_to_the_approver(): void
+    {
+        $officer = $this->controlOfficer();
+        $booking = $this->booking(['booking_type_id' => 8]);
+        $url = '/api/bookings-approver-management/bookings/' . self::SERIAL;
+
+        // Received: the control officer's turn. The vice approver waits and does not even see it.
+        $this->as(self::VICE_APPROVER)->getJson($url)->assertNotFound();
+        $this->as(self::VICE_APPROVER)->postJson(self::STATUS_URL, ['status_id' => 15, 'version' => 1])->assertNotFound();
+
+        $this->as($officer)
+            ->getJson($url)
+            ->assertOk()
+            ->assertJsonPath('data.stage', 'control_officer')
+            ->assertJsonPath('data.actions.0.status_id', 17)
+            ->assertJsonPath('data.actions.1.status_id', 18);
+        $this->as($officer)->postJson(self::STATUS_URL, ['status_id' => 15, 'version' => 1])->assertForbidden();
+        $this->as($officer)->postJson(self::STATUS_URL, ['status_id' => 17, 'version' => 1])->assertOk()->assertJsonPath('data.status_id', 17);
+
+        // Passed on: the vice approver's turn - the control officer is done with it.
+        $this->as($officer)->getJson($url)->assertNotFound();
+        $this->as(self::VICE_APPROVER)->getJson($url)->assertOk()->assertJsonPath('data.stage', 'vice_approver');
+        $this->as(self::VICE_APPROVER)->postJson(self::STATUS_URL, ['status_id' => 15, 'version' => 2])->assertOk();
+
+        // And last the approver.
+        $this->as(self::APPROVER)->getJson($url)->assertOk()->assertJsonPath('data.stage', 'approver')->assertJsonPath('data.actions.0.status_id', 3);
+        $this->as(self::APPROVER)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 3])->assertOk();
+
+        $this->assertSame([17, 15, 3], ApplicationLog::where('booking_id', $booking->id)->orderBy('id')->pluck('status_id')->map(fn ($id): int => (int) $id)->all());
+    }
+
+    public function test_the_approver_skips_the_control_officer_and_the_vice_approver_of_a_transportation_booking(): void
+    {
+        $booking = $this->booking(['booking_type_id' => 8]);
+
+        $this->as(self::APPROVER)
+            ->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)
+            ->assertOk()
+            ->assertJsonPath('data.stage', 'control_officer')
+            ->assertJsonPath('data.actions.0.status_id', 3);
+
+        $this->as(self::APPROVER)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])->assertOk()->assertJsonPath('data.status_id', 3);
+
+        $this->assertSame([3], ApplicationLog::where('booking_id', $booking->id)->pluck('status_id')->map(fn ($id): int => (int) $id)->all());
+    }
+
+    public function test_the_control_officer_has_nothing_to_do_with_the_other_booking_types(): void
+    {
+        $officer = $this->controlOfficer();
+        $this->booking();
+
+        $this->as($officer)->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)->assertNotFound();
+        $this->as($officer)->postJson(self::STATUS_URL, ['status_id' => 17, 'version' => 1])->assertNotFound();
     }
 
     public function test_the_approver_decides_once_the_vice_approver_has_passed_the_booking_on(): void

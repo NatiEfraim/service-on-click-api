@@ -138,7 +138,7 @@ class ManagementInsightTest extends ManagementTestCase
 
         $this->assertGreaterThanOrEqual(2, $approver['open_total']);
         $this->assertContains(800000001, $approver['awaiting_me']['serials'], 'at the approver stage');
-        $this->assertNotContains(800000002, $approver['awaiting_me']['serials'], 'still with the vice approver');
+        $this->assertContains(800000002, $approver['awaiting_me']['serials'], 'still with the vice approver: the approver may approve it finally');
         $this->assertCount(30, $approver['trend']);
 
         $vice = $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/overview')->assertOk()->json('data');

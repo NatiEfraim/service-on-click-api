@@ -30,12 +30,50 @@ class WorkflowTest extends TestCase
         $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::APPROVED, ['vice_approver_1'], 1));
     }
 
-    public function test_the_approver_waits_for_the_vice_approver_then_decides(): void
+    public function test_the_approver_decides_once_the_vice_approver_has_answered(): void
     {
-        $this->assertSame([], $this->targets(S::RECEIVED, ['approver_1'], 1));
         $this->assertSame([3, 4], $this->targets(S::VICE_APPROVER_APPROVED, ['approver_1'], 1));
         $this->assertSame([3, 4], $this->targets(S::VICE_APPROVER_REJECTED, ['approver_1'], 1));
         $this->assertSame([5, 7], $this->targets(S::APPROVED, ['approver_1'], 1));
+    }
+
+    public function test_the_approver_and_the_admin_may_approve_finally_from_every_stage_below_them(): void
+    {
+        // The vice approver's stage on a car (received, and what the control officer left behind) and the control officer's stage on a transport.
+        $stages = [[S::RECEIVED, 1], [S::PROCESSING_BY_CONTROL_OFFICER, 1], [S::RECEIVED, 8], [S::CONTROL_OFFICER_APPROVED, 8], [S::CONTROL_OFFICER_REJECTED, 8]];
+
+        foreach ($stages as [$from, $bookingTypeId]) {
+            foreach (['approver_', 'admin_'] as $role) {
+                $this->assertTrue($this->workflow->canChangeTo($from, S::APPROVED, [$role . $bookingTypeId], $bookingTypeId), "{$role}{$bookingTypeId} from {$from->name}");
+            }
+        }
+
+        // One move, labeled as the final approval, and the next stage is the realization: no status of the skipped stages in between.
+        $this->assertSame([['status' => S::APPROVED, 'label' => 'אישור סופי']], $this->workflow->availableActions(S::RECEIVED, ['approver_1'], 1));
+        $this->assertSame([['status' => S::APPROVED, 'label' => 'אישור סופי']], $this->workflow->availableActions(S::RECEIVED, ['approver_8'], 8));
+        $this->assertSame(BookingStageEnum::REALIZATION, $this->workflow->stageOf(S::APPROVED, 1));
+    }
+
+    public function test_the_shortcut_is_only_the_approval_and_only_for_the_approver_and_the_admin(): void
+    {
+        foreach (['approver_1', 'admin_1'] as $permission) {
+            $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::REJECTED, [$permission], 1), $permission . ' rejects only after the stages below');
+            $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::COMPLETED, [$permission], 1));
+            $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::APPROVED_BY_BARBER, [$permission], 1));
+        }
+
+        // The handlers below the approver have nothing to skip to.
+        $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::APPROVED, ['vice_approver_1'], 1));
+        $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::APPROVED, ['transportation_control_officer_8'], 8));
+        $this->assertFalse($this->workflow->canChangeTo(S::CONTROL_OFFICER_APPROVED, S::APPROVED, ['vice_approver_8'], 8));
+
+        // Per booking type; nothing for a person without a role in it.
+        $this->assertSame([], $this->targets(S::RECEIVED, ['approver_2', 'admin_2', 'user_1'], 1));
+
+        // No shortcut once the booking is past the stages below the approver.
+        $this->assertSame([3, 4], $this->targets(S::VICE_APPROVER_APPROVED, ['approver_1'], 1));
+        $this->assertSame([5, 7], $this->targets(S::APPROVED, ['approver_1'], 1));
+        $this->assertSame([], $this->targets(S::COMPLETED, ['approver_1', 'admin_1'], 1));
     }
 
     public function test_a_closed_booking_has_no_actions_and_a_permission_is_per_booking_type(): void
@@ -46,12 +84,12 @@ class WorkflowTest extends TestCase
 
     public function test_the_admin_holds_every_turn_of_the_type_they_administer(): void
     {
-        // The same moves as whoever's turn it is: vice approver, approver and (in transportation) control officer.
-        $this->assertSame([15, 16], $this->targets(S::RECEIVED, ['admin_1'], 1));
+        // The same moves as whoever's turn it is: vice approver, approver and (in transportation) control officer, then the shortcut (3).
+        $this->assertSame([15, 16, 3], $this->targets(S::RECEIVED, ['admin_1'], 1));
         $this->assertSame([3, 4], $this->targets(S::VICE_APPROVER_APPROVED, ['admin_1'], 1));
         $this->assertSame([5, 7], $this->targets(S::APPROVED, ['admin_1'], 1));
-        $this->assertSame([17, 18, 8, 9, 10], $this->targets(S::RECEIVED, ['admin_8'], 8));
-        $this->assertSame([15, 16, 8, 9, 10], $this->targets(S::CONTROL_OFFICER_APPROVED, ['admin_8'], 8));
+        $this->assertSame([17, 18, 8, 9, 10, 3], $this->targets(S::RECEIVED, ['admin_8'], 8));
+        $this->assertSame([15, 16, 8, 9, 10, 3], $this->targets(S::CONTROL_OFFICER_APPROVED, ['admin_8'], 8));
         $this->assertSame([3, 4, 8, 10], $this->targets(S::PENDING_PROCESSING, ['admin_8'], 8));
 
         // The barber route: done by the barber (vice approver's move) first, then completed by the approver's move.
@@ -60,9 +98,9 @@ class WorkflowTest extends TestCase
         $this->assertTrue($this->workflow->canChangeTo(S::APPROVED_BY_BARBER, S::COMPLETED, ['admin_5'], 5));
     }
 
-    public function test_the_admin_is_strongest_in_the_roles_but_still_goes_through_the_route(): void
+    public function test_the_admin_is_strongest_in_the_roles_but_cannot_act_for_the_requester_or_on_a_closed_booking(): void
     {
-        $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::APPROVED, ['admin_1'], 1), 'no skipping the vice approver');
+        $this->assertTrue($this->workflow->canChangeTo(S::RECEIVED, S::APPROVED, ['admin_1'], 1), 'may skip the vice approver');
         $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::CANCELED_BY_USER, ['admin_1'], 1), 'the requester cancels in the app');
 
         foreach ([S::REJECTED, S::COMPLETED, S::CANCELED_BY_APPROVER, S::CANCELED_BY_USER] as $closed) {
@@ -78,23 +116,33 @@ class WorkflowTest extends TestCase
     {
         $permissions = ['approver_1', 'vice_approver_1'];
 
-        $this->assertSame([15, 16], $this->targets(S::RECEIVED, $permissions, 1));
+        // The turn's own buttons first, then the approver's shortcut.
+        $this->assertSame([15, 16, 3], $this->targets(S::RECEIVED, $permissions, 1));
         $this->assertSame([3, 4], $this->targets(S::VICE_APPROVER_APPROVED, $permissions, 1));
     }
 
     public function test_transportation_starts_at_the_control_officer_who_may_also_put_it_on_hold(): void
     {
         $this->assertSame([17, 18, 8, 9, 10], $this->targets(S::RECEIVED, ['transportation_control_officer_8'], 8));
-        // Nobody else acts at that stage (except the admin of the type), and the control officer has no say on a car.
-        $this->assertSame([], $this->targets(S::RECEIVED, ['vice_approver_8', 'approver_8'], 8));
+        // At that stage the vice approver waits, the approver can only skip ahead (and so can the admin of the type), and the control officer has no say on a car.
+        $this->assertSame([], $this->targets(S::RECEIVED, ['vice_approver_8'], 8));
+        $this->assertSame([3], $this->targets(S::RECEIVED, ['approver_8'], 8));
         $this->assertSame([], $this->targets(S::RECEIVED, ['transportation_control_officer_1'], 1));
     }
 
-    public function test_in_transportation_the_vice_approver_follows_the_control_officer_and_the_approver_cannot_skip_the_vice_approver(): void
+    public function test_in_transportation_the_route_goes_control_officer_then_vice_approver_then_approver(): void
     {
+        $this->assertSame(BookingStageEnum::CONTROL_OFFICER, $this->workflow->stageOf(S::RECEIVED, 8));
+        $this->assertSame(BookingStageEnum::VICE_APPROVER, $this->workflow->stageOf(S::CONTROL_OFFICER_APPROVED, 8));
+        $this->assertSame(BookingStageEnum::VICE_APPROVER, $this->workflow->stageOf(S::CONTROL_OFFICER_REJECTED, 8));
+        $this->assertSame(BookingStageEnum::APPROVER, $this->workflow->stageOf(S::VICE_APPROVER_APPROVED, 8));
+
         $this->assertSame([15, 16, 8, 9, 10], $this->targets(S::CONTROL_OFFICER_APPROVED, ['vice_approver_8'], 8));
-        $this->assertSame([], $this->targets(S::CONTROL_OFFICER_APPROVED, ['approver_8'], 8));
+        $this->assertSame([3], $this->targets(S::CONTROL_OFFICER_APPROVED, ['approver_8'], 8), 'only by skipping the vice approver');
         $this->assertContains(9, $this->targets(S::VICE_APPROVER_APPROVED, ['approver_8'], 8));
+
+        // On every other type the route starts at the vice approver.
+        $this->assertSame(BookingStageEnum::VICE_APPROVER, $this->workflow->stageOf(S::RECEIVED, 11));
     }
 
     public function test_only_the_approver_acts_while_transportation_waits_for_the_supplier(): void
@@ -149,7 +197,8 @@ class WorkflowTest extends TestCase
         $this->assertTrue($this->workflow->canEditValues(S::VICE_APPROVER_APPROVED, ['admin_1'], 1));
         $this->assertFalse($this->workflow->canEditValues(S::APPROVED, ['admin_1'], 1), 'not after the final approval, not even for the admin');
         $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['admin_2'], 1), 'the admin of another type');
-        $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['approver_1'], 1), 'not on the vice approver turn');
+        $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['approver_1'], 1), 'not on the vice approver turn, even though the approver may skip it');
+        $this->assertFalse($this->workflow->canEditValues(S::CONTROL_OFFICER_APPROVED, ['approver_8'], 8));
         $this->assertTrue($this->workflow->canEditValues(S::RECEIVED, ['vice_approver_1'], 1));
         $this->assertFalse($this->workflow->canEditValues(S::VICE_APPROVER_APPROVED, ['vice_approver_1'], 1));
         $this->assertTrue($this->workflow->canEditValues(S::CONTROL_OFFICER_APPROVED, ['vice_approver_8'], 8));
