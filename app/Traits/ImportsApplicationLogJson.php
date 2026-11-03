@@ -2,8 +2,6 @@
 
 namespace App\Traits;
 
-use App\Jobs\ImportApplicationLogJsonBucketJob;
-use App\Jobs\ImportApplicationLogJsonFtpJob;
 use App\Services\DigitalHatchService;
 use App\Services\ImportApplicationLogService;
 use Illuminate\Support\Facades\Log;
@@ -23,8 +21,10 @@ trait ImportsApplicationLogJson
     }
 
     /**
-     * importApplicationLogJson:bucket - queues ImportApplicationLogJsonBucketJob (a queue worker runs it), or with $sync imports the files waiting
-     * in the bucket here, rows included, and returns what it did.
+     * importApplicationLogJson:bucket - the command reads the application log files waiting in the bucket (ImportApplicationLogService), queues
+     * their rows as chunk jobs (ImportApplicationLogJsonChunkJob: a queue worker saves them, a log waits for its booking), moves each file to
+     * loaded-json and returns what it did. With $sync the rows are saved here instead, so no worker is needed; a file with logs whose booking is
+     * not saved yet then stays where it is.
      * @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>}
      */
     protected function importApplicationLogJsonFromBucket(bool $sync = false): array
@@ -35,18 +35,13 @@ trait ImportsApplicationLogJson
             return ['enabled' => false, 'switch' => 'IMPORT_JSON_ENABLED=false'];
         }
 
-        if ($sync) {
-            return ['enabled' => true, 'queued' => false, 'result' => ['imported' => app(ImportApplicationLogService::class)->importFromBucket(true)]];
-        }
-
-        dispatch(new ImportApplicationLogJsonBucketJob());
-
-        return ['enabled' => true, 'queued' => true];
+        return ['enabled' => true, 'queued' => false, 'result' => ['imported' => app(ImportApplicationLogService::class)->importFromBucket($sync)]];
     }
 
     /**
-     * importApplicationLogJson:ftp - queues ImportApplicationLogJsonFtpJob, or with $sync takes the new application log files from the digital
-     * hatch into the bucket and imports them here. Off while HATCH_ENABLED=false.
+     * importApplicationLogJson:ftp - the command takes the new application log files from the digital hatch (the FTP, or the local test folder) into
+     * the bucket and imports them like importApplicationLogJson:bucket: command -> this trait -> DigitalHatchService -> the rows queued as chunk
+     * jobs (or saved here with $sync), the file moved to loaded-json, its name noted in digital_hatch_fetched_files. Off while HATCH_ENABLED=false.
      * @param bool $force take the files again even when they were taken before
      * @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>}
      */
@@ -58,12 +53,6 @@ trait ImportsApplicationLogJson
             return ['enabled' => false, 'switch' => 'HATCH_ENABLED=false'];
         }
 
-        if ($sync) {
-            return ['enabled' => true, 'queued' => false, 'result' => app(DigitalHatchService::class)->importApplicationLogs($force, true)];
-        }
-
-        dispatch(new ImportApplicationLogJsonFtpJob($force));
-
-        return ['enabled' => true, 'queued' => true];
+        return ['enabled' => true, 'queued' => false, 'result' => app(DigitalHatchService::class)->importApplicationLogs($force, $sync)];
     }
 }

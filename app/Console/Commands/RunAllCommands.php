@@ -23,8 +23,15 @@ class RunAllCommands extends Command
         // } else {
         //     $this->call('migrate:fresh', ['--seed' => true]);
         // }
+
+
         // $this->call('migrate', ['--force' => true]);
         $this->call('migrate:fresh', ['--seed' => true]);
+               $this->call('passport:client', [
+                '--personal' => true,
+                '--name' => config('auth.access_token_name'),
+                '--provider' => 'users',
+            ]);
         if (!$this->hasPersonalAccessClient()) {
             $this->call('passport:client', [
                 '--personal' => true,

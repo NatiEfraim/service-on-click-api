@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Enums\JsonModelTypeEnum;
+use App\Jobs\ImportApplicationLogJsonChunkJob;
+use App\Jobs\ImportBookingJsonChunkJob;
 use App\Services\StorageService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -10,16 +12,20 @@ use Illuminate\Support\Facades\Log;
 /**
  * What the six import commands share: importBookingJson, importApplicationLogJson and importFile, each with the place the files come from after
  * the colon - ":bucket" reads the bucket folder, ":ftp" first takes the new files from the digital hatch (the FTP, or the local test folders)
- * into it. By default the command's own job is queued and a queue worker does the import; --sync imports here and shows what happened, so each
- * command can be tested alone. A json file that was read ends up in the database and in loaded-json.
+ * into it.
+ *  - The json imports (bookings, application logs): the command runs its trait, the trait the service; the service takes and reads the file,
+ *    queues its rows as chunk jobs (ImportBookingJsonChunkJob, ImportApplicationLogJsonChunkJob) that a queue worker saves in the database, moves
+ *    the file to loaded-json and notes it in digital_hatch_fetched_files. --sync saves the rows here instead, so no worker is needed.
+ *  - The files and images: by default the command queues its own job (copying files takes a while); --sync does it here.
+ * Either way the command shows what happened, so each import can be tested alone.
  */
 abstract class ImportCommand extends Command
 {
-    /** Queues this command's job, or with $sync imports here. @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>} */
+    /**
+     * Does the import (a json import reads the files here and queues its chunk jobs; the files import queues its job), or with $sync does all of it here.
+     * @return array{enabled: bool, switch?: string, queued?: bool, job?: class-string, result?: array<string, mixed>}
+     */
     abstract protected function importFrom(bool $force, bool $sync): array;
-
-    /** @return class-string the job that imports */
-    abstract protected function jobClass(): string;
 
     /** The kind of json file this command imports; null for the files and images. */
     protected function modelType(): ?JsonModelTypeEnum
@@ -40,7 +46,7 @@ abstract class ImportCommand extends Command
             }
 
             if ($outcome['queued']) {
-                $this->info(class_basename($this->jobClass()) . ' queued: a queue worker (php artisan queue:work) imports it. Add --sync to import here and see the result.');
+                $this->info(class_basename($outcome['job']) . ' queued: a queue worker (php artisan queue:work) imports it. Add --sync to import here and see the result.');
 
                 return self::SUCCESS;
             }
@@ -145,7 +151,29 @@ abstract class ImportCommand extends Command
             $this->info("Nothing to import: no file is waiting in {$folder}.");
         }
 
+        $this->describeQueuedChunks($imported, $type, $sync);
+
         return $errors;
+    }
+
+    /** After a run that queued the rows: which jobs they are and what a worker does with them. @param array<string, mixed> $imported */
+    private function describeQueuedChunks(array $imported, JsonModelTypeEnum $type, bool $sync): void
+    {
+        $chunks = array_sum(array_column($imported['files'], 'chunks'));
+
+        if ($sync || $chunks === 0) {
+            return;
+        }
+
+        $job = class_basename($type === JsonModelTypeEnum::EXPORT_BOOKING ? ImportBookingJsonChunkJob::class : ImportApplicationLogJsonChunkJob::class);
+        $line = "{$chunks} {$job} jobs queued: a queue worker (php artisan queue:work) saves them in the database.";
+
+        if ($type === JsonModelTypeEnum::APPLICATION_LOG) {
+            $line .= ' A log waits for its booking (looks again every ' . config('app.jobs.import_application_log_json.backoff') . ' seconds, '
+                . config('app.jobs.import_application_log_json.tries') . ' tries), so import the bookings first; a chunk that still has no booking fails and `php artisan queue:retry all` saves it later.';
+        }
+
+        $this->info($line . ' Add --sync to save them here and see the result.');
     }
 
     /** @param array<string, mixed> $imported ImportFileService::importFromBucket @return array<int, string> */

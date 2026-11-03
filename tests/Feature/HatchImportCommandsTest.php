@@ -3,10 +3,8 @@
 namespace Tests\Feature;
 
 use App\Enums\ActionTypeEnum;
-use App\Jobs\ImportApplicationLogJsonBucketJob;
-use App\Jobs\ImportApplicationLogJsonFtpJob;
-use App\Jobs\ImportBookingJsonBucketJob;
-use App\Jobs\ImportBookingJsonFtpJob;
+use App\Jobs\ImportApplicationLogJsonChunkJob;
+use App\Jobs\ImportBookingJsonChunkJob;
 use App\Jobs\ImportFileBucketJob;
 use App\Jobs\ImportFileFtpJob;
 use App\Models\ApplicationLog;
@@ -21,10 +19,11 @@ use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * The six import commands - importBookingJson, importApplicationLogJson and importFile, each ":bucket" or ":ftp" (where the files come from) - and
- * the job each one queues: by default the job is queued, --sync imports in the command and shows the result. The ":ftp" ones are tested here on
- * local folders (DIGITAL_HATCH_IMPORT_PATH, DIGITAL_HATCH_IMPORT_FILES_PATH) that take the place of the FTP, the way the developer runs them;
- * DigitalHatchTest has the FTP itself.
+ * The six import commands - importBookingJson, importApplicationLogJson and importFile, each ":bucket" or ":ftp" (where the files come from).
+ * The json commands read the file in the command and queue its rows as chunk jobs (a worker saves them); --sync saves the rows in the command.
+ * The file commands queue one job each (--sync does the work in the command). The ":ftp" ones are tested here on local folders
+ * (DIGITAL_HATCH_IMPORT_PATH, DIGITAL_HATCH_IMPORT_FILES_PATH) that take the place of the FTP, the way the developer runs them; DigitalHatchTest
+ * has the FTP itself.
  */
 class HatchImportCommandsTest extends HatchTestCase
 {
@@ -245,26 +244,22 @@ class HatchImportCommandsTest extends HatchTestCase
 
     //----------------------------- The queue ------------------------------------//
 
-    /** @return array<string, array{0: string, 1: class-string}> */
-    public static function commandsAndTheirJobs(): array
+    /** @return array<string, array{0: string, 1: class-string}> the file commands and the one job each queues */
+    public static function fileCommandsAndTheirJobs(): array
     {
         return [
-            'importBookingJson:bucket' => ['importBookingJson:bucket', ImportBookingJsonBucketJob::class],
-            'importBookingJson:ftp' => ['importBookingJson:ftp', ImportBookingJsonFtpJob::class],
-            'importApplicationLogJson:bucket' => ['importApplicationLogJson:bucket', ImportApplicationLogJsonBucketJob::class],
-            'importApplicationLogJson:ftp' => ['importApplicationLogJson:ftp', ImportApplicationLogJsonFtpJob::class],
             'importFile:bucket' => ['importFile:bucket', ImportFileBucketJob::class],
             'importFile:ftp' => ['importFile:ftp', ImportFileFtpJob::class],
         ];
     }
 
-    #[DataProvider('commandsAndTheirJobs')]
-    public function test_a_command_only_queues_its_own_job_without_sync(string $command, string $jobClass): void
+    #[DataProvider('fileCommandsAndTheirJobs')]
+    public function test_a_file_command_only_queues_its_own_job_without_sync(string $command, string $jobClass): void
     {
         Queue::fake();
         $this->useLocalImportFolders();
-        $this->putLocalBookings([$this->foodBooking(6701)]);
-        $this->putBookingFile([$this->foodBooking(6702)]);
+        file_put_contents($this->localFilesDir . '/' . self::PDF . '.pdf', 'x');
+        $this->receiveFile(self::DOC, 'docx');
 
         $this->assertSame(0, Artisan::call($command));
 
@@ -274,21 +269,145 @@ class HatchImportCommandsTest extends HatchTestCase
 
         // Nothing was taken or saved yet: that is the job's work.
         $this->assertSame(0, DigitalHatchFetchedFile::count());
-        $this->assertSame(0, Booking::count());
-        $this->assertTrue($this->bucket()->exists(self::BOOKING_DIRECTORY . '/' . self::BOOKINGS_FILE));
+        $this->assertTrue($this->bucket()->exists('import-files/' . self::DOC . '.docx'));
     }
 
-    public function test_force_is_handed_to_the_ftp_jobs_and_the_bucket_jobs_do_not_have_it(): void
+    /** @return array<string, array{0: string, 1: string, 2: class-string}> the json commands, where their file is, and the chunk job each queues */
+    public static function jsonCommandsAndTheirChunkJobs(): array
+    {
+        return [
+            'importBookingJson:bucket' => ['importBookingJson:bucket', 'bucket', ImportBookingJsonChunkJob::class],
+            'importBookingJson:ftp' => ['importBookingJson:ftp', 'local folder', ImportBookingJsonChunkJob::class],
+            'importApplicationLogJson:bucket' => ['importApplicationLogJson:bucket', 'bucket', ImportApplicationLogJsonChunkJob::class],
+            'importApplicationLogJson:ftp' => ['importApplicationLogJson:ftp', 'local folder', ImportApplicationLogJsonChunkJob::class],
+        ];
+    }
+
+    #[DataProvider('jsonCommandsAndTheirChunkJobs')]
+    public function test_a_json_command_reads_the_file_itself_and_queues_its_rows_as_chunk_jobs(string $command, string $where, string $chunkJob): void
+    {
+        Queue::fake();
+        $this->useLocalImportFolders();
+
+        $bookings = $chunkJob === ImportBookingJsonChunkJob::class;
+        $row = $bookings ? $this->foodBooking(6701) : $this->logRecord(6701, ActionTypeEnum::STORE_BOOKING->value, self::OWNER);
+
+        // The one file the command is to read: in the local folder for ":ftp", in the bucket for ":bucket".
+        if ($where === 'bucket') {
+            $bookings ? $this->putBookingFile([$row]) : $this->putLogFile([$row]);
+        } else {
+            $bookings ? $this->putLocalBookings([$row]) : $this->putLocalLogs([$row]);
+        }
+
+        $this->assertSame(0, Artisan::call($command));
+        $output = Artisan::output();
+
+        // The command did the reading: one chunk job for the one chunk of rows, and the file is backed up in loaded-json already.
+        Queue::assertPushed($chunkJob, 1);
+        Queue::assertCount(1);
+        $this->assertStringContainsString('1 ' . class_basename($chunkJob) . ' jobs queued: a queue worker (php artisan queue:work) saves them', $output);
+        $this->assertStringContainsString('1 chunks queued, file moved to loaded-json/', $output);
+        $this->assertCount(1, $this->bucket()->files('loaded-json'));
+        $this->assertSame([], $this->bucket()->files('import-json'));
+
+        // The file is in the ledger of the digital hatch: taken from the local folder, or imported from the bucket.
+        $this->assertSame(
+            $where === 'bucket' ? 'bucket' : 'local',
+            DigitalHatchFetchedFile::firstOrFail()->source
+        );
+
+        // Saving the rows is the worker's job: nothing is in the database until the chunk job runs.
+        $this->assertSame(0, Booking::count() + ApplicationLog::count());
+    }
+
+    public function test_the_chunk_jobs_a_command_queued_save_the_rows_when_the_worker_runs_them(): void
+    {
+        Queue::fake();
+        $this->useLocalImportFolders();
+        $this->putLocalBookings([$this->foodBooking(6801), $this->foodBooking(6802)]);
+        $this->putLocalLogs([$this->logRecord(6801, ActionTypeEnum::STORE_BOOKING->value, self::OWNER)]);
+
+        $this->assertSame(0, Artisan::call('importBookingJson:ftp'));
+        $this->assertSame(0, Artisan::call('importApplicationLogJson:ftp'));
+
+        // The worker: the bookings first, as they were queued first.
+        Queue::pushed(ImportBookingJsonChunkJob::class)->each(fn (ImportBookingJsonChunkJob $job) => $job->handle());
+        Queue::pushed(ImportApplicationLogJsonChunkJob::class)->each(fn (ImportApplicationLogJsonChunkJob $job) => $job->handle());
+
+        $this->assertSame(2, Booking::count());
+        $this->assertSame(1, ApplicationLog::count());
+        $this->assertEqualsCanonicalizing(
+            ['loaded-json/' . self::BOOKINGS_FILE_ON_DISK, 'loaded-json/' . self::LOGS_FILE_ON_DISK],
+            $this->bucket()->files('loaded-json')
+        );
+        $this->assertEqualsCanonicalizing([
+            ['file_name' => self::BOOKINGS_FILE_ON_DISK, 'stream' => 'export_bookings', 'source' => 'local'],
+            ['file_name' => self::LOGS_FILE_ON_DISK, 'stream' => 'application_logs', 'source' => 'local'],
+        ], DigitalHatchFetchedFile::get(['file_name', 'stream', 'source'])->toArray());
+    }
+
+    public function test_logs_imported_before_their_bookings_wait_in_the_queue_and_are_saved_once_the_bookings_are(): void
+    {
+        Queue::fake();
+        $this->useLocalImportFolders();
+        $chunk = [$this->logRecord(7001, ActionTypeEnum::STORE_BOOKING->value, self::OWNER)];
+        $this->putLocalLogs($chunk);
+        $this->putLocalBookings([$this->foodBooking(7001)]);
+
+        // The logs first, as it happened on the developer's machine: no booking is saved yet.
+        $this->assertSame(0, Artisan::call('importApplicationLogJson:ftp'));
+        Queue::assertPushed(ImportApplicationLogJsonChunkJob::class, 1);
+
+        // The worker runs the chunk: nothing to save yet, so it is put back to look again later - not dropped.
+        $first = (new ImportApplicationLogJsonChunkJob($chunk, 0))->withFakeQueueInteractions();
+        $first->handle();
+        $first->assertReleased(delay: 60);
+        $this->assertSame(0, ApplicationLog::count());
+
+        // The bookings come in; the chunk looks again and saves the log.
+        $this->assertSame(0, Artisan::call('importBookingJson:ftp'));
+        Queue::pushed(ImportBookingJsonChunkJob::class)->each(fn (ImportBookingJsonChunkJob $job) => $job->handle());
+
+        $second = (new ImportApplicationLogJsonChunkJob($chunk, 0))->withFakeQueueInteractions();
+        $second->handle();
+        $second->assertNotReleased();
+        $this->assertSame(1, ApplicationLog::count());
+    }
+
+    public function test_importApplicationLogJson_ftp_sync_keeps_the_file_while_the_bookings_are_not_saved_yet(): void
+    {
+        $this->useLocalImportFolders();
+        $this->putLocalLogs([$this->logRecord(7101, ActionTypeEnum::STORE_BOOKING->value, self::OWNER)]);
+
+        // No booking in the database: nothing can be saved, and the file must not be put away as if it were.
+        $this->assertSame(1, Artisan::call('importApplicationLogJson:ftp', ['--sync' => true]));
+        $output = Artisan::output();
+
+        $this->assertStringContainsString('1 logs have no booking saved yet: import the bookings first and run this again', $output);
+        $this->assertStringContainsString('file left in place because of errors', $output);
+        $this->assertSame(0, ApplicationLog::count());
+        $this->assertSame(['import-json/' . self::LOGS_FILE_ON_DISK], $this->bucket()->files('import-json'));
+        $this->assertSame([], $this->bucket()->files('loaded-json'));
+        $this->assertSame(1, DigitalHatchFetchedFile::count(), 'it was taken from the folder, so it is not taken again');
+
+        // The bookings come in; the same command finds the file that waits (nothing new to take) and saves the log.
+        $this->putLocalBookings([$this->foodBooking(7101)]);
+        $this->assertSame(0, Artisan::call('importBookingJson:ftp', ['--sync' => true]));
+        $this->assertSame(0, Artisan::call('importApplicationLogJson:ftp', ['--sync' => true]));
+        $output = Artisan::output();
+
+        $this->assertStringContainsString('No new file in the source', $output);
+        $this->assertStringContainsString('1 logs in 1 chunks saved (1 created), file moved to loaded-json/', $output);
+        $this->assertSame(1, ApplicationLog::count());
+        $this->assertSame([], $this->bucket()->files('import-json'));
+    }
+
+    public function test_force_is_handed_to_the_ftp_file_job_and_only_the_ftp_commands_take_it(): void
     {
         Queue::fake();
 
-        Artisan::call('importBookingJson:ftp', ['--force' => true]);
-        Artisan::call('importApplicationLogJson:ftp', ['--force' => true]);
-        Artisan::call('importFile:ftp');
-
-        Queue::assertPushed(ImportBookingJsonFtpJob::class, fn (ImportBookingJsonFtpJob $job): bool => $job->force === true);
-        Queue::assertPushed(ImportApplicationLogJsonFtpJob::class, fn (ImportApplicationLogJsonFtpJob $job): bool => $job->force === true);
-        Queue::assertPushed(ImportFileFtpJob::class, fn (ImportFileFtpJob $job): bool => $job->force === false);
+        Artisan::call('importFile:ftp', ['--force' => true]);
+        Queue::assertPushed(ImportFileFtpJob::class, fn (ImportFileFtpJob $job): bool => $job->force === true);
 
         $this->expectException(\Symfony\Component\Console\Exception\InvalidOptionException::class);
         Artisan::call('importBookingJson:bucket', ['--force' => true]);
@@ -313,33 +432,30 @@ class HatchImportCommandsTest extends HatchTestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_without_sync_the_job_does_the_import_when_the_worker_picks_it_up(): void
+    public function test_without_sync_the_rows_go_through_the_queue_and_the_worker_saves_them(): void
     {
         $this->useLocalImportFolders();
-        $this->putLocalBookings([$this->foodBooking(6801)]);
+        $this->putLocalBookings([$this->foodBooking(6901)]);
 
-        // The test queue is sync, so the queued job runs at once, the way a worker would run it.
+        // The test queue is sync, so each queued chunk job runs at once, the way a worker would run it.
         $this->assertSame(0, Artisan::call('importBookingJson:ftp'));
+        $output = Artisan::output();
 
-        $this->assertStringContainsString('ImportBookingJsonFtpJob queued', Artisan::output());
-        $this->assertTrue(Booking::where('serial_number', 6801)->exists());
+        $this->assertStringContainsString('1 bookings in 1 chunks queued, file moved to loaded-json/', $output);
+        $this->assertStringContainsString('1 ImportBookingJsonChunkJob jobs queued', $output);
+        $this->assertTrue(Booking::where('serial_number', 6901)->exists());
         Storage::disk('minio')->assertExists('loaded-json/' . self::BOOKINGS_FILE_ON_DISK);
         $this->assertSame(1, DigitalHatchFetchedFile::count());
     }
 
-    public function test_a_job_with_a_file_it_cannot_read_throws_so_the_queue_tries_again(): void
+    public function test_a_json_command_fails_and_leaves_the_file_when_it_cannot_be_read_even_without_sync(): void
     {
         Storage::disk('minio')->put(self::BOOKING_DIRECTORY . '/' . self::BOOKINGS_FILE, 'not json');
 
-        $this->assertSame(1, Artisan::call('importBookingJson:bucket'), 'on the sync test queue the failure reaches the command');
+        $this->assertSame(1, Artisan::call('importBookingJson:bucket'));
+        $this->assertStringContainsString(self::BOOKINGS_FILE, Artisan::output());
         Storage::disk('minio')->assertExists(self::BOOKING_DIRECTORY . '/' . self::BOOKINGS_FILE);
-
-        try {
-            (new ImportBookingJsonBucketJob())->handle();
-            $this->fail('the job should have thrown');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString(self::BOOKINGS_FILE, $e->getMessage());
-        }
+        $this->assertSame(0, DigitalHatchFetchedFile::count(), 'a file that was not imported is not noted as taken');
     }
 
     public function test_an_ftp_job_throws_while_the_ftp_cannot_be_reached(): void
@@ -352,38 +468,57 @@ class HatchImportCommandsTest extends HatchTestCase
         (new ImportFileFtpJob())->handle();
     }
 
-    public function test_the_jobs_take_their_settings_from_the_config(): void
+    public function test_the_file_jobs_take_their_settings_from_the_config(): void
     {
         config(['app.jobs.import_job' => ['tries' => 7, 'backoff' => 13, 'timeout' => 99]]);
 
-        foreach ([
-            new ImportBookingJsonBucketJob(), new ImportBookingJsonFtpJob(true),
-            new ImportApplicationLogJsonBucketJob(), new ImportApplicationLogJsonFtpJob(),
-            new ImportFileBucketJob(), new ImportFileFtpJob(),
-        ] as $job) {
+        foreach ([new ImportFileBucketJob(), new ImportFileFtpJob(true)] as $job) {
             $this->assertSame([7, 13, 99], [$job->tries, $job->backoff, $job->timeout], $job::class);
         }
     }
 
+    public function test_the_chunk_jobs_take_their_settings_from_their_own_config(): void
+    {
+        config([
+            'app.jobs.import_booking_json' => ['tries' => 2, 'backoff' => 3, 'timeout' => 4],
+            'app.jobs.import_application_log_json' => ['tries' => 5, 'backoff' => 6, 'timeout' => 7],
+        ]);
+
+        $booking = new ImportBookingJsonChunkJob([], 0);
+        $log = new ImportApplicationLogJsonChunkJob([], 0);
+
+        $this->assertSame([2, 3, 4], [$booking->tries, $booking->backoff, $booking->timeout]);
+        $this->assertSame([5, 6, 7], [$log->tries, $log->backoff, $log->timeout]);
+    }
+
     //----------------------------- The schedule ------------------------------------//
 
-    public function test_the_imports_are_scheduled_in_order_bookings_then_logs_then_files_and_the_fetch_only_commands_are_gone(): void
+    /** @return \Illuminate\Support\Collection<int, \Illuminate\Console\Scheduling\Event> */
+    private function scheduled(): \Illuminate\Support\Collection
     {
         Artisan::call('schedule:list');
 
-        $events = collect(app(Schedule::class)->events());
-        $find = fn (string $name) => $events->first(fn ($event) => str_contains($event->command, $name));
+        return collect(app(Schedule::class)->events());
+    }
 
-        // From the bucket: the booking files, the logs a minute later, the files and images after them (a log and a file belong to a booking).
-        $this->assertSame('*/5 * * * *', $find('importBookingJson:bucket')->expression);
-        $this->assertSame('1-59/5 * * * *', $find('importApplicationLogJson:bucket')->expression);
-        $this->assertSame('4-59/5 * * * *', $find('importFile:bucket')->expression);
+    public function test_the_ftp_imports_are_scheduled_in_order_bookings_then_logs_then_files_and_the_fetch_only_commands_are_gone(): void
+    {
+        $find = fn (string $name) => $this->scheduled()->first(fn ($event) => str_contains($event->command, $name));
 
-        // From the digital hatch, in the same order.
+        // A log and a file belong to a booking, so they come after the bookings.
         $this->assertSame('2-59/5 * * * *', $find('importBookingJson:ftp')->expression);
         $this->assertSame('3-59/5 * * * *', $find('importApplicationLogJson:ftp')->expression);
         $this->assertSame('4-59/5 * * * *', $find('importFile:ftp')->expression);
 
         $this->assertNull($find('digital-hatch:fetch'), 'the :ftp imports take the files themselves');
+    }
+
+    public function test_the_bucket_imports_are_scheduled_in_the_same_order(): void
+    {
+        $find = fn (string $name) => $this->scheduled()->first(fn ($event) => str_contains($event->command, $name));
+
+        $this->assertSame('*/5 * * * *', $find('importBookingJson:bucket')?->expression, 'importBookingJson:bucket is not in routes/console.php');
+        $this->assertSame('1-59/5 * * * *', $find('importApplicationLogJson:bucket')?->expression, 'importApplicationLogJson:bucket is not in routes/console.php');
+        $this->assertSame('4-59/5 * * * *', $find('importFile:bucket')?->expression, 'importFile:bucket is not in routes/console.php');
     }
 }

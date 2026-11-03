@@ -11,9 +11,10 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
 /**
- * What the six jobs of the import commands share (importBookingJson, importApplicationLogJson and importFile, each ":bucket" or ":ftp"): the
- * command only queues its job, the job does the import. A ":bucket" job reads the bucket folder and queues the rows as chunk jobs; a ":ftp" job
- * first takes the new files from the digital hatch into that folder. Tries, back-off and timeout are config('app.jobs.import_job').
+ * What the two jobs of the file import share (importFile:bucket and importFile:ftp): the command only queues its job and the job does the import,
+ * because copying files takes a while; a ":ftp" job first takes the new files from the digital hatch into the bucket folder. (The json imports
+ * have no such job: their command reads the files itself and queues the rows as chunk jobs, ImportBookingJsonChunkJob and
+ * ImportApplicationLogJsonChunkJob.) Tries, back-off and timeout are config('app.jobs.import_job').
  */
 abstract class ImportJob implements ShouldQueue
 {

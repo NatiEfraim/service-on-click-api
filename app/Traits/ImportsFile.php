@@ -27,9 +27,9 @@ trait ImportsFile
     }
 
     /**
-     * importFile:bucket - queues ImportFileBucketJob (a queue worker runs it), or with $sync saves the files waiting in the bucket here and returns
-     * what it did.
-     * @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>}
+     * importFile:bucket - queues ImportFileBucketJob (a queue worker runs it; the files are copied one by one, which can take a while), or with
+     * $sync saves the files waiting in the bucket here and returns what it did.
+     * @return array{enabled: bool, switch?: string, queued?: bool, job?: class-string, result?: array<string, mixed>}
      */
     protected function importFileFromBucket(bool $sync = false): array
     {
@@ -45,7 +45,7 @@ trait ImportsFile
 
         dispatch(new ImportFileBucketJob());
 
-        return ['enabled' => true, 'queued' => true];
+        return ['enabled' => true, 'queued' => true, 'job' => ImportFileBucketJob::class];
     }
 
     /**
@@ -68,6 +68,6 @@ trait ImportsFile
 
         dispatch(new ImportFileFtpJob($force));
 
-        return ['enabled' => true, 'queued' => true];
+        return ['enabled' => true, 'queued' => true, 'job' => ImportFileFtpJob::class];
     }
 }

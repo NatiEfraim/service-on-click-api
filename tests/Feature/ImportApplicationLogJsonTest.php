@@ -120,18 +120,35 @@ class ImportApplicationLogJsonTest extends ImportJsonTestCase
         $this->assertSame(1, ApplicationLog::count());
         $this->assertNull(User::where('personal_id', self::ACTOR)->first(), 'nobody is created for a log that was not saved');
 
-        // The booking arrives; the job looks again at the same rows.
+        // Saved here, so it is known that one log cannot be saved yet: the file stays in its folder instead of being put away as done.
+        $this->assertNull($first['files'][0]['moved_to']);
+        $this->assertStringContainsString('1 logs have no booking saved yet: import the bookings first', $first['files'][0]['errors'][0]);
+        Storage::disk('minio')->assertExists(self::LOG_DIRECTORY . '/' . self::LOGS_FILE);
+        Storage::disk('minio')->assertMissing(self::LOADED_DIRECTORY . '/' . self::LOGS_FILE);
+
+        // The booking arrives; reading the file again saves the log that waited (the one that was saved is recognised) and then puts the file away.
         $this->putBookingFile([$this->foodBooking(2002)], 'SrvOnClick_b2r_export_bookings_2026-10-30.json');
         $this->importBookings();
 
-        $chunk = [
-            $this->logRecord(1001, ActionTypeEnum::STORE_BOOKING->value, self::OWNER),
-            $this->logRecord(2002, ActionTypeEnum::STORE_BOOKING->value, self::ACTOR),
-        ];
-        $stats = app(ImportApplicationLogService::class)->importChunk($chunk, 0);
+        $second = $this->importLogs();
 
-        $this->assertSame(['created' => 1, 'already_saved' => 1, 'skipped' => 0, 'booking_not_found' => 0], $stats);
+        $this->assertSame(['created' => 1, 'already_saved' => 1, 'skipped' => 0, 'booking_not_found' => 0], $second['files'][0]['stats']);
+        $this->assertSame([], $second['files'][0]['errors']);
+        $this->assertSame(self::LOADED_DIRECTORY . '/' . self::LOGS_FILE, $second['files'][0]['moved_to']);
         $this->assertSame(2, ApplicationLog::count());
+    }
+
+    public function test_the_queued_path_still_moves_the_file_because_the_chunk_jobs_wait_for_the_bookings(): void
+    {
+        Queue::fake();
+        $this->putLogFile([$this->logRecord(3003, ActionTypeEnum::STORE_BOOKING->value, self::OWNER)]);
+
+        $result = app(ImportApplicationLogService::class)->importFromBucket();
+
+        // Nothing is read for its rows here (they are queued): the chunk job is what waits and looks again, so the file is backed up at once.
+        Queue::assertPushed(ImportApplicationLogJsonChunkJob::class, 1);
+        $this->assertSame([], $result['files'][0]['errors']);
+        $this->assertSame(self::LOADED_DIRECTORY . '/' . self::LOGS_FILE, $result['files'][0]['moved_to']);
     }
 
     public function test_rows_that_cannot_be_logs_are_skipped_and_the_others_are_saved(): void
@@ -153,7 +170,7 @@ class ImportApplicationLogJsonTest extends ImportJsonTestCase
         $this->assertSame(1, ApplicationLog::count());
     }
 
-    public function test_the_job_waits_and_looks_again_while_a_booking_is_missing_and_gives_up_on_the_last_try(): void
+    public function test_the_job_waits_and_looks_again_while_a_booking_is_missing_and_fails_on_the_last_try(): void
     {
         config(['app.jobs.import_application_log_json' => ['tries' => 5, 'backoff' => 60, 'timeout' => 900]]);
         $chunk = [$this->logRecord(3003, ActionTypeEnum::STORE_BOOKING->value, self::OWNER)];
@@ -164,13 +181,29 @@ class ImportApplicationLogJsonTest extends ImportJsonTestCase
         $this->assertSame(1, $stats['booking_not_found']);
         $job->assertReleased(delay: 60);
 
-        // On the last try there is nobody left to wait for.
+        // On the last try there is nobody left to wait for: the job fails, so it shows in failed_jobs and `queue:retry` can save the logs once
+        // the bookings are in - they are not dropped quietly.
         config(['app.jobs.import_application_log_json.tries' => 1]);
         $last = (new ImportApplicationLogJsonChunkJob($chunk, 0))->withFakeQueueInteractions();
-        $last->handle();
+
+        try {
+            $last->handle();
+            $this->fail('the last try should have failed');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('1 logs of chunk 0 still have no booking after 1 tries', $e->getMessage());
+            $this->assertStringContainsString('queue:retry all', $e->getMessage());
+        }
 
         $last->assertNotReleased();
         $this->assertSame(0, ApplicationLog::count());
+
+        // The failed job keeps its rows: once the bookings are in, running it again saves them.
+        $this->putBookingFile([$this->foodBooking(3003)]);
+        $this->importBookings();
+
+        $again = (new ImportApplicationLogJsonChunkJob($chunk, 0))->withFakeQueueInteractions();
+        $this->assertSame(1, $again->handle()['created']);
+        $this->assertSame(1, ApplicationLog::count());
     }
 
     public function test_the_job_does_not_wait_when_every_booking_is_there(): void

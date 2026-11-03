@@ -2,8 +2,6 @@
 
 namespace App\Traits;
 
-use App\Jobs\ImportBookingJsonBucketJob;
-use App\Jobs\ImportBookingJsonFtpJob;
 use App\Services\DigitalHatchService;
 use App\Services\ImportBookingService;
 use Illuminate\Support\Facades\Log;
@@ -23,8 +21,9 @@ trait ImportsBookingJson
     }
 
     /**
-     * importBookingJson:bucket - queues ImportBookingJsonBucketJob (a queue worker runs it), or with $sync imports the files waiting in the bucket
-     * here, rows included, and returns what it did.
+     * importBookingJson:bucket - the command reads the booking files waiting in the bucket (ImportBookingService), queues their rows as chunk jobs
+     * (ImportBookingJsonChunkJob: a queue worker saves them), moves each file to loaded-json and returns what it did. With $sync the rows are saved
+     * here instead, so no worker is needed.
      * @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>}
      */
     protected function importBookingJsonFromBucket(bool $sync = false): array
@@ -35,18 +34,13 @@ trait ImportsBookingJson
             return ['enabled' => false, 'switch' => 'IMPORT_JSON_ENABLED=false'];
         }
 
-        if ($sync) {
-            return ['enabled' => true, 'queued' => false, 'result' => ['imported' => app(ImportBookingService::class)->importFromBucket(true)]];
-        }
-
-        dispatch(new ImportBookingJsonBucketJob());
-
-        return ['enabled' => true, 'queued' => true];
+        return ['enabled' => true, 'queued' => false, 'result' => ['imported' => app(ImportBookingService::class)->importFromBucket($sync)]];
     }
 
     /**
-     * importBookingJson:ftp - queues ImportBookingJsonFtpJob, or with $sync takes the new booking files from the digital hatch into the bucket and
-     * imports them here. Off while HATCH_ENABLED=false.
+     * importBookingJson:ftp - the command takes the new booking files from the digital hatch (the FTP, or the local test folder) into the bucket and
+     * imports them like importBookingJson:bucket: rows queued as chunk jobs (or saved here with $sync), files moved to loaded-json, names noted in
+     * digital_hatch_fetched_files. Off while HATCH_ENABLED=false.
      * @param bool $force take the files again even when they were taken before
      * @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>}
      */
@@ -58,12 +52,6 @@ trait ImportsBookingJson
             return ['enabled' => false, 'switch' => 'HATCH_ENABLED=false'];
         }
 
-        if ($sync) {
-            return ['enabled' => true, 'queued' => false, 'result' => app(DigitalHatchService::class)->importBookings($force, true)];
-        }
-
-        dispatch(new ImportBookingJsonFtpJob($force));
-
-        return ['enabled' => true, 'queued' => true];
+        return ['enabled' => true, 'queued' => false, 'result' => app(DigitalHatchService::class)->importBookings($force, $sync)];
     }
 }

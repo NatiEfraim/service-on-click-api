@@ -43,6 +43,16 @@ class ImportApplicationLogService
         return new ImportApplicationLogJsonChunkJob($rows, $chunkIndex);
     }
 
+    /** Saved here and some logs have no booking yet: the file stays in its folder, so they are not lost - the bookings first, then read it again. */
+    protected function pendingReason(array $stats, string $directory): ?string
+    {
+        $waiting = (int) ($stats['booking_not_found'] ?? 0);
+
+        return $waiting === 0
+            ? null
+            : "{$waiting} logs have no booking saved yet: import the bookings first and run this again (the logs whose booking is saved were saved; the file stays in {$directory})";
+    }
+
     /**
      * Saves one chunk in a transaction. Unusable rows are logged and skipped; a log whose booking is not saved yet is counted in
      * booking_not_found and the job looks again later (see ImportApplicationLogJsonChunkJob).

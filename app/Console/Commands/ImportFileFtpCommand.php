@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\ImportFileFtpJob;
 use App\Traits\ImportsFile;
 
 class ImportFileFtpCommand extends ImportCommand
@@ -18,10 +17,5 @@ class ImportFileFtpCommand extends ImportCommand
     protected function importFrom(bool $force, bool $sync): array
     {
         return $this->importFileFromFtp($force, $sync);
-    }
-
-    protected function jobClass(): string
-    {
-        return ImportFileFtpJob::class;
     }
 }

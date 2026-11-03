@@ -117,20 +117,27 @@ and every file is checked again before it is written; a file that holds one is h
 Five scheduler commands of the hatch, all off while `HATCH_ENABLED=false`; the FTP account is `HATCH_FTP_*`, the folders are in `config/services.php`
 (`digital-hatch`). Names are never changed on the way: what is in the bucket is what is on the FTP.
 
-Every stream has its **own command, queued job, service and trait**, so one can be run (and tested) without the others, and the command names where
-the files come from: **`:bucket`** reads the bucket, **`:ftp`** works with the digital hatch. The commands **queue** their job (a queue worker must run;
-tries / back-off / timeout in `config/app.php` `jobs.digital_hatch_send_*` and `jobs.import_job`, a run that failed - FTP down - is tried again);
-`--sync` does the work right now in the command and prints what it did; `--force` sends (r2b) or takes (b2r) the same file again.
+Every stream has its **own command, job, service and trait**, so one can be run (and tested) without the others, and the command names where the
+files come from: **`:bucket`** reads the bucket, **`:ftp`** works with the digital hatch. A queue worker must run (`php artisan queue:work`):
+
+- the two **r2b sends** and the two **file imports** queue one job each (tries / back-off / timeout in `config/app.php` `jobs.digital_hatch_send_*`
+  and `jobs.import_job`; a run that failed - FTP down - is tried again);
+- the two **json imports** (bookings, application logs) work in the command - command -> trait -> service: the file is taken, read, backed up in
+  `loaded-json` and noted in the ledger - and queue its **rows as chunk jobs** (`ImportBookingJsonChunkJob`, 100 bookings each;
+  `ImportApplicationLogJsonChunkJob`, 500 logs each) that the worker saves in the database.
+
+`--sync` does the work right now in the command (the rows are saved there too, no worker needed) and prints what it did; `--force` sends (r2b) or
+takes (b2r) the same file again.
 
 | Command | Job (service) | Every | From -> to | Files |
 |---|---|---|---|---|
 | `digital-hatch:send-users` | `SendHatchUsersJob` (`UsersExportService`) | 2 min (odd minutes) | bucket `export-json/users` -> FTP `RED_TO_BLACK_FTP_PATH` (`/R2B/Tikshoret-R2B-Prod/`) | `SrvOnClick_r2b_users_<Y-m-d>.json` |
 | `digital-hatch:send-booking-status` | `SendHatchBookingStatusJob` (`BookingStatusSnapshotService`) | 2 min (odd minutes, after the export) | bucket `export-json/booking-status` -> the same FTP folder | `SrvOnClick_r2b_booking_status_<Y-m-d>.json` |
-| `importBookingJson:ftp` | `ImportBookingJsonFtpJob` (`DigitalHatchService`) | 5 min (minute 2) | FTP `BLACK_TO_RED_FTP_PATH` (`/Tikshoret-B2R-Prod/`) -> bucket `import-json` -> database -> `loaded-json` | `SrvOnClick_b2r_export_bookings_<Y-m-d_H-i-s>.json` |
-| `importApplicationLogJson:ftp` | `ImportApplicationLogJsonFtpJob` (`DigitalHatchService`) | 5 min (minute 3, after the bookings) | the same for the logs: FTP -> bucket `import-json` -> database -> `loaded-json` | `SrvOnClick_b2r_application_logs_<Y-m-d_H-i-s>.json` |
+| `importBookingJson:ftp` | `ImportBookingJsonChunkJob` per chunk (`DigitalHatchService` -> `ImportBookingService`) | 5 min (minute 2) | FTP `BLACK_TO_RED_FTP_PATH` (`/Tikshoret-B2R-Prod/`) -> bucket `import-json` -> chunk jobs -> database; the file -> `loaded-json` | `SrvOnClick_b2r_export_bookings_<Y-m-d_H-i-s>.json` |
+| `importApplicationLogJson:ftp` | `ImportApplicationLogJsonChunkJob` per chunk (`DigitalHatchService` -> `ImportApplicationLogService`) | 5 min (minute 3, after the bookings) | the same for the logs: FTP -> bucket `import-json` -> chunk jobs -> database; the file -> `loaded-json` | `SrvOnClick_b2r_application_logs_<Y-m-d_H-i-s>.json` |
 | `importFile:ftp` | `ImportFileFtpJob` (`DigitalHatchService`, `ImportFileService`) | 5 min (minute 4) | FTP `BLACK_TO_RED_FTP_ATTACHMENTS_PATH` (`/DigitalFiles-B2R-Prod/`) -> bucket `import-files` -> database (file / image rows) -> `files` + `loaded-files` | `SrvOnClickFiles_<stored name>.<ext>` (the name the booking json gives, plus the extension) |
-| `importBookingJson:bucket` | `ImportBookingJsonBucketJob` (`ImportBookingService`) | 5 min | bucket `import-json` -> database -> `loaded-json` | the files the mobile app drops there (this command was `importBookingJson:mysql`, which still works) |
-| `importApplicationLogJson:bucket` | `ImportApplicationLogJsonBucketJob` (`ImportApplicationLogService`) | 5 min (minute 1) | bucket `import-json` -> database -> `loaded-json` | (was `importApplicationLogJson:mysql`, which still works) |
+| `importBookingJson:bucket` | `ImportBookingJsonChunkJob` per chunk (`ImportBookingService`) | 5 min | bucket `import-json` -> chunk jobs -> database; the file -> `loaded-json` | the files the mobile app drops there (this command was `importBookingJson:mysql`, which still works) |
+| `importApplicationLogJson:bucket` | `ImportApplicationLogJsonChunkJob` per chunk (`ImportApplicationLogService`) | 5 min (minute 1) | bucket `import-json` -> chunk jobs -> database; the file -> `loaded-json` | (was `importApplicationLogJson:mysql`, which still works) |
 | `importFile:bucket` | `ImportFileBucketJob` (`ImportFileService`) | 5 min (minute 4, after the bookings) | bucket `import-files` -> database (file / image rows) -> `files` + `loaded-files` | `SrvOnClickFiles_<stored name>.<ext>` |
 
 - **Sending** puts only the **newest** file of each stream (both are cumulative snapshots) and sends the same name again when its content changed
@@ -153,6 +160,12 @@ tries / back-off / timeout in `config/app.php` `jobs.digital_hatch_send_*` and `
   and `DIGITAL_HATCH_IMPORT_FILES_PATH` (the files and images, e.g. `.../tikshort-ftp/b2r_files`) make the three `:ftp` imports read those folders
   instead of the FTP. The import folders must exist (a mistyped path is an error, not a new empty folder) and are never written to or cleaned.
   Use forward slashes in `.env`.
+- **A log belongs to a booking: import the bookings first.** A queued log chunk that finds some logs without their booking looks again
+  (`IMPORT_APPLICATION_LOG_JSON_JOB_BACKOFF`, 60 s, up to `IMPORT_APPLICATION_LOG_JSON_JOB_TRIES`, 5 tries) and then **fails visibly** (`failed_jobs`,
+  with its rows) instead of dropping the logs; `php artisan queue:retry all` saves them once the bookings are in (a log that was saved is recognised, so
+  nothing is saved twice). With `--sync` there is no queue to wait in: a file with such logs **stays in `import-json/`** (it is not moved to
+  `loaded-json/`) and the command fails with the reason; run it again after the bookings (a `:ftp` file that was taken is not taken again, but the
+  waiting file is found in `import-json/`).
 - **A `:ftp` import = taking, then the `:bucket` import.** It first takes the new files into the bucket folder the matching `:bucket` command reads
   (`import-json` for the json, `import-files` for the files and images), then runs that import, so a json file ends up in the database and in
   `loaded-json/` (the file is not changed on the way; a name already in `loaded-json/` gets the date and time added) and a file in the database, in

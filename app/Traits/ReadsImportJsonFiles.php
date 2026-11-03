@@ -22,6 +22,16 @@ trait ReadsImportJsonFiles
     abstract protected function makeChunkJob(array $rows, int $chunkIndex): object;
 
     /**
+     * Why a file that was just saved in this process (not queued) must stay in its folder although no chunk failed; null when it can move on.
+     * Rows that cannot be saved *yet* - a log whose booking is missing - are not an error of the file, but moving it would lose them.
+     * @param array<string, int> $stats what the chunks returned, added up
+     */
+    protected function pendingReason(array $stats, string $directory): ?string
+    {
+        return null;
+    }
+
+    /**
      * Imports every waiting file of this type, oldest first. A file is moved only once all its chunks are queued
      * (or saved without error when $sync); an unreadable file stays in place.
      * @param bool $sync run the chunk jobs in this process instead of queueing them
@@ -91,6 +101,11 @@ trait ReadsImportJsonFiles
                 Log::error("Import of {$fileName}: chunk {$chunkIndex} failed: " . $e->getMessage());
                 $errors[] = "chunk {$chunkIndex}: " . $e->getMessage();
             }
+        }
+
+        // Saved here, not queued, so what could not be saved yet is known now: such a file stays where it is, to be read again later.
+        if ($sync && $errors === [] && ($pending = $this->pendingReason($stats, $directory)) !== null) {
+            $errors[] = $pending;
         }
 
         $movedTo = null;

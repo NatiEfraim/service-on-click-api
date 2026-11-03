@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\ImportFileBucketJob;
 use App\Traits\ImportsFile;
 
 class ImportFileBucketCommand extends ImportCommand
@@ -17,10 +16,5 @@ class ImportFileBucketCommand extends ImportCommand
     protected function importFrom(bool $force, bool $sync): array
     {
         return $this->importFileFromBucket($sync);
-    }
-
-    protected function jobClass(): string
-    {
-        return ImportFileBucketJob::class;
     }
 }

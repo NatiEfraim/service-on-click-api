@@ -105,9 +105,11 @@ return [
             'cron' => env('IMPORT_FILE_CRON', '4-59/5 * * * *'),
         ],
 
-        // The b2r import commands (importBookingJson, importApplicationLogJson, importFile; each ":bucket" or ":ftp") only queue their own job, so a
-        // queue worker must be running. The job reads the bucket folder (and, for ":ftp", first takes the new files from the digital hatch into it)
-        // and queues the chunk jobs above. A run that fails (FTP down) is tried again after the back-off. All six jobs use these settings.
+        // The json imports (importBookingJson, importApplicationLogJson; each ":bucket" or ":ftp") read the files in the command and queue their rows
+        // as the chunk jobs above, so a queue worker must be running to save them. A log chunk waits for its booking (backoff, tries) and then fails
+        // visibly (failed_jobs, `php artisan queue:retry all`) instead of dropping the logs.
+        // The file imports (importFile:bucket, importFile:ftp) queue one job each, because copying files takes a while; the job takes the new files
+        // from the digital hatch first (":ftp") and a run that fails (FTP down) is tried again after the back-off. Those two jobs use these settings.
         'import_job' => [
             'tries' => (int) env('IMPORT_JOB_TRIES', 3),
             'backoff' => (int) env('IMPORT_JOB_BACKOFF', 60),
