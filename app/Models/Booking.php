@@ -113,7 +113,7 @@ class Booking extends Model
     /**
      * The status that decides whose turn it is: for a booking on hold (8, 9, 10) the status it was put on hold from (parked_status_id), else its own.
      * A hold never moves a booking - its stage, its buttons and who sees it stay those of this status - while status_id, the hold, is what the
-     * booking shows and what is sent to the mobile app. A hold with nowhere recorded (from before parked_status_id) is its own position.
+     * booking shows and what is sent to the mobile app. A hold with nowhere recorded (put on before parked_status_id, or already on hold when the booking arrived) is its own position.
      * Only a hold looks at parked_status_id, so a value left on any other status changes nothing.
      */
     public function positionStatus(): StatusBookingEnum
