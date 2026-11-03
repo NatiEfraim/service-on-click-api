@@ -10,7 +10,12 @@ use App\Enums\StatusBookingEnum as Status;
  * The booking route rules, shared by the UI buttons (BookingResource::next_actions) and the server checks (BookingWorkflowService).
  * The route runs from the bottom up: control officer (only on the types that have the role), vice approver, approver.
  * Turn-based: only the role whose turn it is may act, except the admin of the booking type, who holds every turn (control officer, vice approver
- * and approver). The approver and the admin may also skip the stages below them with the final approval (shortcutTransitions).
+ * and approver). A role may also act at a stage below its own, without waiting for the role that owns it (skipTransitions): the approver and the
+ * admin decide finally - approve or reject - from the control officer's and the vice approver's stage, and the vice approver takes a booking over
+ * from the control officer.
+ * A hold (TRANSPORTATION: 8, 9, 10) never moves a booking: the stage, the buttons and the visibility stay those of the status it was put on hold
+ * from. So every method here takes that status as $current - the status that decides whose turn it is (Booking::positionStatus()) - and, where
+ * buttons are built, the hold itself as $hold, which is not offered again. A hold with nowhere recorded is its own $current: the supplier stage.
  * Status ids are the mobile app's - never renumber.
  */
 final class Workflow
@@ -64,16 +69,23 @@ final class Workflow
     }
 
     /**
-     * The moves of the role whose turn it is, then the shortcut to the final approval for the approver and the admin.
+     * The moves of the role whose turn it is (the admin holds every turn), then the moves of the roles above that stage that skip it.
+     * Each status is listed once, with the label of the first role that offers it.
+     * @param Status $current the status that decides whose turn it is
+     * @param ?Status $hold the hold the booking is on, when $current is the status it was put on hold from: not offered again
      * @param array{isControlOfficer?: bool, isViceApprover?: bool, isApprover?: bool, isAdmin?: bool} $flags
      * @return array<int, array{status: Status, label: string}>
      */
-    public function allowedTransitions(Status $current, array $flags, int $bookingTypeId): array
+    public function allowedTransitions(Status $current, array $flags, int $bookingTypeId, ?Status $hold = null): array
     {
-        return [
-            ...$this->turnTransitions($current, $flags, $bookingTypeId),
-            ...$this->shortcutTransitions($current, $flags, $bookingTypeId),
-        ];
+        $transitions = [];
+        $moves = [...$this->turnTransitions($current, $flags, $bookingTypeId, $hold), ...$this->skipTransitions($current, $flags, $bookingTypeId, $hold)];
+
+        foreach ($moves as $transition) {
+            $transitions[$transition['status']->value] ??= $transition;
+        }
+
+        return array_values($transitions);
     }
 
     /**
@@ -81,115 +93,165 @@ final class Workflow
      * @param array{isControlOfficer?: bool, isViceApprover?: bool, isApprover?: bool, isAdmin?: bool} $flags
      * @return array<int, array{status: Status, label: string}>
      */
-    private function turnTransitions(Status $current, array $flags, int $bookingTypeId): array
+    private function turnTransitions(Status $current, array $flags, int $bookingTypeId, ?Status $hold = null): array
     {
-        $transitions = [];
-        $isTransportation = $this->transportationBookingTypeId !== null && $bookingTypeId === $this->transportationBookingTypeId;
-
         $isAdmin = !empty($flags['isAdmin']);
         $isControlOfficer = $isAdmin || !empty($flags['isControlOfficer']);
         $isViceApprover = $isAdmin || !empty($flags['isViceApprover']);
         $isApprover = $isAdmin || !empty($flags['isApprover']);
+        // The hold the booking is on is not offered again: the one it was put on, or its own status when it is parked nowhere (an old hold).
+        $except = $hold ?? $current;
 
-        $holds = function (array &$transitions) use ($current, $isTransportation): void {
-            if (!$isTransportation) {
-                return;
-            }
-
-            $labels = [
-                Status::PENDING_FILE->value => 'העבר לממתין לקבצים מהלקוח',
-                Status::PENDING_PROCESSING->value => 'העבר לממתין לאישור ספק',
-                Status::PENDING_APPROVED->value => 'העבר לממתין למספר ספק',
-            ];
-
-            foreach ([Status::PENDING_FILE, Status::PENDING_PROCESSING, Status::PENDING_APPROVED] as $hold) {
-                if ($hold !== $current) {
-                    $transitions[] = ['status' => $hold, 'label' => $labels[$hold->value]];
-                }
-            }
+        return match ($this->stageOf($current, $bookingTypeId)) {
+            BookingStageEnum::CONTROL_OFFICER => $isControlOfficer ? $this->controlOfficerMoves($except, $bookingTypeId) : [],
+            BookingStageEnum::VICE_APPROVER => $isViceApprover ? $this->viceApproverMoves($except, $bookingTypeId) : [],
+            BookingStageEnum::APPROVER,
+            BookingStageEnum::SUPPLIER_FILES,
+            BookingStageEnum::SUPPLIER_APPROVAL,
+            BookingStageEnum::SUPPLIER_NUMBER => $isApprover ? $this->approverMoves($except, $bookingTypeId) : [],
+            BookingStageEnum::REALIZATION => $this->realizationMoves($bookingTypeId, $isViceApprover, $isApprover),
+            BookingStageEnum::BARBER_DONE => $isApprover ? $this->closingMoves() : [],
+            BookingStageEnum::CLOSED => [],
         };
-
-        switch ($this->stageOf($current, $bookingTypeId)) {
-            case BookingStageEnum::CONTROL_OFFICER:
-                if ($isControlOfficer) {
-                    $transitions[] = ['status' => Status::CONTROL_OFFICER_APPROVED, 'label' => 'אישור והעברה לגורם המטפל'];
-                    $transitions[] = ['status' => Status::CONTROL_OFFICER_REJECTED, 'label' => 'דחייה'];
-                    $holds($transitions);
-                }
-                break;
-
-            case BookingStageEnum::VICE_APPROVER:
-                if ($isViceApprover) {
-                    $transitions[] = ['status' => Status::VICE_APPROVER_APPROVED, 'label' => 'אישור והעברה למפקד התחום'];
-                    $transitions[] = ['status' => Status::VICE_APPROVER_REJECTED, 'label' => 'דחייה'];
-                    $holds($transitions);
-                }
-                break;
-
-            case BookingStageEnum::APPROVER:
-            case BookingStageEnum::SUPPLIER_FILES:
-            case BookingStageEnum::SUPPLIER_APPROVAL:
-            case BookingStageEnum::SUPPLIER_NUMBER:
-                if ($isApprover) {
-                    $transitions[] = ['status' => Status::APPROVED, 'label' => 'אישור סופי'];
-                    $transitions[] = ['status' => Status::REJECTED, 'label' => 'דחייה סופית'];
-                    $holds($transitions);
-                }
-                break;
-
-            case BookingStageEnum::REALIZATION:
-                if ($this->barberBookingTypeId !== null && $bookingTypeId === $this->barberBookingTypeId && $isViceApprover) {
-                    $transitions[] = ['status' => Status::APPROVED_BY_BARBER, 'label' => 'אישור על ידי הספר'];
-                }
-
-                if ($isApprover) {
-                    if ($bookingTypeId !== $this->barberBookingTypeId) {
-                        $transitions[] = ['status' => Status::COMPLETED, 'label' => 'סיום קריאה'];
-                    }
-
-                    $transitions[] = ['status' => Status::CANCELED_BY_APPROVER, 'label' => 'ביטול קריאה'];
-                }
-                break;
-
-            case BookingStageEnum::BARBER_DONE:
-                if ($isApprover) {
-                    $transitions[] = ['status' => Status::COMPLETED, 'label' => 'סיום קריאה'];
-                    $transitions[] = ['status' => Status::CANCELED_BY_APPROVER, 'label' => 'ביטול קריאה'];
-                }
-                break;
-
-            case BookingStageEnum::CLOSED:
-                break;
-        }
-
-        return $transitions;
     }
 
     /**
-     * The approver and the admin of the type need not wait for the stages below them: from the control officer's or the vice approver's stage
-     * they approve finally, straight to the realization stage (no status of the stages they skip in between). Only the approval: a final
-     * rejection still comes after the stages below.
+     * What a role above the stage a booking waits at may do without waiting for the role that owns the stage:
+     *  - the approver and the admin of the type decide finally - approve or reject - from the control officer's and the vice approver's stage,
+     *    straight to the realization stage or to the rejection, with no status of the skipped stages in between;
+     *  - the vice approver takes a booking over from the control officer (transportation), with the moves of their own stage.
+     * Only the decision is skipped: correcting values stays with the role whose turn it is (canEditValues reads turnTransitions only), and a role
+     * never reaches above its own stage.
      * @param array{isControlOfficer?: bool, isViceApprover?: bool, isApprover?: bool, isAdmin?: bool} $flags
      * @return array<int, array{status: Status, label: string}>
      */
-    private function shortcutTransitions(Status $current, array $flags, int $bookingTypeId): array
+    private function skipTransitions(Status $current, array $flags, int $bookingTypeId, ?Status $hold = null): array
     {
-        $mayApprove = !empty($flags['isAdmin']) || !empty($flags['isApprover']);
-        $below = in_array($this->stageOf($current, $bookingTypeId), [BookingStageEnum::CONTROL_OFFICER, BookingStageEnum::VICE_APPROVER], true);
+        $stage = $this->stageOf($current, $bookingTypeId);
+        $moves = [];
 
-        return $mayApprove && $below ? [['status' => Status::APPROVED, 'label' => 'אישור סופי']] : [];
+        if (!empty($flags['isViceApprover']) && $stage === BookingStageEnum::CONTROL_OFFICER) {
+            $moves = $this->viceApproverMoves($hold ?? $current, $bookingTypeId);
+        }
+
+        $belowTheApprover = in_array($stage, [BookingStageEnum::CONTROL_OFFICER, BookingStageEnum::VICE_APPROVER], true);
+
+        if ((!empty($flags['isApprover']) || !empty($flags['isAdmin'])) && $belowTheApprover) {
+            $moves = [...$moves, ...$this->finalDecisionMoves()];
+        }
+
+        return $moves;
     }
 
-    /** Single source for the UI buttons and the server check. @param iterable<string> $permissionNames @return array<int, array{status: Status, label: string}> */
-    public function availableActions(Status $current, iterable $permissionNames, int $bookingTypeId): array
+    /** @param Status $except the hold the booking is on, which is not offered again (any other status leaves the holds as they are) @return array<int, array{status: Status, label: string}> */
+    private function controlOfficerMoves(Status $except, int $bookingTypeId): array
     {
-        return $this->allowedTransitions($current, self::roleFlags($permissionNames, $bookingTypeId), $bookingTypeId);
+        return [
+            ['status' => Status::CONTROL_OFFICER_APPROVED, 'label' => 'אישור והעברה לגורם המטפל'],
+            ['status' => Status::CONTROL_OFFICER_REJECTED, 'label' => 'דחייה'],
+            ...$this->holdMoves($except, $bookingTypeId),
+        ];
+    }
+
+    /** @param Status $except see controlOfficerMoves @return array<int, array{status: Status, label: string}> */
+    private function viceApproverMoves(Status $except, int $bookingTypeId): array
+    {
+        return [
+            ['status' => Status::VICE_APPROVER_APPROVED, 'label' => 'אישור והעברה למפקד התחום'],
+            ['status' => Status::VICE_APPROVER_REJECTED, 'label' => 'דחייה'],
+            ...$this->holdMoves($except, $bookingTypeId),
+        ];
+    }
+
+    /** @param Status $except see controlOfficerMoves @return array<int, array{status: Status, label: string}> */
+    private function approverMoves(Status $except, int $bookingTypeId): array
+    {
+        return [...$this->finalDecisionMoves(), ...$this->holdMoves($except, $bookingTypeId)];
+    }
+
+    /** The approver's decision on a request: the final approval or the final rejection (which needs a comment). @return array<int, array{status: Status, label: string}> */
+    private function finalDecisionMoves(): array
+    {
+        return [
+            ['status' => Status::APPROVED, 'label' => 'אישור סופי'],
+            ['status' => Status::REJECTED, 'label' => 'דחייה סופית'],
+        ];
+    }
+
+    /**
+     * Transportation only: put the booking on hold on the supplier side (files, approval, number), except on the hold it is on. A hold does not
+     * move the booking - it stays with the role that holds the stage - and its status is what the mobile app shows the requester.
+     * @return array<int, array{status: Status, label: string}>
+     */
+    private function holdMoves(Status $except, int $bookingTypeId): array
+    {
+        if ($this->transportationBookingTypeId === null || $bookingTypeId !== $this->transportationBookingTypeId) {
+            return [];
+        }
+
+        $labels = [
+            Status::PENDING_FILE->value => 'העבר לממתין לקבצים מהלקוח',
+            Status::PENDING_PROCESSING->value => 'העבר לממתין לאישור ספק',
+            Status::PENDING_APPROVED->value => 'העבר לממתין למספר ספק',
+        ];
+        $moves = [];
+
+        foreach ([Status::PENDING_FILE, Status::PENDING_PROCESSING, Status::PENDING_APPROVED] as $hold) {
+            if ($hold !== $except) {
+                $moves[] = ['status' => $hold, 'label' => $labels[$hold->value]];
+            }
+        }
+
+        return $moves;
+    }
+
+    /** After the final approval: the barber marks a haircut done (vice approver's move), the approver completes or cancels. @return array<int, array{status: Status, label: string}> */
+    private function realizationMoves(int $bookingTypeId, bool $isViceApprover, bool $isApprover): array
+    {
+        $isBarber = $this->barberBookingTypeId !== null && $bookingTypeId === $this->barberBookingTypeId;
+        $moves = [];
+
+        if ($isBarber && $isViceApprover) {
+            $moves[] = ['status' => Status::APPROVED_BY_BARBER, 'label' => 'אישור על ידי הספר'];
+        }
+
+        if ($isApprover) {
+            // A haircut is completed after the barber's mark (BARBER_DONE), not straight from the approval.
+            if (!$isBarber) {
+                $moves[] = ['status' => Status::COMPLETED, 'label' => 'סיום קריאה'];
+            }
+
+            $moves[] = ['status' => Status::CANCELED_BY_APPROVER, 'label' => 'ביטול קריאה'];
+        }
+
+        return $moves;
+    }
+
+    /** @return array<int, array{status: Status, label: string}> */
+    private function closingMoves(): array
+    {
+        return [
+            ['status' => Status::COMPLETED, 'label' => 'סיום קריאה'],
+            ['status' => Status::CANCELED_BY_APPROVER, 'label' => 'ביטול קריאה'],
+        ];
+    }
+
+    /**
+     * Single source for the UI buttons and the server check.
+     * @param Status $current the status that decides whose turn it is (Booking::positionStatus())
+     * @param ?Status $hold the hold the booking is on, if any
+     * @param iterable<string> $permissionNames
+     * @return array<int, array{status: Status, label: string}>
+     */
+    public function availableActions(Status $current, iterable $permissionNames, int $bookingTypeId, ?Status $hold = null): array
+    {
+        return $this->allowedTransitions($current, self::roleFlags($permissionNames, $bookingTypeId), $bookingTypeId, $hold);
     }
 
     /** @param iterable<string> $permissionNames */
-    public function canChangeTo(Status $current, Status $target, iterable $permissionNames, int $bookingTypeId): bool
+    public function canChangeTo(Status $current, Status $target, iterable $permissionNames, int $bookingTypeId, ?Status $hold = null): bool
     {
-        foreach ($this->availableActions($current, $permissionNames, $bookingTypeId) as $action) {
+        foreach ($this->availableActions($current, $permissionNames, $bookingTypeId, $hold) as $action) {
             if ($action['status'] === $target) {
                 return true;
             }
@@ -199,8 +261,8 @@ final class Workflow
     }
 
     /**
-     * Date/time value correction: whoever's turn it is, until the final approval. Skipping ahead with the shortcut does not make the stages
-     * below it the approver's turn.
+     * Date/time value correction: whoever's turn it is, until the final approval. Skipping a stage (skipTransitions) does not make it the skipper's
+     * turn.
      * @param iterable<string> $permissionNames
      */
     public function canEditValues(Status $current, iterable $permissionNames, int $bookingTypeId): bool

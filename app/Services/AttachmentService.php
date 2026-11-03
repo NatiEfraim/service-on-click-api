@@ -180,9 +180,9 @@ class AttachmentService
      */
     public function open(AccessScope $scope, int $serial, string $kind, int $id): StreamedResponse
     {
-        $booking = Booking::query()->where('serial_number', $serial)->first(['id', 'serial_number', 'unit_id', 'booking_type_id', 'status_id']);
+        $booking = Booking::query()->where('serial_number', $serial)->first(['id', 'serial_number', 'unit_id', 'booking_type_id', 'status_id', 'parked_status_id']);
 
-        if ($booking === null || !$scope->canSeeBooking($booking->unit_id, (int) $booking->booking_type_id, (int) $booking->status_id)) {
+        if ($booking === null || !$scope->canSeeBooking($booking->unit_id, (int) $booking->booking_type_id, $booking->positionStatus()->value)) {
             throw new DomainError('לא נמצא', 404);
         }
 

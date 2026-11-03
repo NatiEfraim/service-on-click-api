@@ -191,16 +191,14 @@ class BookingValueFormatterService
             return false;
         }
 
-        $status = StatusBookingEnum::tryFrom((int) $booking->status_id);
-
-        if ($status === null) {
+        if (StatusBookingEnum::tryFrom((int) $booking->status_id) === null) {
             return false;
         }
 
-        // Same rule as on submit (Workflow::canEditValues): whoever's turn it is, until the final approval.
-        // Uses the user's own permission names: hasPermissionTo() throws for a permission that does not exist.
+        // Same rule as on submit (Workflow::canEditValues): whoever's turn it is, until the final approval - for a booking on hold, the turn of
+        // the stage it is parked at. Uses the user's own permission names: hasPermissionTo() throws for a permission that does not exist.
         return app(Workflow::class)->canEditValues(
-            $status,
+            $booking->positionStatus(),
             $user->workflowPermissionNames(),
             (int) $booking->booking_type_id,
         );

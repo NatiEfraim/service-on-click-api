@@ -82,9 +82,12 @@ class BookingResource extends JsonResource
             bookingTypeId: $bookingTypeId,
         );
 
-        return StatusBookingEnum::tryFrom((int) $this->status_id)
-            ?->getNextStatuses($roleFlags, $bookingTypeId)
-            ?? [];
+        if (StatusBookingEnum::tryFrom((int) $this->status_id) === null) {
+            return [];
+        }
+
+        // Whose turn it is follows the position: a booking on hold stays with the stage it was put on hold from.
+        return $this->resource->positionStatus()->getNextStatuses($roleFlags, $bookingTypeId, $this->resource->holdStatus());
     }
 
     private function formatDate(mixed $date): ?string

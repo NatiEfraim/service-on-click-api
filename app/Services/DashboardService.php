@@ -38,10 +38,11 @@ class DashboardService
 
         // Counted in the database: only the figures are read.
         $totals = (clone $base)->selectRaw('booking_type_id, COUNT(*) AS total')->groupBy('booking_type_id')->pluck('total', 'booking_type_id');
+        // Grouped by position, not status: a booking on hold counts in the stage it was put on hold from.
         $openByStatus = (clone $base)
             ->whereNotIn('status_id', $terminal)
-            ->selectRaw('booking_type_id, status_id, COUNT(*) AS total')
-            ->groupBy('booking_type_id', 'status_id')
+            ->selectRaw('booking_type_id, ' . Booking::positionSql() . ' AS position_status_id, COUNT(*) AS total')
+            ->groupBy('booking_type_id', 'position_status_id')
             ->get();
 
         $types = BookingType::query()->whereIn('id', $typeIds)->get(['id', 'display_name', 'icon'])->keyBy('id');
@@ -70,7 +71,7 @@ class DashboardService
         $byTypeStage = [];
 
         foreach ($openByStatus as $group) {
-            $stage = $scope->workflow()->stageOf(StatusBookingEnum::from((int) $group->status_id), (int) $group->booking_type_id)->value;
+            $stage = $scope->workflow()->stageOf(StatusBookingEnum::from((int) $group->position_status_id), (int) $group->booking_type_id)->value;
             $byTypeStage[(int) $group->booking_type_id][$stage] = ($byTypeStage[(int) $group->booking_type_id][$stage] ?? 0) + (int) $group->total;
         }
 

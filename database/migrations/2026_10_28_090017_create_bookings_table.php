@@ -21,6 +21,9 @@ return new class extends Migration
             $table->unsignedInteger('version')->default(1);
             // Last status seen from the mobile app, for the three-way merge on import.
             $table->unsignedTinyInteger('ext_status_id')->nullable();
+            // TRANSPORTATION holds (8, 9, 10) never move a booking: the status it was put on hold from, which still decides whose turn it is.
+            // Null = not on hold, or a hold with nowhere recorded (it stays at the supplier stage).
+            $table->unsignedTinyInteger('parked_status_id')->nullable();
             // Who set the current status: external (mobile app), internal (decided here) or system.
             $table->string('status_source', 10)->default('external');
             // When the status was set; updated_at moves on every edit, so it cannot measure waiting time.

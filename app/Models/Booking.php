@@ -7,6 +7,7 @@ use App\Enums\StatusBookingEnum;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class Booking extends Model
@@ -20,6 +21,7 @@ class Booking extends Model
         'status_id',
         'version',
         'ext_status_id',
+        'parked_status_id',
         'status_source',
         'status_changed_at',
         'is_exported',
@@ -33,6 +35,7 @@ class Booking extends Model
         'updated_at' => 'datetime',
         'status_changed_at' => 'datetime',
         'version' => 'integer',
+        'parked_status_id' => 'integer',
         'is_exported' => 'boolean',
         'is_status_exported' => 'boolean',
         'is_updated_value' => 'boolean',
@@ -105,6 +108,64 @@ class Booking extends Model
     public function statusEnum(): StatusBookingEnum
     {
         return StatusBookingEnum::from((int) $this->status_id);
+    }
+
+    /**
+     * The status that decides whose turn it is: for a booking on hold (8, 9, 10) the status it was put on hold from (parked_status_id), else its own.
+     * A hold never moves a booking - its stage, its buttons and who sees it stay those of this status - while status_id, the hold, is what the
+     * booking shows and what is sent to the mobile app. A hold with nowhere recorded (from before parked_status_id) is its own position.
+     * Only a hold looks at parked_status_id, so a value left on any other status changes nothing.
+     */
+    public function positionStatus(): StatusBookingEnum
+    {
+        $status = $this->statusEnum();
+
+        if (!$status->isPendingForSupplier() || $this->parked_status_id === null) {
+            return $status;
+        }
+
+        return StatusBookingEnum::tryFrom((int) $this->parked_status_id) ?? $status;
+    }
+
+    /** The hold the booking is on, or null. */
+    public function holdStatus(): ?StatusBookingEnum
+    {
+        $status = $this->statusEnum();
+
+        return $status->isPendingForSupplier() ? $status : null;
+    }
+
+    /**
+     * What parked_status_id becomes when the booking moves to $target. A hold put on from a stage parks the booking at the status it leaves; from
+     * one hold to another it stays where it was parked (nowhere, for an old hold); any other status parks nothing.
+     */
+    public function parkedStatusFor(StatusBookingEnum $target): ?int
+    {
+        if (!$target->isPendingForSupplier()) {
+            return null;
+        }
+
+        $status = $this->statusEnum();
+
+        if ($status->isPendingForSupplier()) {
+            return $this->parked_status_id === null ? null : (int) $this->parked_status_id;
+        }
+
+        return $status->canBeParked() ? $status->value : null;
+    }
+
+    /** The SQL of positionStatus(), for queries over many bookings. */
+    public static function positionSql(): string
+    {
+        $holds = implode(', ', StatusBookingEnum::holdIds());
+
+        return "CASE WHEN bookings.status_id IN ({$holds}) AND bookings.parked_status_id IS NOT NULL THEN bookings.parked_status_id ELSE bookings.status_id END";
+    }
+
+    /** Bookings whose position (see positionStatus()) is one of these statuses. @param array<int, int> $statusIds */
+    public function scopeAtPosition(Builder $query, array $statusIds): Builder
+    {
+        return $query->whereIn(DB::raw(self::positionSql()), $statusIds);
     }
 
     /** Opening time with time of day (created_at reads as a date only). */

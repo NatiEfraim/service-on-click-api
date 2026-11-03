@@ -101,7 +101,7 @@ final class AccessScope
         return BookingType::query()->where('is_outsource', false)->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all();
     }
 
-    /** @return array<int, array<int, int>> Statuses where the user has an action, per managed type. */
+    /** @return array<int, array<int, int>> Statuses where the user has an action, per managed type; they are positions (see Booking::positionStatus()). */
     public function actionableStatusesByType(): array
     {
         if ($this->actionableStatuses !== null) {
@@ -161,8 +161,9 @@ final class AccessScope
                     $where->orWhereIn('booking_type_id', $leadTypes);
                 }
 
+                // By position, not status: a booking on hold stays with the handler whose stage it is parked at.
                 foreach ($handlerTypes as $bookingTypeId) {
-                    $where->orWhere(fn (Builder $type) => $type->where('booking_type_id', $bookingTypeId)->whereIn('status_id', $byType[$bookingTypeId] ?? [-1]));
+                    $where->orWhere(fn (Builder $type) => $type->where('booking_type_id', $bookingTypeId)->atPosition($byType[$bookingTypeId] ?? [-1]));
                 }
             });
         }
@@ -177,7 +178,7 @@ final class AccessScope
             || ($unitId !== null && $unitId === $this->user->unit_id && in_array($bookingTypeId, $this->managedBookingTypeIds(), true));
     }
 
-    /** Managed by the user and, for a handler, at a stage they act on. */
+    /** Managed by the user and, for a handler, at a stage they act on. $statusId is the booking's position (Booking::positionStatus()), not its raw status. */
     public function canSeeBooking(?int $unitId, int $bookingTypeId, ?int $statusId = null): bool
     {
         if (!$this->managesBooking($unitId, $bookingTypeId)) {

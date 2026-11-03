@@ -143,11 +143,12 @@ class BookingValueService
             throw new DomainError('הקריאה עודכנה בינתיים. יש לרענן ולבדוק את המצב העדכני.', 409);
         }
 
-        if (!$scope->canSeeBooking($booking->unit_id, (int) $booking->booking_type_id, (int) $booking->status_id)) {
+        if (!$scope->canSeeBooking($booking->unit_id, (int) $booking->booking_type_id, $booking->positionStatus()->value)) {
             throw new DomainError('הקריאה לא ניתנת לביצוע.', 404);
         }
 
-        if (!$scope->workflow()->canEditValues($booking->statusEnum(), $scope->actingPermissions,(int) $booking->booking_type_id)) {
+        // A booking on hold is still the turn of the role it is parked with.
+        if (!$scope->workflow()->canEditValues($booking->positionStatus(), $scope->actingPermissions, (int) $booking->booking_type_id)) {
             $audit && $this->audit->denied('booking.values.update', 'booking', $serial, 'not_allowed_at_stage', $scope->user, [
                 'booking_serial' => $serial,
                 'unit_id' => $booking->unit_id,

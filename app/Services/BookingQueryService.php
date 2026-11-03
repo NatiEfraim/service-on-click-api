@@ -127,7 +127,7 @@ class BookingQueryService
             ->where('serial_number', $serial)
             ->first();
 
-        if ($booking === null || !$scope->canSeeBooking($booking->unit_id, (int) $booking->booking_type_id, (int) $booking->status_id)) {
+        if ($booking === null || !$scope->canSeeBooking($booking->unit_id, (int) $booking->booking_type_id, $booking->positionStatus()->value)) {
             return null;
         }
 
@@ -154,7 +154,7 @@ class BookingQueryService
                 'occurred_at' => $log->created_at?->toIso8601String(),
                 'correlation_id' => $log->correlation_id,
             ])->values()->all(),
-            'can_edit_values' => $scope->workflow()->canEditValues($booking->statusEnum(), $scope->actingPermissions,(int) $booking->booking_type_id),
+            'can_edit_values' => $scope->workflow()->canEditValues($booking->positionStatus(), $scope->actingPermissions, (int) $booking->booking_type_id),
             'editable_fields' => FormField::query()
                 ->where('unit_id', $booking->unit_id)
                 ->where('booking_type_id', $booking->booking_type_id)
@@ -196,7 +196,9 @@ class BookingQueryService
     {
         $status = $booking->statusEnum();
         $bookingTypeId = (int) $booking->booking_type_id;
-        $stage = $scope->workflow()->stageOf($status, $bookingTypeId);
+        // Whose turn it is: a booking on hold stays at the stage it was put on hold from, whatever the hold says.
+        $position = $booking->positionStatus();
+        $stage = $scope->workflow()->stageOf($position, $bookingTypeId);
         $closed = $stage === BookingStageEnum::CLOSED;
 
         $stageAgeHours = now()->diffInMinutes($booking->statusSince(), true) / 60;
@@ -235,18 +237,18 @@ class BookingQueryService
                 'status_id' => $action['status']->value,
                 'label' => $action['label'],
                 'comment_required' => Workflow::validateComment($action['status'], '') !== null,
-            ], $scope->workflow()->availableActions($status, $scope->actingPermissions, $bookingTypeId)),
+            ], $scope->workflow()->availableActions($position, $scope->actingPermissions, $bookingTypeId, $booking->holdStatus())),
         ];
     }
 
-    /** Bookings the user can act on now: open and at a status where their role has a move. */
+    /** Bookings the user can act on now: open and at a position where their role has a move (a booking on hold is where it was put on hold from). */
     public function limitToActionable(Builder $query, AccessScope $scope): void
     {
         $query->whereNotIn('status_id', StatusBookingEnum::terminalIds())->where(function (Builder $where) use ($scope): void {
             $where->whereRaw('1 = 0');
 
             foreach ($scope->actionableStatusesByType() as $bookingTypeId => $statusIds) {
-                $where->orWhere(fn (Builder $type) => $type->where('booking_type_id', $bookingTypeId)->whereIn('status_id', $statusIds));
+                $where->orWhere(fn (Builder $type) => $type->where('booking_type_id', $bookingTypeId)->atPosition($statusIds));
             }
         });
     }
@@ -289,7 +291,7 @@ class BookingQueryService
         };
     }
 
-    /** Bookings in the given stage (some stages, e.g. control officer, exist only for some types). */
+    /** Bookings in the given stage (some stages, e.g. control officer, exist only for some types); a booking on hold is in the stage it was put on hold from. */
     public function limitToStage(Builder $query, Workflow $workflow, ?BookingStageEnum $stage): void
     {
         if ($stage === null) {
@@ -311,7 +313,7 @@ class BookingQueryService
                 }
 
                 if ($statusIds !== []) {
-                    $where->orWhere(fn (Builder $type) => $type->where('booking_type_id', $bookingTypeId)->whereIn('status_id', $statusIds));
+                    $where->orWhere(fn (Builder $type) => $type->where('booking_type_id', $bookingTypeId)->atPosition($statusIds));
                 }
             }
         });

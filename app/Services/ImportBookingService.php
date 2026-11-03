@@ -635,6 +635,8 @@ class ImportBookingService
 
         $booking->forceFill([
             'status_id' => $statusId,
+            // Where a booking on hold is parked follows the status it has, as for a decision made here: another hold keeps it, any other clears it.
+            'parked_status_id' => $booking->parkedStatusFor(StatusBookingEnum::from($statusId)),
             'updated_at' => $updatedAt,
             'ext_status_id' => $statusId,
             'status_source' => 'external',

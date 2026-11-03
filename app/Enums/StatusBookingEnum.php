@@ -100,6 +100,24 @@ enum StatusBookingEnum: int
         return in_array($this, [self::PENDING_FILE, self::PENDING_PROCESSING, self::PENDING_APPROVED], true);
     }
 
+    /** @return array<int, int> Ids of the holds (see isPendingForSupplier). */
+    public static function holdIds(): array
+    {
+        return array_values(array_map(
+            fn (self $status): int => $status->value,
+            array_filter(self::cases(), fn (self $status): bool => $status->isPendingForSupplier())
+        ));
+    }
+
+    /**
+     * A status a booking can be put on hold from, and so be parked at: it waits for the control officer, the vice approver or the approver.
+     * Not a hold itself, not approved, not closed.
+     */
+    public function canBeParked(): bool
+    {
+        return $this === self::RECEIVED || $this->isWaitingForViceApprover() || $this->isWaitingForApprover();
+    }
+
     /** Whether the owner can still cancel in this status. */
     public function canBeCanceledByUser(): bool
     {
@@ -161,10 +179,13 @@ enum StatusBookingEnum: int
         return Workflow::roleFlags($permissionNames, $bookingTypeId);
     }
 
-    /** Statuses the user may move this booking to. */
-    public function getNextStatuses(array $roleFlags, ?int $bookingTypeId = null): array
+    /**
+     * Statuses the user may move this booking to. $this is the status that decides whose turn it is; $hold is the hold the booking is on, if any
+     * (see Workflow::availableActions).
+     */
+    public function getNextStatuses(array $roleFlags, ?int $bookingTypeId = null, ?self $hold = null): array
     {
-        $allowed = $this->getAllowedTransitions($roleFlags, $bookingTypeId);
+        $allowed = $this->getAllowedTransitions($roleFlags, $bookingTypeId, $hold);
 
         if (empty($allowed)) {
             return [];
@@ -188,9 +209,9 @@ enum StatusBookingEnum: int
         }, $allowed);
     }
 
-    public function canChangeTo(self $targetStatus, array $roleFlags, ?int $bookingTypeId = null): bool
+    public function canChangeTo(self $targetStatus, array $roleFlags, ?int $bookingTypeId = null, ?self $hold = null): bool
     {
-        foreach ($this->getAllowedTransitions($roleFlags, $bookingTypeId) as $transition) {
+        foreach ($this->getAllowedTransitions($roleFlags, $bookingTypeId, $hold) as $transition) {
             if ($transition['status'] === $targetStatus) {
                 return true;
             }
@@ -200,9 +221,9 @@ enum StatusBookingEnum: int
     }
 
     /** Transitions the roles allow from this status (see Workflow). */
-    private function getAllowedTransitions(array $roleFlags, ?int $bookingTypeId = null): array
+    private function getAllowedTransitions(array $roleFlags, ?int $bookingTypeId = null, ?self $hold = null): array
     {
-        return app(Workflow::class)->allowedTransitions($this, $roleFlags, (int) $bookingTypeId);
+        return app(Workflow::class)->allowedTransitions($this, $roleFlags, (int) $bookingTypeId, $hold);
     }
 
     public function getDashboardDisplayName(): string

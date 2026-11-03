@@ -18,8 +18,8 @@ The role names are Spatie roles. **What a user may do inside a booking type come
 |---|---|---|---|
 | `super_admin` | מנהל מערכת | all three below | **yes, everywhere** - acts as the admin of every booking type, in every unit (no per-type permission needed) |
 | `admin` | מפקד מחנה | `bookings-approver-management`, `bookings-admin-management` | **yes, every turn** - on the booking types it holds `admin_{type}` for, in its own unit: acts as control officer, vice approver and approver, and manages their roles |
-| `approver` | מפקד תחום | `bookings-approver-management` | yes - the final decision, and the shortcut to it from the stages below (see the route) |
-| `vice_approver` | גורם מטפל | `bookings-approver-management` | yes - the first decision (the second on transportation) |
+| `approver` | מפקד תחום | `bookings-approver-management` | yes - the final decision (approve or reject), also from the stages below it without waiting for them (see the route) |
+| `vice_approver` | גורם מטפל | `bookings-approver-management` | yes - the first decision (the second on transportation), and on transportation also takes a booking over from the control officer (see the route) |
 | `transportation_control_officer` | רמ"ד תו"ב | `bookings-approver-management` | yes - the first decision, on **transportation (8) only**: the seeders link the role to that booking type and create `transportation_control_officer_8`, so it can be granted with `assign-approver-role` |
 | `user` | משתמש | none of these | no |
 
@@ -34,29 +34,63 @@ another unit or type behaves as if it did not exist (**404**).
 
 ### Turn-based route (important for the buttons)
 
-A booking moves up through the roles in turn, and the role whose turn it is acts (the admin of the type holds every turn). The approver and the
-admin may also skip the stages below them with the final approval:
+A booking moves up through the roles in turn, and the role whose turn it is acts (the admin of the type holds every turn). A role may also act
+at a stage below its own without waiting for the role that owns it - the approver and the admin decide finally (approve **or reject**), and on
+transportation the vice approver takes a booking over from the control officer:
 
 ```
 (transportation) received ──control officer──▶ 17 / 18 ──vice approver──▶ 15 / 16 ──approver──▶ approved(3) / rejected(4)
 (every other type)                            received ──vice approver──▶ 15 / 16 ──approver──▶ approved(3) / rejected(4)
                                    approved(3) ──approver──▶ completed(5) / canceled by approver(7)
 (barber)  approved(3) ──vice approver "barber done"──▶ 11 ──approver──▶ 5 / 7
-(shortcut) received / 17 / 18 ──approver or admin: "אישור סופי"──▶ approved(3)      (no status of the skipped stages in between)
+(skip)   received / 17 / 18 ──approver or admin: "אישור סופי" / "דחייה סופית"──▶ approved(3) / rejected(4)   (no status of the skipped stages in between)
+(skip)   transportation: received ──vice approver, the same buttons as on its own stage──▶ 15 / 16           (no 17 / 18 in between)
+(hold)   transportation: any stage ──the role that has it: 8 / 9 / 10──▶ the booking STAYS at that stage     (status = the hold, stage unchanged)
 ```
+
+The complete step-by-step guide - every role and every status of every booking type, with the buttons each one gets - is
+`docs/frontend-workflow-guide.md`.
 
 - The route starts at the **control officer on transportation (type 8) only**: the seeders link that role to the booking type
   (`booking_type_has_roles`) and create the permission `transportation_control_officer_8`. On every other type it starts at the vice approver.
 - The **admin of the type (and the super admin) holds every turn**: at each stage they get the same buttons as the role whose turn it is, so
   `actions` is never empty for them on an open booking, and `can_edit_values` follows the same rule. They cannot set the requester's own
   cancellation, and a closed booking has no actions for anyone. Their name goes on the timeline and in the audit log as the one who acted.
-- **Skipping ahead.** While a booking is with the control officer or the vice approver, the **approver and the admin of the type (and the super
-  admin)** get one extra button after their own: `{ "status_id": 3, "label": "אישור סופי" }`. It moves the booking straight to *approved* - the
-  realization stage ("מימוש וסגירה") - with a single timeline row and no vice approver status in between. Such bookings are on their `mine=1`
-  list ("waiting for me") and in `awaiting_me`. This is only the approval: the final rejection (4) still comes after the stage below, and the
-  approver does not get `can_edit_values` on a stage they skip (the values stay with that stage's own role).
-- A **vice approver / control officer sees only the bookings at their own stage.** Anything else is a 404 for them. This is decided **per booking
-  type**: someone who is vice approver of type 1 and approver of type 2 sees only their own stage in type 1 and everything in type 2.
+- **Skipping ahead - the final decision.** While a booking is with the control officer or the vice approver, the **approver and the admin of the
+  type (and the super admin)** get two extra buttons after their own: `{ "status_id": 3, "label": "אישור סופי" }` and
+  `{ "status_id": 4, "label": "דחייה סופית", "comment_required": true }`. The approval moves the booking straight to *approved* - the realization
+  stage ("מימוש וסגירה"); the rejection closes it. Either way it is a single timeline row, with no status of the skipped stages in between. Such
+  bookings are on their `mine=1` list ("waiting for me") and in `awaiting_me`. The rejection needs a Hebrew comment, as everywhere. It is the
+  *final rejection* (4), not a cancellation (7): cancelling is only for an approved booking. Skipping is only the decision - no supplier holds, no
+  completing - and the approver does not get `can_edit_values` on a stage they skip (the values stay with that stage's own role).
+- **Skipping ahead - the vice approver on transportation.** While a transportation booking is still with the control officer (status 1), the
+  **vice approver** sees it (stage `control_officer`, on their `mine=1` list) and gets **exactly the buttons of their own stage**: 15, 16 and the
+  supplier holds 8 / 9 / 10 - the same ids and labels as at 17 / 18. Passing it on records 15 (or 16) alone, with no control officer's answer in
+  between, and ties the vice approver to the booking. They get neither the control officer's own answer (17 / 18) nor the final decision (3 / 4),
+  and not `can_edit_values` (the control officer's turn).
+- **Holds (transportation only) never move a booking.** The role that has the booking at its stage can put it on hold: 8 (waiting for files from the
+  requester), 9 (the supplier's approval) or 10 (the supplier's number) - the two it is not already on. The booking **stays at the stage it was put on
+  hold from** (control officer, vice approver or approver): `stage`, `actions`, `can_edit_values`, `mine=1`, `awaiting_me`, `?stage=` and the
+  dashboards all follow that stage, and the same role carries on with its normal buttons (17 / 18, 15 / 16, 3 / 4), which also ends the hold. The
+  roles above keep their skips (the approver and the admin decide with 3 / 4; the vice approver takes over a hold at the control officer's stage). A
+  vice approver who takes a booking over from the control officer and puts it on hold leaves it at the control officer. `status_id` is the hold
+  itself: that is what `?statuses=8,9,10` finds and what the mobile app shows the requester - a row therefore tells *whose turn it is*
+  (`stage_label`) and *what it waits for* (`status_label`).
+  - Where the booking was put on hold from is kept in `bookings.parked_status_id` (nullable: the status it left - 1, 17, 18, 15, 16, or the old
+    14 / 2; written with the hold, kept when the hold changes to another hold, cleared by any other status). It is internal: it is **not exported**
+    to the mobile app, and it is not in the API rows (the effect is: `stage`).
+  - A hold with no recorded stage (`parked_status_id` NULL: put on hold before this rule, or already on hold when the booking arrived from the
+    mobile app) keeps the old behaviour: stage `supplier_files` / `supplier_approval` / `supplier_number`, and only the approver and the admin act
+    on it. So those three stages only find such old holds.
+  - A hold is a decision like any other: `status_source` becomes `internal`, `is_status_exported` becomes 0, `version` + 1, one timeline row and one
+    audit row (its `after` carries `parked_status_id` while it is set), and it goes to the mobile app with the **next round of the booking status
+    file** (r2b: `{ serial_number, status_id: 8 | 9 | 10, personal_id, updated_at }`), like 15 or 3. If the mobile app changes the status before it
+    has been sent, it is a sync conflict (section 9), as for any decision. Once the mobile app has the hold, a later status it sends for that
+    booking either is another hold (say 8 → 9: the stage stays) or is its own word on where the booking is (nothing stays parked).
+- A **vice approver / control officer sees only the bookings at the stages they can act on** - their own, and for the vice approver on
+  transportation the control officer's. A booking on hold counts as being at the stage it was put on hold from. Anything else is a 404 for them.
+  This is decided **per booking type**: someone who is vice approver of type 1 and approver of type 2 sees only their own stage in type 1 and
+  everything in type 2.
 - The requester's own cancellation (status 6) is never done here.
 - **Do not hard-code this.** Render the buttons from `actions` in the booking list/detail (section 4); the server applies the same rule when the
   button is pressed.
@@ -125,7 +159,7 @@ The bookings the user may see. Query (all optional):
 |---|---|
 | `q` | serial number (substring), ID number / personal number (prefix) or name |
 | `statuses`, `types`, `units` | comma separated ids |
-| `stage` | `control_officer`, `vice_approver`, `approver`, `supplier_files`, `supplier_approval`, `supplier_number`, `realization`, `barber_done`, `closed` |
+| `stage` | `control_officer`, `vice_approver`, `approver`, `supplier_files`, `supplier_approval`, `supplier_number`, `realization`, `barber_done`, `closed`. A booking on hold is in the stage it was put on hold from; the three `supplier_*` stages only find old holds |
 | `from`, `to` | `Y-m-d`, the day the booking was opened |
 | `open_only=1` | hide closed bookings |
 | `ids` | comma separated serial numbers |
@@ -152,6 +186,8 @@ One row:
 }
 ```
 - `actions` = the buttons for this user right now (empty = view only). `comment_required` = the user must type a comment first.
+- A booking on hold (transportation) has `status_id` 8, 9 or 10 and the `stage` it is parked at (`stage_label` = whose turn, `status_label` = what it
+  waits for); its `actions` are the stage's buttons without the hold it is on.
 - `sync_state`: `pending` = a decision made here is not yet sent to the mobile app; `conflict` = needs a super admin (section 9); `synced`.
 - `target_hours` is the handling target of the booking type (section 6); `overdue` compares it with `total_age_hours`.
 
@@ -187,9 +223,10 @@ every other call**, so load it with `fetch` + the cookie / token (an `<img src>`
 ```
 Header `Idempotency-Key` (optional). Returns `{ "data": { serial_number, status_id, status_label, version, correlation_id, sync_state: "pending" }, "message": "..." }`.
 
-Refusals: **403** not your turn / not allowed; **404** not visible; **409** stale `version` or an open sync conflict; **422** comment rules (required for
-reject / cancel; Hebrew letters and spaces only, max 100) or the food cancellation deadline (cancel at least N business days before the supply date).
-After a success update the row with the returned `version`.
+Refusals: **403** not your turn / not allowed (the hold the booking is already on included); **404** not visible; **409** stale `version` or an open sync
+conflict; **422** comment rules (required for reject / cancel; Hebrew letters and spaces only, max 100) or the food cancellation deadline (cancel at
+least N business days before the supply date).
+After a success update the row with the returned `version`. After a hold (8 / 9 / 10) `status_id` is the hold and `stage` has not changed.
 
 ### `PUT /bookings-approver-management/bookings/{serial}/values`
 Correct the date / time of a booking while it is the user's turn (before the final approval).
@@ -401,7 +438,7 @@ A decision made here is saved at once and **sent to the mobile app by a schedule
 
 | Endpoint | Change |
 |---|---|
-| `get-bookings/{type}` -> `next_actions` | now follows the turn-based rule above, shortcut included (the same moves as `actions`). Prefer `actions` of the new list. |
+| `get-bookings/{type}` -> `next_actions` | now follows the turn-based rule above, the skips and the holds included (the same moves as `actions`). Prefer `actions` of the new list. |
 | booking values -> `editable` flag | now true only for date / time fields the user may correct **now** (it used to be "status below 3"). |
 | `PUT .../system-references` | blocking a date cancels the bookings on it through the normal decision path (timeline, audit, sent back). Use `.../impact` first. Requires a managing role on the booking type in the body (403 otherwise); audited. |
 | `PUT .../update-options`, `update-select-option`, `update-option`, `update-statement`; `DELETE .../remove-options`, `remove-option` | now audited, with the values before and after, and queued for the mobile app (`system_config`). **Removing an option that bookings chose archives it** (it used to delete the bookings' values with it); a text that holds a unit or department name is refused (422). |
@@ -432,12 +469,13 @@ A decision made here is saved at once and **sent to the mobile app by a schedule
 ## 12. Jobs and configuration (for whoever deploys)
 
 - **Database.** While the project is in local development the management columns live in the *original* create-table migrations
-  (`bookings`: `version`, `ext_status_id`, `status_source`, `status_changed_at`; `application_logs`: `status_id`, `source`, `correlation_id`;
+  (`bookings`: `version`, `ext_status_id`, `parked_status_id`, `status_source`, `status_changed_at`; `application_logs`: `status_id`, `source`, `correlation_id`;
   `units`: `internal_name`; `users`: `department_id`; `form_fields`: `version`, `position`, `is_active`; `option_fields`: `is_active`), and
   `departments` is created together with `units`. The new tables
   are the four `2026_11_01_1000xx` migrations (`sla_targets`, `audit_log`, `idempotency_keys`, the sync tables). So the database has to be built
-  fresh - `php artisan run:all` / `migrate:fresh --seed`; `migrate` alone on a database made before this change does not add the columns. Once a
-  shared database exists, change it with new migrations again.
+  fresh - `php artisan run:all` / `migrate:fresh --seed`; `migrate` alone on a database made before this change does not add the columns (for
+  `parked_status_id` - where a booking on hold is parked, see the route - that means the status writers and the imports fail until the database is
+  rebuilt). Once a shared database exists, change it with new migrations again.
 - `php artisan schedule:work` (or the system cron) runs: `importBookingJson:mysql` / `importApplicationLogJson:mysql` every 5 min (existing),
   **`exportBookingStatusJson:mysql` every 2 min** (sends decisions and corrected values), `audit:verify` daily 02:30, idempotency keys pruned daily.
   The export writes files itself - no queue worker is needed for it.
@@ -461,4 +499,5 @@ A decision made here is saved at once and **sent to the mobile app by a schedule
   `RoleAndPermissionSeeder` / `BookingTypeHasRoleSeeder` link it to transportation (8) and create `transportation_control_officer_8`; a database
   seeded before that gets it with `php artisan db:seed --class=ProdSeeder --force` (safe to repeat). **Transportation bookings still in "received"
   then wait for the control officer** - grant the role to someone with `assign-approver-role` (`is_transportation_control_officer`), or the
-  approver / admin skips ahead. Link the role to another type (and seed its permission) to switch the stage on there.
+  approver / admin skips ahead, or the vice approver takes it over. Link the role to another type (and seed its permission) to switch the stage
+  on there.

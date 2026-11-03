@@ -85,7 +85,9 @@ class BookingWorkflowService
                 'unit_id' => $booking->unit_id,
                 'booking_type_id' => $booking->booking_type_id,
                 'before' => $before,
-                'after' => ['status_id' => $target->value, 'version' => (int) $booking->version],
+                // A hold does not move the booking: the row says where it stays.
+                'after' => ['status_id' => $target->value, 'version' => (int) $booking->version]
+                    + ($booking->parked_status_id !== null ? ['parked_status_id' => (int) $booking->parked_status_id] : []),
                 'reason' => $comment !== '' ? $comment : null,
                 'correlation_id' => $correlationId,
             ], $user);
@@ -133,7 +135,8 @@ class BookingWorkflowService
             throw new DomainError('הקריאה עודכנה בינתיים (ייתכן שבאפליקציה). יש לרענן ולבדוק את המצב העדכני.', 409);
         }
 
-        if (!$scope->canSeeBooking($booking->unit_id, (int) $booking->booking_type_id, (int) $booking->status_id)) {
+        // Whose turn it is follows the position: a booking on hold stays with the stage it was put on hold from.
+        if (!$scope->canSeeBooking($booking->unit_id, (int) $booking->booking_type_id, $booking->positionStatus()->value)) {
             $audit && $this->audit->denied('booking.status_change', 'booking', $serial, 'not_visible', $user, ['booking_serial' => $serial]);
 
             throw new DomainError('הקריאה לא ניתנת לביצוע.', 404);
@@ -148,7 +151,7 @@ class BookingWorkflowService
             throw new DomainError('ביטול על ידי המזמין מתבצע באפליקציה בלבד', 403);
         }
 
-        if (!$scope->workflow()->canChangeTo($current, $target, $scope->actingPermissions,(int) $booking->booking_type_id)) {
+        if (!$scope->workflow()->canChangeTo($booking->positionStatus(), $target, $scope->actingPermissions, (int) $booking->booking_type_id, $booking->holdStatus())) {
             $audit && $this->audit->denied('booking.status_change', 'booking', $serial, "transition {$current->value}->{$target->value} not allowed", $user, $context);
 
             throw new DomainError('הפעולה אינה זמינה עבורך בשלב הנוכחי של הקריאה', 403);

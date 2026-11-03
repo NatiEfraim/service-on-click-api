@@ -122,6 +122,8 @@ class SyncService
 
                 $booking->forceFill([
                     'status_id' => $external->value,
+                    // Where a booking on hold is parked follows the status it has (see BookingStatusRecorder).
+                    'parked_status_id' => $booking->parkedStatusFor($external),
                     'ext_status_id' => $external->value,
                     'status_source' => 'external',
                     'status_changed_at' => now(),

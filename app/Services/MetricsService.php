@@ -126,7 +126,7 @@ class MetricsService
 
         $byType = $visible
             ->reject(fn (Booking $booking): bool => in_array((int) $booking->status_id, $terminal, true))
-            ->groupBy(fn (Booking $booking): string => $booking->booking_type_id . '|' . $scope->workflow()->stageOf($booking->statusEnum(), (int) $booking->booking_type_id)->value)
+            ->groupBy(fn (Booking $booking): string => $booking->booking_type_id . '|' . $scope->workflow()->stageOf($booking->positionStatus(), (int) $booking->booking_type_id)->value)
             ->map(function ($group, string $key) use ($bookingTypeNames): array {
                 [$bookingTypeId, $stage] = explode('|', $key);
 
