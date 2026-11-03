@@ -68,6 +68,14 @@ return [
         'cron' => env('EXPORT_JSON_CRON', '*/2 * * * *'),
     ],
 
+    // The bookings report (xlsx) of POST /bookings-admin-management/bookings-report/export; a copy is kept in the bucket folder
+    // filesystems.folder_name.export_report.
+    'export_report' => [
+        // Timezone of the date and time in the file name and in the sheet, and of the days in from_created_at / to_created_at
+        // (the database holds UTC).
+        'timezone' => env('EXPORT_REPORT_TIMEZONE') ?: 'Asia/Jerusalem',
+    ],
+
     // Retry/timeout settings and schedule per job in app/Jobs.
     'jobs' => [
         'import_booking_json' => [

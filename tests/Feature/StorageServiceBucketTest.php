@@ -125,4 +125,47 @@ class StorageServiceBucketTest extends TestCase
 
         $this->storage->moveBucketFile('nothing.json', 'inbox', 'loaded');
     }
+
+    public function test_it_keeps_a_local_file_in_a_folder_without_replacing_one_that_is_there(): void
+    {
+        $local = tempnam(sys_get_temp_dir(), 'put_');
+
+        try {
+            file_put_contents($local, 'first');
+            $this->assertSame('export-report/a.xlsx', $this->storage->putLocalFileToBucket($local, 'a.xlsx', 'export-report'));
+
+            // The same name again: the new file takes the next free one and the old one stays as it was.
+            file_put_contents($local, 'second');
+            $this->assertSame('export-report/a_2.xlsx', $this->storage->putLocalFileToBucket($local, 'a.xlsx', '/export-report/'));
+
+            file_put_contents($local, 'third');
+            $this->assertSame('export-report/a_3.xlsx', $this->storage->putLocalFileToBucket($local, 'a.xlsx', 'export-report'));
+
+            $this->assertSame('first', Storage::disk('minio')->get('export-report/a.xlsx'));
+            $this->assertSame('second', Storage::disk('minio')->get('export-report/a_2.xlsx'));
+            $this->assertSame('third', Storage::disk('minio')->get('export-report/a_3.xlsx'));
+
+            // A name without an extension, and outside prod the bucket name is part of the key.
+            config(['app.prod_stage' => false]);
+            $this->assertSame('srvonclick-bucket/export-report/b', $this->storage->putLocalFileToBucket($local, 'b', 'export-report'));
+            $this->assertSame('srvonclick-bucket/export-report/b_2', $this->storage->putLocalFileToBucket($local, 'b', 'export-report'));
+        } finally {
+            @unlink($local);
+        }
+    }
+
+    public function test_it_will_not_keep_a_local_file_that_cannot_be_read(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Could not read');
+
+        // fopen() warns about the missing file; the test turns it into the exception being checked, not a failure.
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $this->storage->putLocalFileToBucket(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'no_such_file_' . uniqid(), 'a.xlsx', 'export-report');
+        } finally {
+            restore_error_handler();
+        }
+    }
 }

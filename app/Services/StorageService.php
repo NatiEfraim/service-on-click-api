@@ -171,6 +171,37 @@ class StorageService
         return $fileKey;
     }
 
+    /** Copies a local file into a bucket folder without replacing one that is there: a taken name gets "_2", "_3" ... before its extension. Throws when the disk refuses. @return string the object key written */
+    public function putLocalFileToBucket(string $localPath, string $fileName, string $remoteDirectory): string
+    {
+        $disk = Storage::disk(config('filesystems.storage_service'));
+        $name = pathinfo($fileName, PATHINFO_FILENAME);
+        $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+        $fileKey = $this->buildBucketKey($remoteDirectory, $fileName);
+
+        for ($attempt = 2; $disk->exists($fileKey); $attempt++) {
+            $fileKey = $this->buildBucketKey($remoteDirectory, "{$name}_{$attempt}" . ($extension === '' ? '' : ".{$extension}"));
+        }
+
+        $stream = fopen($localPath, 'rb');
+
+        if ($stream === false) {
+            throw new \RuntimeException("Could not read {$localPath}");
+        }
+
+        try {
+            if (!$disk->put($fileKey, $stream)) {
+                throw new \RuntimeException("Could not write {$fileKey} to the bucket");
+            }
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        return $fileKey;
+    }
+
     /** The bytes of a bucket file; null when it is not there. */
     public function bucketFileContents(string $fileName, string $remoteDirectory): ?string
     {

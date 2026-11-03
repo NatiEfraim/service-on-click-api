@@ -112,6 +112,9 @@ return [
             'system_config' => (string) env('SYSTEM_CONFIG_JSON_FOLDER_NAME', 'system-config'),
             'users' => (string) env('USERS_JSON_FOLDER_NAME', 'users'),
         ],
+
+        // The bookings report (xlsx) a super admin or admin exports: bookings_<date>_<time>.xlsx is sent back and also kept here, as a backup.
+        'export_report' => (string) env('EXPORT_REPORT_FOLDER_NAME', 'export-report'),
     ],
 
 ];

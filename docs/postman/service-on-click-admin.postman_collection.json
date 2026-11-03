@@ -547,6 +547,92 @@
                         },
                         "description": "Who: admin, super admin"
                     }
+                },
+                {
+                    "name": "Bookings report - list (every filter optional, they combine)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-admin-management/bookings-report?booking_type_id=1&status_id=3&from_created_at=2026-10-01&to_created_at=2026-10-31&page=1&per_page=25",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-admin-management",
+                                "bookings-report"
+                            ],
+                            "query": [
+                                {
+                                    "key": "booking_type_id",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "status_id",
+                                    "value": "3"
+                                },
+                                {
+                                    "key": "from_created_at",
+                                    "value": "2026-10-01"
+                                },
+                                {
+                                    "key": "to_created_at",
+                                    "value": "2026-10-31"
+                                },
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "25"
+                                }
+                            ]
+                        },
+                        "description": "Who: admin (own unit, the booking types they administer), super admin (every booking). Newest first. Days are counted in EXPORT_REPORT_TIMEZONE and both ends are included."
+                    }
+                },
+                {
+                    "name": "Bookings report - export to Excel (copy kept in the bucket folder export-report)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/bookings-admin-management/bookings-report/export",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "bookings-admin-management",
+                                "bookings-report",
+                                "export"
+                            ]
+                        },
+                        "description": "Who: admin, super admin. Same filters as the list (page and per_page are ignored); all the matching bookings. Answers with the file bookings_<date>_<time>.xlsx - use Send and Download in Postman.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"booking_type_id\": 1,\n    \"status_id\": 3,\n    \"from_created_at\": \"2026-10-01\",\n    \"to_created_at\": \"2026-10-31\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
                 }
             ]
         },

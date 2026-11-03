@@ -211,10 +211,57 @@ Always **405** (and audited): bookings are opened in the mobile app only. Do not
 | `GET /bookings-approver-management/domain-dashboard?types=1,2&days=30` | approver, admin, super admin | `totals`, `handling` (median / p90 / avg hours), `by_stage`, `stages` (bottleneck analysis), `rates`, `oldest`, `overdue_serials`, `trend`, `target` |
 | `GET /bookings-approver-management/bottlenecks?days=30&types=1,2&unit=1` | any manager (`unit` only for super admin) | `stages[]` (open count, median / p90 time, severity `critical | warning | ok | no_target`, top handlers), `by_type`, `handlers`, `pools` (open bookings per role holder), `rates` |
 | `GET /bookings-admin-management/reports?...` | admin, super admin | `{ rows, total, truncated }` - flat rows; build the Excel / PDF in the browser |
+| `GET /bookings-admin-management/bookings-report?...` | admin, super admin | every booking, filtered by type, status and creation days - one page (see below) |
+| `POST /bookings-admin-management/bookings-report/export` | admin, super admin | the same bookings as an Excel file, `bookings_<date>_<time>.xlsx`; a copy is kept in the bucket (see below) |
 
 `reports` filters: `serial`, `types`, `groups`, `statuses`, `units`, `departments` (comma separated ids), `requester`, `personal_id`,
 `opened_from`, `opened_to`, `updated_from`, `updated_to` (`Y-m-d`), `stage`, `overdue` (`yes|no`), `min_age_days`. All filters are applied by the
 database; `total` is the number of matches and at most 5000 rows are returned (`truncated`).
+
+### All bookings and the Excel backup - `bookings-admin-management/bookings-report` (admin, super admin)
+
+**`GET /bookings-admin-management/bookings-report`** - every booking the user may see, newest first (by the time it was created). The **super
+admin gets every booking in the database**; an **admin only the bookings of their own unit and of the booking types they administer** (the same
+scope as `reports`). Query, all optional, and they **combine**:
+
+| Param | Meaning |
+|---|---|
+| `booking_type_id` | one booking type (ids in `catalog.booking_types`) |
+| `status_id` | one status (ids in `catalog.statuses`) |
+| `from_created_at`, `to_created_at` | `Y-m-d`: the days the booking was created on, **both days included**. Either one may be sent alone; `to_created_at` may not be before `from_created_at` |
+| `page`, `per_page` | default `1` and `25`; at most `100` per page (a larger `per_page` is cut to 100) |
+
+E.g. `?booking_type_id=2&status_id=3&from_created_at=2026-10-01&to_created_at=2026-10-31` = approved bookings of type 2 created in October.
+**The days are counted in the report timezone** (`EXPORT_REPORT_TIMEZONE`, `Asia/Jerusalem` unless changed), not in UTC: a booking created at
+01:30 on the 1st in Israel belongs to the 1st (the older `from` / `to` of the bookings queue count UTC days).
+
+Answers `{ "data": [ ... ], "meta": { "total", "page", "last_page", "per_page" } }`; a row:
+```json
+{ "uuid": "...", "serial_number": 810000001, "booking_type_id": 2, "booking_type_label": "...", "status_id": 3, "status_label": "...",
+  "unit_id": 1, "unit_name": "H", "owner_name": "...", "owner_personal_id": "012345678", "owner_personal_number": "1000006",
+  "created_at": "2026-10-04T09:00:00+00:00", "status_changed_at": "2026-10-05T20:30:00+00:00" }
+```
+The two dates are ISO 8601 in UTC; show them in the browser's timezone. A filter that is not valid is a **422** with the usual `errors` (Hebrew
+messages): a date that is not `Y-m-d`, an end before the start, an unknown `booking_type_id` / `status_id`. Anyone but an admin or the super
+admin gets **403**.
+
+**`POST /bookings-admin-management/bookings-report/export`** - the same bookings, **all of them** (not one page), as an Excel file. Send the
+same four filters in the JSON body (or the query string); `page` / `per_page` are ignored.
+
+- The answer is **the file itself**, not JSON: `200`, `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+  `Content-Disposition: attachment; filename=bookings_2026-11-03_14-35-20.xlsx`. Read it as a blob (`axios` `responseType: 'blob'`, or
+  `fetch` `response.blob()`) and save it under the name in `Content-Disposition`. Errors still come as JSON (403, 422, 503).
+- **Name:** `bookings_<Y-m-d>_<H-i-s>.xlsx`, the time of the request in the report timezone. Two exports in the same second never replace each
+  other: the later one is `..._2.xlsx`, then `..._3.xlsx`.
+- **Backup:** a copy of the file is saved in the bucket, folder **`export-report`** (`EXPORT_REPORT_FOLDER_NAME`). If the copy cannot be saved the
+  file is **not** sent: `503` with a Hebrew message ("שמירת הדוח בגיבוי באחסון הקבצים נכשלה...") - show it and let the user try again. Nothing
+  reads that folder; it is not part of the exchange with the mobile app.
+- **The sheet** "קריאות" runs right to left, the heading row stays in view and has a filter. Columns: מספר קריאה (serial), תחום (booking type), סטטוס,
+  שם המבקש, תעודת זהות, מספר אישי, יחידה, נוצרה (created), סטטוס עודכן (status changed). The two dates are real Excel dates in the report timezone;
+  the ID numbers are text, so a leading zero is kept. Form values, comments and the timeline are not in the file.
+- **Audit:** every export is written to the audit log as `report.export` with the file name, the number of rows and the filters. So is an attempt
+  by an admin who administers no booking type (`result` `denied`) and an export whose copy could not be saved (`result` `failed`). The list is not
+  audited.
 
 The stage timings come from the booking timeline (`application_logs`). Bookings imported before this version have no stage history, so their
 stage-duration statistics stay empty; their open age is still correct.
@@ -323,7 +370,7 @@ Newest first, 40 per page. Filters: `serial`, `actor` (personal number), `action
 - Actions you will see: `booking.status_change`, `booking.values.update`, `booking.canceled_by_restriction`, `booking.create` (denied),
   `config.sla_target.set|remove`, `config.form_field.create|update|reorder|archive|delete|editable`, `config.system_reference.update`,
   `config.options.update|remove`, `config.statement.update`, `user.create`, `user.permissions.change`, `user.department.change`, `org.unit.*`,
-  `org.department.*`, `sync.conflict.*` (`detected`, `resolve` by a person, `auto_resolve` by the import), `sync.outbound.manual_retry`,
+  `org.department.*`, `report.export` (the Excel report: file, rows, filters), `sync.conflict.*` (`detected`, `resolve` by a person, `auto_resolve` by the import), `sync.outbound.manual_retry`,
   `sync.outbound.blocked` (a file held back because it held an internal name), `audit.modify` (denied).
   The automatic transfer events of the schedule (`sync.outbound.sent|failed`) are stored but not listed.
 
@@ -377,7 +424,9 @@ A decision made here is saved at once and **sent to the mobile app by a schedule
    `can_change_type` allow, a confirmation that says "archived, the bookings keep their values" when `used_by > 0`.
 7. **Users and roles** - existing lists + `assign-*-role` + department selector.
 8. **Organisation** (super admin) - `org`.
-9. **Reports** (admin) - `reports` + client-side export.
+9. **Reports** (admin) - `reports` + client-side export. **All bookings** (admin, super admin) - `bookings-report` with a type and a status
+   dropdown (from `catalog`) and two date fields, paged, and an "Export to Excel" button that POSTs the same filters to `bookings-report/export` and
+   saves the file it returns.
 10. **Audit** and **Sync** (super admin).
 
 ## 12. Jobs and configuration (for whoever deploys)
@@ -402,6 +451,12 @@ A decision made here is saved at once and **sent to the mobile app by a schedule
   (e.g. `Asia/Jerusalem`) is the timezone the mobile importer uses to name "today's" file - this app runs in UTC, so if the mobile side counts the
   day in Israeli time, set it, or decisions made in the first hours after local midnight go into a file it no longer reads. `EXPORT_JSON_CRON`,
   `EXPORT_JSON_MAX_ATTEMPTS` tune the schedule and retries.
+- **Bookings report (Excel).** `POST /bookings-admin-management/bookings-report/export` writes `bookings_<date>_<time>.xlsx` and keeps a copy in the
+  bucket folder `export-report` (`EXPORT_REPORT_FOLDER_NAME`) as a backup. `EXPORT_REPORT_TIMEZONE` (default `Asia/Jerusalem`) is the timezone of
+  the name, of the dates in the sheet and of the days in the filters. The file is built with the new Composer package `openspout/openspout`
+  (run `composer install`; it needs PHP 8.4 and the `zip` extension, both in the Dockerfile) and is written row by row, so the memory does not
+  grow with the number of bookings. Measured on a local test database: 30,000 bookings took about 10 seconds and 13 MB of extra memory, and the
+  production `php.ini` stops a request after 30 seconds, so an export of several hundred thousand bookings would need to become a background job.
 - Control officer: the stage exists only for booking types that have the `transportation_control_officer` role linked in `booking_type_has_roles`.
   `RoleAndPermissionSeeder` / `BookingTypeHasRoleSeeder` link it to transportation (8) and create `transportation_control_officer_8`; a database
   seeded before that gets it with `php artisan db:seed --class=ProdSeeder --force` (safe to repeat). **Transportation bookings still in "received"

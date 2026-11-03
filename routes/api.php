@@ -7,6 +7,7 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\BookingSuperAdminManagementController;
 use App\Http\Controllers\ManagementAuditController;
 use App\Http\Controllers\ManagementBookingController;
+use App\Http\Controllers\ManagementBookingReportController;
 use App\Http\Controllers\ManagementInsightController;
 use App\Http\Controllers\ManagementOrgController;
 use App\Http\Controllers\ManagementSettingsController;
@@ -109,6 +110,14 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin'])
             Route::get('/home', 'home');
             Route::get('/reports', 'reports');
         });
+
+        // The bookings, filtered (GET), and the same as an Excel file that is also kept in the bucket as a backup (POST).
+        Route::controller(ManagementBookingReportController::class)
+            ->prefix('bookings-report')
+            ->group(function () {
+                Route::get('/', 'index');
+                Route::post('/export', 'export');
+            });
 
         // User department
         Route::put('/users/{uuid}/department', [ManagementOrgController::class, 'setUserDepartment'])->whereUuid('uuid');
