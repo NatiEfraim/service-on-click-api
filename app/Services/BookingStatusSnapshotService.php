@@ -32,17 +32,19 @@ class BookingStatusSnapshotService
 
     /**
      * @param bool $force send the day's file again even when this exact content was sent before
+     * @param int|null $bookingTypeId when given, only bookings of this type are included (manual web trigger)
+     * @param int|null $statusId when given, only bookings at this status are included (manual web trigger)
      * @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>}
      *         built = what run() did, file = the name sent (null: nothing new), marked = bookings set to is_status_exported = 1
      */
-    public function export(bool $force = false): array
+    public function export(bool $force = false, ?int $bookingTypeId = null, ?int $statusId = null): array
     {
-        return $this->locked('send-booking-status', function () use ($force): array {
+        return $this->locked('send-booking-status', function () use ($force, $bookingTypeId, $statusId): array {
             $errors = [];
             $waiting = [];
 
-            $built = $this->building('booking status file', function () use (&$waiting): array {
-                return $this->run($waiting);
+            $built = $this->building('booking status file', function () use (&$waiting, $bookingTypeId, $statusId): array {
+                return $this->run($waiting, $bookingTypeId, $statusId);
             }, $errors);
             $sent = $this->sendNewestFile(DigitalHatchFileEnum::BOOKING_STATUS, $force);
             $errors = [...$errors, ...$sent['errors']];
@@ -57,11 +59,13 @@ class BookingStatusSnapshotService
     /**
      * Puts the waiting bookings in the bucket file of the day (export-json/booking-status), next to what earlier runs of the day put there.
      * @param array<int, int> $waiting filled with the bookings that are in the file now: booking id => version
+     * @param int|null $bookingTypeId optional filter by booking type (manual web trigger)
+     * @param int|null $statusId optional filter by status (manual web trigger)
      * @return array{written: bool, file?: string, bookings?: int, in_file?: int, reason?: string} reason: nothing_waiting | unchanged
      */
-    public function run(array &$waiting = []): array
+    public function run(array &$waiting = [], ?int $bookingTypeId = null, ?int $statusId = null): array
     {
-        [$rows, $waiting] = $this->waitingRows();
+        [$rows, $waiting] = $this->waitingRows($bookingTypeId, $statusId);
 
         if ($rows === []) {
             return ['written' => false, 'reason' => 'nothing_waiting'];
@@ -99,9 +103,11 @@ class BookingStatusSnapshotService
 
     /**
      * The bookings waiting to be sent, as the rows of the file, and the version each had when it was read.
+     * @param int|null $bookingTypeId optional filter (manual web trigger)
+     * @param int|null $statusId optional filter (manual web trigger)
      * @return array{0: array<int, array{serial_number: int, status_id: int, personal_id: ?string, updated_at: string}>, 1: array<int, int>} rows by serial number; booking id => version
      */
-    private function waitingRows(): array
+    private function waitingRows(?int $bookingTypeId = null, ?int $statusId = null): array
     {
         $rows = [];
         $waiting = [];
@@ -110,6 +116,8 @@ class BookingStatusSnapshotService
         Booking::query()
             ->whereNotNull('serial_number')
             ->where('is_status_exported', false)
+            ->when($bookingTypeId !== null, fn ($q) => $q->where('booking_type_id', $bookingTypeId))
+            ->when($statusId !== null, fn ($q) => $q->where('status_id', $statusId))
             ->whereDoesntHave('syncConflicts', fn ($conflicts) => $conflicts->where('state', SyncConflict::STATE_OPEN))
             ->orderBy('id')
             ->chunkById(2000, function ($bookings) use (&$rows, &$waiting): void {

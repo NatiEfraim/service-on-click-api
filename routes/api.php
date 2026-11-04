@@ -11,6 +11,7 @@ use App\Http\Controllers\ManagementBookingReportController;
 use App\Http\Controllers\ManagementInsightController;
 use App\Http\Controllers\ManagementOrgController;
 use App\Http\Controllers\ManagementSettingsController;
+use App\Http\Controllers\ManagementDigitalHatchController;
 use App\Http\Controllers\ManagementSyncController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -179,4 +180,16 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             Route::get('/audit/verify', 'verify');
             Route::match(['put', 'patch', 'delete'], '/audit/{id}', 'immutable');
         });
+
+        // Digital hatch: manually trigger the r2b exports and b2r imports that the scheduler runs automatically.
+        // All endpoints accept GET or POST; pass sync=0 to queue the work instead of running it here.
+        Route::controller(ManagementDigitalHatchController::class)
+            ->prefix('digital-hatch')
+            ->group(function () {
+                Route::match(['get', 'post'], '/export-booking-status', 'exportBookingStatus');
+                Route::match(['get', 'post'], '/export-users', 'exportUsers');
+                Route::match(['get', 'post'], '/import-booking-json', 'importBookingJson');
+                Route::match(['get', 'post'], '/import-application-log-json', 'importApplicationLogJson');
+                Route::match(['get', 'post'], '/import-files', 'importFiles');
+            });
     });
