@@ -46,9 +46,11 @@ class UserService
         try {
             $query = User::with(['roles', 'permissions', 'unit', 'department'])->where('is_deleted', false);
 
-            // Admins manage their own unit's people (assertMayManage); the super admin everybody.
+            // Nobody sees a super admin here and an admin sees no admin; an admin sees their own unit's people only (assertMayManage), the super admin every unit.
             /** @var User $actor Auth::user() is typed as the Authenticatable contract, which has no hasRole(). */
             $actor = Auth::user();
+            $query->manageableBy($actor);
+
             if (!$actor->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName())) {
                 $query->where('unit_id', $actor->unit_id);
             }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PermissionEnum;
 use App\Enums\RoleEnum;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -92,6 +93,34 @@ class User extends Authenticatable
         $role = $this->getRoleNames()->first();
 
         return $role ? RoleEnum::fromSpatieRole($role) : null;
+    }
+
+    /**
+     * The roles that put a person out of this user's reach (not listed, no roles or permissions granted or replaced): nobody deals with a
+     * super admin through the API, and an admin is the super admin's to manage, so an admin sees neither.
+     * @return array<int, string>
+     */
+    public function unmanageableRoleNames(): array
+    {
+        $names = [RoleEnum::SUPER_ADMIN->toSpatieRoleName()];
+
+        if (!$this->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName())) {
+            $names[] = RoleEnum::ADMIN->toSpatieRoleName();
+        }
+
+        return $names;
+    }
+
+    /** The people $actor may list and manage; the unit is limited by the caller. Keep in step with isManageableBy(). */
+    public function scopeManageableBy(Builder $query, User $actor): Builder
+    {
+        return $query->whereDoesntHave('roles', fn (Builder $roles) => $roles->whereIn('name', $actor->unmanageableRoleNames()));
+    }
+
+    /** Whether $actor may see this person and change their roles and permissions. Keep in step with scopeManageableBy(). */
+    public function isManageableBy(User $actor): bool
+    {
+        return !$this->hasAnyRole($actor->unmanageableRoleNames());
     }
 
     /**

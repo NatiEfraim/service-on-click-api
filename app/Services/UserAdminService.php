@@ -9,7 +9,8 @@ use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Puts a person in a department; an admin (camp commander) works on their own unit's people only, the super admin on any.
+ * Puts a person in a department; an admin (camp commander) works on their own unit's people only (never an admin or a super admin), the super
+ * admin on any (never another super admin).
  * Granting roles is done by the assign-*-role endpoints.
  */
 class UserAdminService
@@ -32,6 +33,13 @@ class UserAdminService
 
         if (!$scope->can('users.manage') || (!$scope->isSuperAdmin() && (int) $user->unit_id !== (int) $scope->user->unit_id)) {
             $this->audit->denied('user.department.change', 'user', $user->actorId(), 'no_permission', $scope->user, ['unit_id' => $user->unit_id]);
+
+            throw new DomainError('אין לך הרשאה לשנות שיוך של משתמש זה', 403);
+        }
+
+        // A person the list does not show (a super admin; for an admin also an admin) is not one to change either.
+        if (!$user->isManageableBy($scope->user)) {
+            $this->audit->denied('user.department.change', 'user', $user->actorId(), 'protected_role', $scope->user, ['unit_id' => $user->unit_id]);
 
             throw new DomainError('אין לך הרשאה לשנות שיוך של משתמש זה', 403);
         }

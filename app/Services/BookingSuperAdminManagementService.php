@@ -26,6 +26,7 @@ use App\Models\User;
 use App\Traits\AuditsConfigChanges;
 use App\Traits\AuditsPermissionChanges;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
@@ -52,6 +53,9 @@ class BookingSuperAdminManagementService
     public function assignAdminRole(array $validated = []): mixed
     {
         try {
+
+            // Before the transaction: a refusal is audited, and that row would be rolled back inside it. A super admin is not given or stripped of anything.
+            $this->assertTargetManageable($this->grantTargetOf($validated));
 
             DB::beginTransaction();
 
@@ -87,6 +91,9 @@ class BookingSuperAdminManagementService
             $this->auditPermissionChange($user, $permissionsBefore, $validated['reason'] ?? null);
             DB::commit();
             return $this->getAdminsWithPermission(identifier: $user->personal_number);
+        } catch (DomainError $e) {
+            // A refusal, not a failure: nothing changed and the answer is the rule's own.
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error($e->getMessage());          
@@ -101,6 +108,7 @@ class BookingSuperAdminManagementService
         try {
 
             $query = User::role(RoleEnum::ADMIN->value)
+                ->manageableBy(Auth::user())
                 ->select('uuid', 'full_name', 'personal_number');
 
             if (!is_null($identifier)) {
@@ -142,7 +150,8 @@ class BookingSuperAdminManagementService
             $user = User::where('uuid', $userUuid)->with(['roles', 'permissions'])
                 ->where('is_deleted', false)->first();
 
-            if (!$user) {
+            // A super admin is not shown, like a person that does not exist.
+            if (!$user || !$user->isManageableBy(Auth::user())) {
                 return HttpStatusCodeEnum::BAD_REQUEST;
             }
 

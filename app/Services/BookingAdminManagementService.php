@@ -45,10 +45,11 @@ class BookingAdminManagementService
             $roleIds = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->value)->all();
             $permissionPrefixes = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->toPermissionEnum()->value)->all();
 
-            // An admin manages their own unit's people (assertMayManage); the super admin manages everybody.
+            // An admin manages their own unit's people (assertMayManage); the super admin manages everybody. Neither deals with a super admin, and an admin not with an admin.
             $users = User::whereHas('roles', function ($query) use ($roleIds) {
                 $query->whereIn('id', $roleIds);
             })
+                ->manageableBy(Auth::user())
                 ->when(!$this->isSuperAdmin(), fn ($query) => $query->where('unit_id', Auth::user()->unit_id))
                 ->when($identifier, function ($query, $identifier) {
                     $query->where(function ($q) use ($identifier) {
@@ -90,8 +91,8 @@ class BookingAdminManagementService
             $user = User::where('uuid', $userUuid)->with(['roles', 'permissions'])
                 ->where('is_deleted', false)->first();
 
-            // A person of another unit is not one an admin deals with.
-            if (!$user || (!$this->isSuperAdmin() && (int) $user->unit_id !== (int) Auth::user()->unit_id)) {
+            // A person of another unit is not one an admin deals with, nor a super admin, nor (for an admin) an admin: they are not shown.
+            if (!$user || !$user->isManageableBy(Auth::user()) || (!$this->isSuperAdmin() && (int) $user->unit_id !== (int) Auth::user()->unit_id)) {
                 return HttpStatusCodeEnum::BAD_REQUEST;
             }
 
@@ -242,36 +243,34 @@ class BookingAdminManagementService
     private function assertMayManage(array $validated): void
     {
         $admin = Auth::user();
+        $target = $this->grantTargetOf($validated);
 
-        if ($this->isSuperAdmin()) {
-            return;
+        if (!$this->isSuperAdmin()) {
+            $administered = $admin->getAllPermissions()
+                ->map(fn ($permission) => PermissionEnum::parsePermissionName($permission->name))
+                ->filter(fn ($parsed) => $parsed !== null && $parsed['permission'] === PermissionEnum::ADMIN)
+                ->map(fn ($parsed): int => $parsed['booking_type_id'])
+                ->all();
+
+            $outsideTypes = collect($validated['role_assignments'] ?? [])
+                ->contains(fn (array $assignment): bool => !in_array((int) $assignment['booking_type_id'], $administered, true));
+
+            if ($outsideTypes || ($target !== null && (int) $target->unit_id !== (int) $admin->unit_id)) {
+                app(AuditService::class)->denied('user.permissions.change', 'user', $target?->actorId() ?? ($validated['personal_number'] ?? null), 'outside_admin_scope', $admin, ['unit_id' => $target?->unit_id]);
+
+                throw new DomainError('ניתן להקצות הרשאות רק בתחומים שבניהולך ולמשתמשי היחידה שלך', 403);
+            }
+
+            // An admin never changes their own roles (they could widen their reach or lock themselves out).
+            if ($target !== null && (int) $target->id === (int) $admin->id) {
+                app(AuditService::class)->denied('user.permissions.change', 'user', $admin->actorId(), 'self_grant', $admin, ['unit_id' => $admin->unit_id]);
+
+                throw new DomainError('לא ניתן לשנות את ההרשאות של עצמך', 403);
+            }
         }
 
-        $administered = $admin->getAllPermissions()
-            ->map(fn ($permission) => PermissionEnum::parsePermissionName($permission->name))
-            ->filter(fn ($parsed) => $parsed !== null && $parsed['permission'] === PermissionEnum::ADMIN)
-            ->map(fn ($parsed): int => $parsed['booking_type_id'])
-            ->all();
-
-        $target = !empty($validated['uuid'])
-            ? User::query()->where('uuid', $validated['uuid'])->first()
-            : User::query()->where('personal_number', $validated['personal_number'] ?? null)->first();
-
-        $outsideTypes = collect($validated['role_assignments'] ?? [])
-            ->contains(fn (array $assignment): bool => !in_array((int) $assignment['booking_type_id'], $administered, true));
-
-        if ($outsideTypes || ($target !== null && (int) $target->unit_id !== (int) $admin->unit_id)) {
-            app(AuditService::class)->denied('user.permissions.change', 'user', $target?->actorId() ?? ($validated['personal_number'] ?? null), 'outside_admin_scope', $admin, ['unit_id' => $target?->unit_id]);
-
-            throw new DomainError('ניתן להקצות הרשאות רק בתחומים שבניהולך ולמשתמשי היחידה שלך', 403);
-        }
-
-        // An admin never changes their own roles (they could widen their reach or lock themselves out).
-        if ($target !== null && (int) $target->id === (int) $admin->id) {
-            app(AuditService::class)->denied('user.permissions.change', 'user', $admin->actorId(), 'self_grant', $admin, ['unit_id' => $admin->unit_id]);
-
-            throw new DomainError('לא ניתן לשנות את ההרשאות של עצמך', 403);
-        }
+        // Nobody changes a super admin's roles or permissions, and an admin changes no admin's.
+        $this->assertTargetManageable($target);
     }
 
     private function isSuperAdmin(): bool
