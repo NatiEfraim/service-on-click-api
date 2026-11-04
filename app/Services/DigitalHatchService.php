@@ -6,26 +6,12 @@ use App\Enums\DigitalHatchFileEnum;
 use App\Traits\GuardsDigitalHatchRuns;
 use App\Traits\HatchImportable;
 
-/**
- * The b2r side of the digital hatch, what the ":ftp" import commands do: the new files the mobile side put on the FTP (or in the local test
- * folders) are taken into the bucket, then imported from there by the same services the ":bucket" commands use, so a json file ends up in the
- * database and in loaded-json:
- *  - importBookings: SrvOnClick_b2r_export_bookings_* -> import-json -> ImportBookingService -> loaded-json;
- *  - importApplicationLogs: SrvOnClick_b2r_application_logs_* -> import-json -> ImportApplicationLogService -> loaded-json;
- *  - importFiles: SrvOnClickFiles_* -> import-files -> ImportFileService (saved with the bookings that name them, copied to files, moved to loaded-files).
- * (The r2b side is one service per stream: UsersExportService and BookingStatusSnapshotService.)
- * Each run is serialized by a lock, so the scheduler and a manual run cannot overlap. HATCH_ENABLED=false turns it off.
- */
+/** Handles the b2r side of the digital hatch: fetches new files from the FTP into the bucket and imports them via the :bucket services. */
 class DigitalHatchService
 {
     use GuardsDigitalHatchRuns, HatchImportable;
 
-    /**
-     * @param bool $force take the files again even when they were taken before
-     * @param bool $sync save the rows in this process instead of queueing them as chunk jobs
-     * @return array{enabled: bool, busy?: bool, source?: string, fetched?: array<int, string>, errors?: array<int, string>, imported?: array<string, mixed>}
-     *         fetched = the names landed in the bucket, errors = what went wrong taking them, imported = what the bucket import did
-     */
+    /** @param bool $force re-fetch already-taken files @param bool $sync run chunk jobs inline @return array{enabled: bool, busy?: bool, source?: string, fetched?: array<int, string>, errors?: array<int, string>, imported?: array<string, mixed>} */
     public function importBookings(bool $force = false, bool $sync = false): array
     {
         return $this->locked('import-bookings', fn (): array => $this->fetchAndImport(

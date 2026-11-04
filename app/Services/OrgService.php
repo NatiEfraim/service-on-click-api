@@ -10,10 +10,7 @@ use App\Models\User;
 use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Super-admin management of units (the letter the mobile app knows plus the name shown here) and departments.
- * A unit's letter cannot change: the mobile app and UnitEnum find the unit by it.
- */
+/** Super-admin management of units and departments; a unit's letter (the mobile app's key) cannot change. */
 class OrgService
 {
     public function __construct(

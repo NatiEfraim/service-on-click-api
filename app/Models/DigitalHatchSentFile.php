@@ -5,11 +5,7 @@ namespace App\Models;
 use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * A version of an r2b file this system wrote for the mobile side: its name, the sha256 of its content and where it went. The daily status and
- * users files keep their name while their content grows, so a changed content is sent again and an unchanged one is not.
- * destination: bucket (written there for the mobile side to read), ftp, or local (the local test folder that takes the FTP's place).
- */
+/** Tracks r2b files written for the mobile side; content sha256 deduplicates so an unchanged file is not sent again. Destination: bucket | ftp | local (test folder). */
 class DigitalHatchSentFile extends Model
 {
     use HasUuid;

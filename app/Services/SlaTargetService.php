@@ -7,10 +7,7 @@ use App\Models\SlaTarget;
 use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
-/**
- * The handling target of a booking type: total hours from opening to closing; an older booking is overdue.
- * The super admin sets any type's target; an admin (camp commander) only the types they administer.
- */
+/** SLA target (total open hours before overdue) per booking type; super admin sets any, admin only their own. */
 class SlaTargetService
 {
     public const MIN_HOURS = 1;

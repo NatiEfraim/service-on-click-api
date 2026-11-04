@@ -13,21 +13,7 @@ use App\Traits\HatchExportable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-/**
- * The users stream of the digital hatch (r2b), driven by the flag users.is_exported_role: the people who have a role and the booking types they
- * hold it on, so the mobile side knows who may do what.
- *  - a person waits while is_exported_role = 0: they are new, or their roles changed here (User::markRolesChanged, called when an admin or the
- *    super admin grants or takes a role away);
- *  - the waiting people go in the day's file (SrvOnClick_r2b_users_<Y-m-d>.json), and only once it has gone is_exported_role = 1 is set on them
- *    (User::markRolesExported).
- * The day's file keeps what earlier runs of the day put in it, so a later run never takes a person out of it; a person whose roles changed again
- * replaces their row. The mobile importer upserts each person by ID number, so the file lists the people who changed, not everybody.
- * run() writes the file to the bucket (export-json/users). Two ways out, ONE flag, so only the one the HATCH_ENABLED switch picks works:
- *  - HATCH_ENABLED=true: export() = run() and the newest file on the FTP; queued by SendHatchUsersJob (command digital-hatch:send-users);
- *  - HATCH_ENABLED=false: exportToBucket() = run() alone (command exportUsersJson:bucket); it steps aside while the hatch is on.
- * Two senders would take turns clearing the flag and each would carry only part of the changes. Both take the same lock and write the same file
- * name, so switching the hatch on or off in the middle of a day loses nobody: the day's file keeps the people the other way already sent.
- */
+/** r2b users stream: writes a cumulative daily delta file to the bucket and sends it to the FTP; driven by users.is_exported_role. */
 class UsersExportService
 {
     use GuardsDigitalHatchRuns, HatchExportable;
@@ -36,12 +22,7 @@ class UsersExportService
     {
     }
 
-    /**
-     * Builds today's users file and sends it. A failure to build still lets the file already in the bucket go out.
-     * @param bool $force send the day's file again even when this exact content was sent before
-     * @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>}
-     *         built = what run() did, file = the name sent (null: nothing new), marked = people set to is_exported_role = 1
-     */
+    /** Builds today's users file and sends it to the FTP. @param bool $force re-send even if this content was already sent @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>} */
     public function export(bool $force = false): array
     {
         return $this->locked('send-users', function () use ($force): array {
@@ -61,13 +42,7 @@ class UsersExportService
         });
     }
 
-    /**
-     * The bucket-only way out, for when the digital hatch is off: puts the waiting people in the day's file in the bucket (run()) and marks them
-     * sent, since the bucket is where the mobile side reads it. The same rule as export(): only is_exported_role = 0 goes out, and they are marked
-     * only if the file is in the bucket; after a failure they stay waiting. It steps aside while the hatch is on (digital-hatch:send-users does
-     * this and puts the file on the FTP too) and while EXPORT_JSON_ENABLED=false.
-     * @return array{skipped?: string, built?: array<string, mixed>, marked?: int, errors?: array<int, string>} skipped = digital_hatch | export_json_disabled | busy
-     */
+    /** Bucket-only export for when HATCH_ENABLED=false; steps aside while the hatch is on. @return array{skipped?: string, built?: array<string, mixed>, marked?: int, errors?: array<int, string>} */
     public function exportToBucket(): array
     {
         if (!config('app.export_json.enabled', true)) {
@@ -95,7 +70,7 @@ class UsersExportService
                 return $this->run($waiting);
             }, $errors);
 
-            // In the bucket (written now, or it held them as they are), so they are sent; after a failure they stay waiting for the next run.
+            // In the bucket now, so mark them sent.
             $marked = $errors === [] ? User::markRolesExported($waiting) : 0;
 
             return ['built' => $built, 'marked' => $marked, 'errors' => $errors];
@@ -104,11 +79,7 @@ class UsersExportService
         }
     }
 
-    /**
-     * Puts the waiting people in the bucket file of the day (export-json/users), next to what earlier runs of the day put there.
-     * @param array<int, ?string> $waiting filled with the people who are in the file now: user id => updated_at as stored
-     * @return array{written: bool, file?: string, users?: int, in_file?: int, reason?: string} reason: nothing_waiting | unchanged
-     */
+    /** Builds the day's users file in the bucket, merging with what earlier runs put there. @param array<int, ?string> $waiting user id => updated_at @return array{written: bool, file?: string, users?: int, in_file?: int, reason?: string} */
     public function run(array &$waiting = []): array
     {
         $rows = $this->payload($waiting);
@@ -151,11 +122,8 @@ class UsersExportService
     }
 
     /**
-     * The "users" list of a file, ordered by ID number: the people waiting to be sent (is_exported_role = 0). A person is in it when they have an
-     * ID number (how the mobile app knows people), are not deleted and hold a role on at least one booking type. The role is the RoleEnum value
-     * (the id both systems share) and the booking types come from the "{role}_{booking type}" permissions; the super admin holds no such
-     * permission and gets every booking type. A waiting person who does not qualify is left out and stays waiting.
-     * @param array<int, ?string> $waiting filled with the people listed: user id => updated_at as stored (User::markRolesExported checks it)
+     * Builds the user rows for the file: waiting people (is_exported_role=0) who have an ID number, a role and are not deleted. Super admin gets all booking types.
+     * @param array<int, ?string> $waiting filled: user id => updated_at
      * @return array<int, array{personal_id: string, phone: ?string, unit_id: ?int, booking_type_roles: array<int, array{role_id: int, booking_type_ids: array<int, int>}>, created_at: string, updated_at: string}>
      */
     public function payload(array &$waiting = []): array

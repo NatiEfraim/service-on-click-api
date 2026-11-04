@@ -45,7 +45,7 @@ class BookingAdminManagementService
             $roleIds = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->value)->all();
             $permissionPrefixes = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->toPermissionEnum()->value)->all();
 
-            // An admin manages their own unit's people (assertMayManage); the super admin manages everybody. Neither deals with a super admin, and an admin not with an admin.
+            // An admin manages their own unit only; neither side deals with super admins, and an admin not with other admins.
             $users = User::whereHas('roles', function ($query) use ($roleIds) {
                 $query->whereIn('id', $roleIds);
             })

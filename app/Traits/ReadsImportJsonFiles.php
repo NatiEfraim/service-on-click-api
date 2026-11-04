@@ -8,11 +8,7 @@ use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Shared import step: reads the waiting files of this type in the bucket's import-json folder (only those with the system prefix, e.g.
- * SrvOnClick_b2r_export_bookings_), queues their rows as chunk jobs, moves the file to loaded-json and notes it in digital_hatch_fetched_files.
- * The using service needs a StorageService in $this->storageService.
- */
+/** Reads waiting import-json files, dispatches chunk jobs, moves each to loaded-json, records in digital_hatch_fetched_files. Requires $this->storageService. */
 trait ReadsImportJsonFiles
 {
     abstract protected function jsonModelType(): JsonModelTypeEnum;
@@ -21,22 +17,13 @@ trait ReadsImportJsonFiles
 
     abstract protected function makeChunkJob(array $rows, int $chunkIndex): object;
 
-    /**
-     * Why a file that was just saved in this process (not queued) must stay in its folder although no chunk failed; null when it can move on.
-     * Rows that cannot be saved *yet* - a log whose booking is missing - are not an error of the file, but moving it would lose them.
-     * @param array<string, int> $stats what the chunks returned, added up
-     */
+    /** Override to return a reason a sync-imported file must stay in place despite no errors (e.g. logs waiting for bookings); null = move it. @param array<string, int> $stats */
     protected function pendingReason(array $stats, string $directory): ?string
     {
         return null;
     }
 
-    /**
-     * Imports every waiting file of this type, oldest first. A file is moved only once all its chunks are queued
-     * (or saved without error when $sync); an unreadable file stays in place.
-     * @param bool $sync run the chunk jobs in this process instead of queueing them
-     * @return array{busy: bool, files: array<int, array>, errors: array<int, array{file: string, message: string}>}
-     */
+    /** Imports all waiting files oldest-first; moves each to loaded-json when all chunks succeed. @param bool $sync run chunks inline @return array{busy: bool, files: array<int, array>, errors: array<int, array{file: string, message: string}>} */
     public function importFromBucket(bool $sync = false): array
     {
         $type = $this->jsonModelType();
@@ -103,7 +90,7 @@ trait ReadsImportJsonFiles
             }
         }
 
-        // Saved here, not queued, so what could not be saved yet is known now: such a file stays where it is, to be read again later.
+        // Sync only: a file with pending rows stays in place.
         if ($sync && $errors === [] && ($pending = $this->pendingReason($stats, $directory)) !== null) {
             $errors[] = $pending;
         }
@@ -129,10 +116,7 @@ trait ReadsImportJsonFiles
         ];
     }
 
-    /**
-     * Notes in the ledger of the digital hatch that this file was imported from the bucket (a file a ":ftp" import took there first keeps its row).
-     * The ledger only records; the import does not depend on it.
-     */
+    /** Notes in the digital hatch ledger that this bucket file was imported; non-fatal (the import does not depend on it). */
     private function noteImported(JsonModelTypeEnum $type, string $fileName): void
     {
         try {

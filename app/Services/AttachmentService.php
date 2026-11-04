@@ -12,12 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/**
- * Files and images of bookings. The booking json only names them ("SrvOnClickFiles_<stored name>", no extension) and the bytes arrive
- * separately, so register() saves the row when the json is read, ImportFileService gives it the key of its bytes once they are received
- * (a copy in the folder the bookings serve their attachments from, "files"), and resolve() finds the object when it is wanted.
- * Served only through the API, to users who may see the booking, and only the types below.
- */
+/** Attachments of bookings: register() saves the name from the JSON, ImportFileService links the bytes once received, resolve() finds the object key. API-only, served by the types listed below. */
 class AttachmentService
 {
     public const KIND_FILE = 'file';
@@ -80,11 +75,7 @@ class AttachmentService
         $attachment->forceFill(['path' => $key, 'file_name' => basename($key)])->save();
     }
 
-    /**
-     * Links a booking to the files and images its json names; names and links already saved are kept, so a re-read changes nothing.
-     * @param array<int, string> $files stored names (without extension) @param array<int, string> $images
-     * @return int the links added
-     */
+    /** Links a booking to the named files and images; already-saved names are kept so a re-read is idempotent. @param array<int, string> $files stored names (no extension) @param array<int, string> $images @return int links added */
     public function register(Booking $booking, array $files, array $images): int
     {
         $added = 0;
@@ -107,10 +98,7 @@ class AttachmentService
         return $added;
     }
 
-    /**
-     * The bucket key of the object when its bytes are there (kept on the row, with extension, for later calls);
-     * null while they have not arrived or the bucket cannot be read.
-     */
+    /** The bucket key of the object when its bytes are in place (cached on the row); null while bytes have not arrived or the bucket is unavailable. */
     public function resolve(File|Image $attachment): ?string
     {
         try {
@@ -145,10 +133,7 @@ class AttachmentService
         }
     }
 
-    /**
-     * The attachments of a booking as a screen shows them; loaded relations cost no extra query.
-     * @return array<int, array{kind: string, id: int, name: string, mime: ?string, inline: bool, available: bool, url: ?string}>
-     */
+    /** All attachments of a booking for the screen; preload relations to avoid extra queries. @return array<int, array{kind: string, id: int, name: string, mime: ?string, inline: bool, available: bool, url: ?string}> */
     public function describe(Booking $booking): array
     {
         $rows = [];
@@ -174,10 +159,7 @@ class AttachmentService
         return $rows;
     }
 
-    /**
-     * The stream of one attachment of a booking the user may see.
-     * @throws DomainError 404 for every miss, including a booking the user may not see (one answer for all)
-     */
+    /** Streams one attachment the user may see; 404 for every miss including unauthorized bookings (one error for all). @throws DomainError */
     public function open(AccessScope $scope, int $serial, string $kind, int $id): StreamedResponse
     {
         $booking = Booking::query()->where('serial_number', $serial)->first(['id', 'serial_number', 'unit_id', 'booking_type_id', 'status_id', 'parked_status_id']);

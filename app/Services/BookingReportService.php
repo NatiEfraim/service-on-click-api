@@ -20,11 +20,7 @@ use OpenSpout\Writer\XLSX\Entity\SheetView;
 use OpenSpout\Writer\XLSX\Options;
 use OpenSpout\Writer\XLSX\Writer;
 
-/**
- * The bookings report of the super admin and the admin: every booking the user may see (the admin: their unit and the booking types they
- * administer, as in ReportService), filtered by booking type, status and the days it was created on. list() gives a page of it as JSON; export()
- * writes all of it to an Excel file, bookings_<date>_<time>.xlsx, and keeps a copy in the bucket (folder export-report) as a backup.
- */
+/** Bookings report: paginated list (list()) and Excel export (export()) scoped to what the caller may see; a copy is kept in the bucket's export-report folder. */
 class BookingReportService
 {
     public const MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -62,12 +58,7 @@ class BookingReportService
     ) {
     }
 
-    /**
-     * One page of the bookings, newest first. Filters (all optional, combined): booking_type_id, status_id, from_created_at / to_created_at
-     * (Y-m-d, both days included, counted in the report timezone), page, per_page (at most 100).
-     * @param array<string, mixed> $filters
-     * @return array{data: array<int, array<string, mixed>>, meta: array{total: int, page: int, last_page: int, per_page: int}}
-     */
+    /** One page of bookings, newest first; filters: booking_type_id, status_id, from/to_created_at (Y-m-d, report timezone), page, per_page (max 100). @param array<string, mixed> $filters @return array{data: array<int, array<string, mixed>>, meta: array{total: int, page: int, last_page: int, per_page: int}} */
     public function list(AccessScope $scope, array $filters): array
     {
         $this->assertMayReport($scope);
@@ -94,13 +85,7 @@ class BookingReportService
         ];
     }
 
-    /**
-     * Writes the filtered bookings (the same as list(), without paging) to an Excel file and keeps a copy of it in the bucket. The caller sends
-     * the local file and deletes it.
-     * @param array<string, mixed> $filters
-     * @return array{path: string, file_name: string, key: string, rows: int}
-     * @throws DomainError 403 when the user may not report, 503 when the copy cannot be kept in the bucket (the file is then not handed out)
-     */
+    /** Writes all filtered bookings to a temp Excel file and keeps a copy in the bucket; the caller sends and deletes it. @param array<string, mixed> $filters @return array{path: string, file_name: string, key: string, rows: int} @throws DomainError 403 no permission, 503 bucket write failed */
     public function export(AccessScope $scope, array $filters): array
     {
         $this->assertMayReport($scope, 'report.export');
@@ -183,12 +168,7 @@ class BookingReportService
         throw new DomainError('דוח הקריאות זמין למנהל מערכת ולמפקד מחנה', 403);
     }
 
-    /**
-     * Writes the sheet to $path row by row: the ids are read at once (so a booking imported meanwhile cannot shift the pages), the bookings
-     * a few hundred at a time, and the file is built by a streaming writer, so the memory does not grow with the number of bookings.
-     * @param array<string, mixed> $filters
-     * @return int the bookings written
-     */
+    /** Writes the sheet to $path streaming: ids read once (import cannot shift pages), bookings in chunks of 500. @param array<string, mixed> $filters @return int rows written */
     private function writeWorkbook(AccessScope $scope, array $filters, string $path, \DateTimeZone $timezone): int
     {
         $options = new Options();
@@ -255,11 +235,7 @@ class BookingReportService
         );
     }
 
-    /**
-     * The cells are typed here and not with Cell::fromValue(), which turns a text that starts with "=" into a formula: a requester's name
-     * comes from outside and must stay text. Identifiers other than the serial number stay text too, so a leading zero survives.
-     * @param array<string, mixed> $record
-     */
+    /** Types cells explicitly (not Cell::fromValue()) to prevent formula injection from user-supplied names and to preserve leading zeros. @param array<string, mixed> $record */
     private function sheetRow(array $record, \DateTimeZone $timezone, Style $dateStyle): Row
     {
         $cells = [];
@@ -278,11 +254,7 @@ class BookingReportService
         return new Row($cells);
     }
 
-    /**
-     * Keeps the file in the bucket under its name, or a free one when the name is taken (two exports in the same second).
-     * @param array<string, mixed> $filters
-     * @return string the object key written
-     */
+    /** Puts the file in the bucket under its name (or a free variant if two exports land the same second). @param array<string, mixed> $filters @return string the object key written */
     private function keepCopy(AccessScope $scope, string $path, string $fileName, array $filters): string
     {
         try {
@@ -302,11 +274,7 @@ class BookingReportService
         }
     }
 
-    /**
-     * The values of one booking; the two dates are Carbon (UTC) so the list can print them as ISO 8601 and the sheet as local time.
-     * @param array<int, string> $units unit id => name
-     * @return array<string, mixed>
-     */
+    /** The fields of one booking row; dates are Carbon (UTC) so list() formats them as ISO 8601 and the sheet converts to local time. @param array<int, string> $units @return array<string, mixed> */
     private function record(Booking $booking, array $units): array
     {
         return [

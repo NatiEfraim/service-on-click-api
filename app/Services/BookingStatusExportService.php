@@ -12,13 +12,7 @@ use App\Support\AccessScope;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Sends the decisions made here back to the mobile app as r2b files in the bucket (export-json/...):
- *  - booking_status: a cumulative daily snapshot of unconfirmed decisions (the mobile importer reads one file per day by exact name);
- *  - booking_values: corrected date/time values, one file per correction, in order (queued by BookingValueService);
- *  - system_config: configuration changes, one file per request, in order (queued by ConfigOutboxService).
- * Bookings with an open sync conflict are held back; failed files retry with a growing wait; every payload passes PayloadGuard.
- */
+/** Sends r2b export files to the bucket: booking_status (daily snapshot), booking_values (corrections) and system_config (config changes). Failed files retry with exponential back-off. */
 class BookingStatusExportService
 {
     public function __construct(
@@ -72,7 +66,7 @@ class BookingStatusExportService
             ->where('file_name', $fileName)->where('state', SyncFile::STATE_SENT)
             ->exists();
 
-        // Nothing new and today's file is out already; it still holds every unconfirmed decision.
+        // Nothing new and today's file already went out.
         if (!$hasNew && $sentToday) {
             return ['sent' => false, 'reason' => 'nothing_new'];
         }
@@ -92,7 +86,7 @@ class BookingStatusExportService
             ['kind' => SyncFile::KIND_BOOKING_STATUS, 'file_name' => $fileName, 'state' => SyncFile::STATE_QUEUED, 'record_count' => $decisions->count(), 'payload' => $json]
         );
 
-        // The same snapshot failed before: wait out the back-off; after the last attempt a person retries.
+        // Same snapshot failed before: respect back-off.
         if ($file->state === SyncFile::STATE_FAILED) {
             if ($file->next_attempt_at === null) {
                 return ['sent' => false, 'reason' => 'needs_manual_retry', 'file_id' => $file->id];
@@ -126,11 +120,7 @@ class BookingStatusExportService
         return ['sent' => true, 'file_id' => $file->id];
     }
 
-    /**
-     * Sends queued value corrections, oldest first. A failed file and the later files of its bookings wait out the back-off
-     * (or a person's retry), and the first write failure ends the round (the bucket is probably down).
-     * @return array{sent: int}
-     */
+    /** Sends queued value correction files oldest-first; stops at the first write failure or back-off period. @return array{sent: int} */
     public function exportValues(): array
     {
         $files = SyncFile::query()
@@ -163,11 +153,7 @@ class BookingStatusExportService
         return ['sent' => $sent];
     }
 
-    /**
-     * Sends queued configuration changes, oldest first, stopping at the first that cannot go (waiting to retry or blocked),
-     * so a later change never reaches the mobile app before an earlier one.
-     * @return array{sent: int, stopped_at?: int, reason?: string, error?: string} reason: waiting_to_retry | needs_manual_retry | blocked | failed
-     */
+    /** Sends queued config changes oldest-first; stops at the first that is blocked or waiting to retry. @return array{sent: int, stopped_at?: int, reason?: string, error?: string} */
     public function exportConfig(): array
     {
         // Changes kept while the channel was off go out once it is switched on.
@@ -292,12 +278,7 @@ class BookingStatusExportService
         return $this->attempt($file);
     }
 
-    /**
-     * Keeps back a file that names a unit or a department until the name is gone or a person resends it;
-     * the audit log gets one row when it becomes blocked, not one per round.
-     * @param string[] $leaks where in the payload the names were found
-     * @return array{sent: bool, file_id: int, error: string}
-     */
+    /** Marks a file as blocked (internal name in payload); audits only the first block per file. @param string[] $leaks @return array{sent: bool, file_id: int, error: string} */
     private function block(SyncFile $file, array $leaks): array
     {
         $error = 'internal name in ' . implode(', ', array_slice($leaks, 0, 5));

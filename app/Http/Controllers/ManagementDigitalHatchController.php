@@ -11,13 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * SUPER_ADMIN-only endpoints that manually trigger the same logic as the scheduled digital-hatch commands:
- *   r2b export: booking status (with optional booking_type_id / status_id filter), users
- *   b2r import: booking JSON from FTP, application log JSON from FTP, files from bucket
- * All endpoints run synchronously by default (sync=1) so the caller gets the result immediately.
- * Pass sync=0 to queue the work instead (like the commands do by default; a queue worker is then needed).
- */
+/** SUPER_ADMIN-only endpoints that manually trigger the digital-hatch commands; sync by default (sync=0 queues the work). */
 class ManagementDigitalHatchController extends Controller
 {
     use ImportsBookingJson, ImportsApplicationLogJson, ImportsFile;
@@ -28,10 +22,7 @@ class ManagementDigitalHatchController extends Controller
     ) {
     }
 
-    /**
-     * Manually run digital-hatch:send-booking-status.
-     * Optional params: force (bool), sync (bool, default 1), booking_type_id (int), status_id (int).
-     */
+    /** Manually run digital-hatch:send-booking-status; params: force, sync (default 1), booking_type_id, status_id. */
     public function exportBookingStatus(Request $request): JsonResponse
     {
         if (!config('services.digital-hatch.enabled')) {
@@ -54,10 +45,7 @@ class ManagementDigitalHatchController extends Controller
         return response()->json(['data' => ['enabled' => true, 'queued' => false, 'result' => $result]], Response::HTTP_OK);
     }
 
-    /**
-     * Manually run digital-hatch:send-users (HATCH on) or exportUsersJson:bucket (HATCH off).
-     * Optional params: force (bool), sync (bool, default 1).
-     */
+    /** Manually run digital-hatch:send-users (hatch on) or exportUsersJson:bucket (hatch off); params: force, sync (default 1). */
     public function exportUsers(Request $request): JsonResponse
     {
         $force = (bool) $request->input('force', false);
@@ -78,10 +66,7 @@ class ManagementDigitalHatchController extends Controller
         return response()->json(['data' => ['enabled' => true, 'queued' => false, 'result' => $result]], Response::HTTP_OK);
     }
 
-    /**
-     * Manually run importBookingJson:ftp (takes new files from the FTP into the bucket, then imports them).
-     * Optional params: force (bool), sync (bool, default 1).
-     */
+    /** Manually run importBookingJson:ftp; params: force, sync (default 1). */
     public function importBookingJson(Request $request): JsonResponse
     {
         $force = (bool) $request->input('force', false);
@@ -91,10 +76,7 @@ class ManagementDigitalHatchController extends Controller
         return response()->json(['data' => $outcome], Response::HTTP_OK);
     }
 
-    /**
-     * Manually run importApplicationLogJson:ftp (takes new files from the FTP into the bucket, then imports them).
-     * Optional params: force (bool), sync (bool, default 1).
-     */
+    /** Manually run importApplicationLogJson:ftp; params: force, sync (default 1). */
     public function importApplicationLogJson(Request $request): JsonResponse
     {
         $force = (bool) $request->input('force', false);
@@ -104,10 +86,7 @@ class ManagementDigitalHatchController extends Controller
         return response()->json(['data' => $outcome], Response::HTTP_OK);
     }
 
-    /**
-     * Manually run importFile:bucket (saves the files and images waiting in the bucket inbox).
-     * Optional params: sync (bool, default 1).
-     */
+    /** Manually run importFile:bucket; params: sync (default 1). */
     public function importFiles(Request $request): JsonResponse
     {
         $sync = (bool) $request->input('sync', true);

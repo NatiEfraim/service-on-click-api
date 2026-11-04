@@ -9,17 +9,7 @@ use App\Models\SyncConflict;
 use App\Traits\GuardsDigitalHatchRuns;
 use App\Traits\HatchExportable;
 
-/**
- * The booking status stream of the digital hatch (r2b), driven by the flag bookings.is_status_exported:
- *  - changeStatus (BookingStatusRecorder) sets the new status_id and is_status_exported = 0 together, so the booking is waiting to be sent;
- *  - export() puts every waiting booking in the day's file - { "bookings": [ { serial_number, status_id, personal_id, updated_at } ] }, the shape
- *    of the file exportBookingStatusJson:mysql writes - sends the file, and only then sets is_status_exported = 1 on those bookings.
- * The day's file (SrvOnClick_r2b_booking_status_<Y-m-d>.json, the mobile importer reads one file per day by its exact name) keeps what earlier
- * runs of the day put in it, so a later run never takes a booking out of it; a booking decided again replaces its row.
- * personal_id = the ID number of whoever made the latest decision here (null when there is none); updated_at = unix seconds as a string.
- * A booking with an open sync conflict is held back until the conflict is settled. Queued by SendHatchBookingStatusJob (command
- * digital-hatch:send-booking-status). While the hatch is on, BookingStatusExportService leaves the status to this stream: one sender per flag.
- */
+/** r2b booking status stream: writes a cumulative daily snapshot to the bucket and sends it to the FTP; driven by bookings.is_status_exported. */
 class BookingStatusSnapshotService
 {
     use GuardsDigitalHatchRuns, HatchExportable;
@@ -31,11 +21,10 @@ class BookingStatusSnapshotService
     }
 
     /**
-     * @param bool $force send the day's file again even when this exact content was sent before
-     * @param int|null $bookingTypeId when given, only bookings of this type are included (manual web trigger)
-     * @param int|null $statusId when given, only bookings at this status are included (manual web trigger)
+     * @param bool $force re-send even if this content was already sent
+     * @param int|null $bookingTypeId optional filter (manual web trigger)
+     * @param int|null $statusId optional filter (manual web trigger)
      * @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>}
-     *         built = what run() did, file = the name sent (null: nothing new), marked = bookings set to is_status_exported = 1
      */
     public function export(bool $force = false, ?int $bookingTypeId = null, ?int $statusId = null): array
     {
@@ -57,11 +46,9 @@ class BookingStatusSnapshotService
     }
 
     /**
-     * Puts the waiting bookings in the bucket file of the day (export-json/booking-status), next to what earlier runs of the day put there.
-     * @param array<int, int> $waiting filled with the bookings that are in the file now: booking id => version
-     * @param int|null $bookingTypeId optional filter by booking type (manual web trigger)
-     * @param int|null $statusId optional filter by status (manual web trigger)
-     * @return array{written: bool, file?: string, bookings?: int, in_file?: int, reason?: string} reason: nothing_waiting | unchanged
+     * Builds the day's booking status file in the bucket, merging with what earlier runs put there.
+     * @param array<int, int> $waiting booking id => version
+     * @return array{written: bool, file?: string, bookings?: int, in_file?: int, reason?: string}
      */
     public function run(array &$waiting = [], ?int $bookingTypeId = null, ?int $statusId = null): array
     {
@@ -83,7 +70,6 @@ class BookingStatusSnapshotService
             }
         }
 
-        // A booking decided again replaces its row where it stood.
         foreach ($rows as $serial => $row) {
             $inFile[$serial] = $row;
         }
@@ -102,10 +88,9 @@ class BookingStatusSnapshotService
     }
 
     /**
-     * The bookings waiting to be sent, as the rows of the file, and the version each had when it was read.
-     * @param int|null $bookingTypeId optional filter (manual web trigger)
-     * @param int|null $statusId optional filter (manual web trigger)
-     * @return array{0: array<int, array{serial_number: int, status_id: int, personal_id: ?string, updated_at: string}>, 1: array<int, int>} rows by serial number; booking id => version
+     * @param int|null $bookingTypeId optional filter
+     * @param int|null $statusId optional filter
+     * @return array{0: array<int, array{serial_number: int, status_id: int, personal_id: ?string, updated_at: string}>, 1: array<int, int>}
      */
     private function waitingRows(?int $bookingTypeId = null, ?int $statusId = null): array
     {
@@ -137,11 +122,7 @@ class BookingStatusSnapshotService
         return [$rows, $waiting];
     }
 
-    /**
-     * Sets is_status_exported = 1 on the bookings that went out. A booking decided again while the file was written has a newer version
-     * than the file holds: it stays waiting and goes in the next file.
-     * @param array<int, int> $waiting booking id => version @return int the bookings marked
-     */
+    /** Sets is_status_exported = 1 on sent bookings; a newer version stays waiting. @param array<int, int> $waiting booking id => version @return int */
     private function markExported(array $waiting): int
     {
         $idsByVersion = [];

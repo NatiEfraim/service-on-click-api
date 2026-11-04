@@ -12,24 +12,12 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-/**
- * Takes the b2r files the mobile side put on the digital hatch and lands them in the bucket, where the importers (importBookingJson:bucket,
- * importApplicationLogJson:bucket, importFile:bucket) read them as if the mobile app had written them there: the json files in import-json, the
- * files and images in import-files. The hatch is the FTP; for local testing the folders DIGITAL_HATCH_IMPORT_PATH (the json files) and
- * DIGITAL_HATCH_IMPORT_FILES_PATH (the files and images) take its place. Only names with the system prefixes are taken (SrvOnClick_b2r_...,
- * SrvOnClickFiles_...). What was taken is remembered by its name in digital_hatch_fetched_files, with its stream and where it came from, so
- * nothing is taken twice (unless $force); the source is never written to or cleaned.
- */
+/** Takes b2r files from the digital hatch FTP into the bucket; remembers every fetch in digital_hatch_fetched_files so nothing is taken twice. */
 trait HatchImportable
 {
     use ResolvesAttachmentStoragePath;
 
-    /**
-     * Takes the new files of ONE b2r json stream - SrvOnClick_b2r_export_bookings_<date>.json or SrvOnClick_b2r_application_logs_<date>.json - into
-     * the bucket folder its importer reads. A file that is not valid json yet (still being uploaded) is left for the next run.
-     * @param bool $force take the files again even when they were taken before
-     * @return array{source: string, files: array<int, string>, errors: array<int, string>} where they came from, the names landed
-     */
+    /** Lands new b2r json files from the FTP into the bucket; skips invalid JSON (still uploading) and already-fetched names. @param bool $force re-fetch even if already taken @return array{source: string, files: array<int, string>, errors: array<int, string>} */
     public function downloadFiles(DigitalHatchFileEnum $stream, bool $force = false): array
     {
         $result = ['source' => '', 'files' => [], 'errors' => []];
@@ -51,14 +39,12 @@ trait HatchImportable
         $prefix = $stream->fileNamePrefix();
         $extension = '.' . DigitalHatchFormatEnum::current()->extension();
 
-        // The prefix is matched exactly (as the importers do), the case of the extension is not.
         $names = array_values(array_filter($names, fn (string $fileName): bool => str_starts_with($fileName, $prefix)
             && Str::endsWith(Str::lower($fileName), $extension)));
 
         $fetched = $force ? [] : $this->alreadyFetched($names);
         $storage = app(StorageService::class);
 
-        // No order is applied: the importers read the bucket folder oldest name first, whatever order the files landed in.
         foreach ($names as $fileName) {
             if (isset($fetched[$fileName])) {
                 continue;
@@ -78,7 +64,6 @@ trait HatchImportable
                 try {
                     $storage->putJsonToBucket($fileName, $stream->bucketDirectory(), $content);
                 } catch (\Throwable $e) {
-                    // Not landed: the next run takes it again.
                     DigitalHatchFetchedFile::where('file_name', $fileName)->delete();
 
                     throw $e;
@@ -93,12 +78,7 @@ trait HatchImportable
         return $result;
     }
 
-    /**
-     * Takes the new attachments of the bookings - SrvOnClickFiles_<stored name>.<ext> (pdf, docx, ... images) - into the bucket folder the received
-     * files wait in (import-files). Only the types AttachmentService serves are taken; they land under their own name.
-     * @param bool $force take the files again even when they were taken before
-     * @return array{source: string, files: array<int, string>, errors: array<int, string>} where they came from, the names landed
-     */
+    /** Lands new SrvOnClickFiles_* attachments from the FTP into the import-files bucket folder; only types AttachmentService serves are taken. @param bool $force re-fetch even if already taken @return array{source: string, files: array<int, string>, errors: array<int, string>} */
     public function downloadAttachments(bool $force = false): array
     {
         $result = ['source' => '', 'files' => [], 'errors' => []];
@@ -158,19 +138,13 @@ trait HatchImportable
         return $result;
     }
 
-    /**
-     * Remembers a file of the source as taken, with its stream and where it came from, so the next run skips it (a file taken again on purpose,
-     * --force, has its row refreshed). Throws when the ledger cannot be written.
-     */
+    /** Records a file as fetched in the ledger so the next run skips it; replaces the row on --force. Throws when the ledger cannot be written. */
     public static function markProcessed(string $fileName, string $stream, string $source): void
     {
         DigitalHatchFetchedFile::record($fileName, $stream, $source, replace: true);
     }
 
-    /**
-     * Where the files of a b2r folder are: the local test folder when it is set ($localKey under services.digital-hatch.local.import), else the FTP.
-     * @return array{disk: Filesystem, folder: string, label: string, kind: string} folder is '' or ends with one slash
-     */
+    /** Returns the source disk and folder for a b2r stream; local test folder if configured, otherwise the FTP. @return array{disk: Filesystem, folder: string, label: string, kind: string} */
     private function hatchSource(string $ftpFolderKey, string $localKey): array
     {
         $local = trim((string) config("services.digital-hatch.local.import.{$localKey}"));

@@ -7,17 +7,10 @@ use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
-/**
- * The only writer of the audit log: rows are appended in the caller's transaction and the head row is locked, keeping the hash chain single.
- * Call denied() OUTSIDE the transaction the refusal rolls back, or the row goes with it.
- */
+/** The only writer of the audit log; rows are appended in the caller's transaction, the head row is locked (hash chain). Call denied() OUTSIDE the transaction a refusal rolls back. */
 class AuditService
 {
-    /**
-     * Appends a row. Requires action and entity_type; optional: entity_id, booking_serial, unit_id, booking_type_id, before, after, reason,
-     * result (success | denied | failed), correlation_id, source, actor_type, actor_id, actor_name.
-     * @param array<string, mixed> $event
-     */
+    /** Appends an audit row; required: action, entity_type; optional: entity_id, booking_serial, unit_id, booking_type_id, before, after, reason, result, correlation_id, source, actor_*. @param array<string, mixed> $event */
     public function record(array $event, ?User $actor = null): AuditLog
     {
         return DB::transaction(function () use ($event, $actor): AuditLog {

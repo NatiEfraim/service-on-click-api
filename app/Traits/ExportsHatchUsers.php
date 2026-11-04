@@ -8,11 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 trait ExportsHatchUsers
 {
-    /**
-     * Sends the users file to the digital hatch when it is enabled: queues SendHatchUsersJob (a queue worker runs it), or with $sync runs
-     * it here and returns what it did.
-     * @return array{enabled: bool, queued?: bool, result?: array<string, mixed>}
-     */
+    /** Sends the users file to the digital hatch; queues SendHatchUsersJob or runs inline with $sync. @return array{enabled: bool, queued?: bool, result?: array<string, mixed>} */
     protected function exportHatchUsers(bool $force = false, bool $sync = false): array
     {
         if (!config('services.digital-hatch.enabled')) {

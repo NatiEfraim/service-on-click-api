@@ -22,10 +22,7 @@ use App\Support\AccessScope;
 use App\Traits\CancelsBookingsOnRestrictionDates;
 use Carbon\Carbon;
 
-/**
- * What the settings screen of one booking type in one unit shows (references, fields and options, statement, managers)
- * and what blocking dates would do. Read-only; changes go through the approver / super admin endpoints.
- */
+/** Settings screen data for one booking type/unit: references, fields, options, statement, managers, blocking dates. Read-only; changes go through approver/super admin endpoints. */
 class SettingsService
 {
     use CancelsBookingsOnRestrictionDates;

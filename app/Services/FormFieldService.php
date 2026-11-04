@@ -16,11 +16,7 @@ use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-/**
- * Super-admin management of a booking type's form in a unit: add, change, move and remove fields, and mark which date/time field an approver may correct.
- * Each change is validated, versioned, audited and queued for the mobile app in one transaction; fields are known to both systems by field_name.
- * Fields with values are archived, never deleted; mobile-app fields can be renamed, moved or made required, but not retyped or removed.
- */
+/** Super-admin form management: add, move, archive fields (archived, never deleted; mobile-app fields renamed/moved/required only). Each change is validated, versioned, audited and queued for mobile. */
 class FormFieldService
 {
     public function __construct(

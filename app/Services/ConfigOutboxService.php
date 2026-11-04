@@ -10,11 +10,7 @@ use App\Models\SyncFile;
 use App\Models\Unit;
 use Illuminate\Support\Str;
 
-/**
- * Queues configuration changes (form fields, options, statements, settings) as one {"changes": [...]} file per request,
- * in the transaction of the change; BookingStatusExportService sends the files oldest first.
- * Entities: form_field, option_field, system_reference, statement, unit. Payloads may not name a unit or a department (PayloadGuard).
- */
+/** Queues config changes as one {"changes":[...]} file per request; BookingStatusExportService sends them oldest-first. Payloads may not name a unit or department (PayloadGuard). */
 class ConfigOutboxService
 {
     /**

@@ -11,10 +11,7 @@ use App\Models\SlaTarget;
 use App\Models\SyncConflict;
 use App\Support\AccessScope;
 
-/**
- * The main screen (a tile per booking type with open bookings by stage) and the dashboard of a booking type.
- * Super admin and admin see all tiles and booking types; the approver only his own booking types' dashboard; handlers none.
- */
+/** Main screen (tile per booking type) and type dashboard; super admin/admin see all, approver sees their own, handlers none. */
 class DashboardService
 {
     public function __construct(

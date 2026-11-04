@@ -9,12 +9,7 @@ use App\Models\Booking;
 use App\Models\User;
 use Illuminate\Support\Str;
 
-/**
- * Everything that follows when a decision made here puts a booking into a new status, so approvals, date-blocking cancellations and
- * conflicts settled in our favour leave the same traces: the booking moves and is marked unsent to the mobile app (is_status_exported = 0, so the
- * next round of the r2b booking status file carries it - a hold, 8 / 9 / 10, included), a timeline row is logged and a barber slot is freed.
- * The caller opens the transaction and writes the audit row.
- */
+/** Applies an internal status decision: moves the booking, marks it unsent (is_status_exported=0 for the next r2b file, holds included), logs a timeline row, frees a barber slot. Caller owns the transaction and audit. */
 class BookingStatusRecorder
 {
     /**

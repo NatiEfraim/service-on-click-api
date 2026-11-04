@@ -110,12 +110,7 @@ class Booking extends Model
         return StatusBookingEnum::from((int) $this->status_id);
     }
 
-    /**
-     * The status that decides whose turn it is: for a booking on hold (8, 9, 10) the status it was put on hold from (parked_status_id), else its own.
-     * A hold never moves a booking - its stage, its buttons and who sees it stay those of this status - while status_id, the hold, is what the
-     * booking shows and what is sent to the mobile app. A hold with nowhere recorded (put on before parked_status_id, or already on hold when the booking arrived) is its own position.
-     * Only a hold looks at parked_status_id, so a value left on any other status changes nothing.
-     */
+    /** The status that decides whose turn it is: parked_status_id for a booking on hold, its own otherwise. A hold changes status_id but not stage, buttons or visibility. */
     public function positionStatus(): StatusBookingEnum
     {
         $status = $this->statusEnum();
@@ -135,10 +130,7 @@ class Booking extends Model
         return $status->isPendingForSupplier() ? $status : null;
     }
 
-    /**
-     * What parked_status_id becomes when the booking moves to $target. A hold put on from a stage parks the booking at the status it leaves; from
-     * one hold to another it stays where it was parked (nowhere, for an old hold); any other status parks nothing.
-     */
+    /** What parked_status_id becomes when moving to $target: a hold parks at the status it was entered from; hold-to-hold keeps the same park. */
     public function parkedStatusFor(StatusBookingEnum $target): ?int
     {
         if (!$target->isPendingForSupplier()) {

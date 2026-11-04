@@ -21,10 +21,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-/**
- * Correction of editable date/time values while a booking is handled (who and when: Workflow; which fields: form_fields.editable).
- * A corrected value is saved here and queued as an r2b file for the mobile app; a barber booking's slot moves with it, only to a free time.
- */
+/** Corrects editable date/time values while a booking is handled; queues the change for mobile, moves the barber slot to a free time. */
 class BookingValueService
 {
     use ResolvesBarberSchedule;

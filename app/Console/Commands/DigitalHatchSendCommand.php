@@ -6,22 +6,19 @@ use App\Services\StorageService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
-/**
- * What the two r2b send commands share (one per stream: digital-hatch:send-users, digital-hatch:send-booking-status): by default the stream's
- * job is queued and a queue worker sends it; --sync runs it here and shows what it did, so each stream can be tested alone.
- */
+/** Base for digital-hatch:send-booking-status and digital-hatch:send-users. */
 abstract class DigitalHatchSendCommand extends Command
 {
-    /** Queues this stream's job, or with $sync runs it here. @return array{enabled: bool, queued?: bool, result?: array<string, mixed>} */
+    /** @return array{enabled: bool, queued?: bool, result?: array<string, mixed>} */
     abstract protected function sendToHatch(bool $force, bool $sync): array;
 
-    /** One line about what building this stream's file did. @param array<string, mixed> $built */
+    /** @param array<string, mixed> $built */
     abstract protected function describeBuilt(array $built): string;
 
-    /** @return class-string the job that sends this stream */
+    /** @return class-string */
     abstract protected function jobClass(): string;
 
-    /** One line about the rows set to "exported" once the file has gone, for a stream that has such a flag; null for one that has none. */
+    /** Override to describe how many rows were marked exported; null = no flag for this stream. */
     protected function describeMarked(int $marked): ?string
     {
         return null;
@@ -56,7 +53,6 @@ abstract class DigitalHatchSendCommand extends Command
             $this->info($this->describeBuilt($result['built']));
             $this->info($result['file'] !== null ? "Sent: {$result['file']}" : 'Nothing new to send (the same content was sent before; --force sends it again).');
 
-            // Both streams have a flag to set once their file has gone: bookings.is_status_exported, users.is_exported_role.
             if (isset($result['marked']) && ($marked = $this->describeMarked($result['marked'])) !== null) {
                 $this->info($marked);
             }

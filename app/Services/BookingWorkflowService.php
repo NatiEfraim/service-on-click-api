@@ -19,11 +19,7 @@ use App\Models\ViceApproverHasBooking;
 use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
-/**
- * A status change made by a person here, with every rule enforced on the server: visibility, permission for this move at this stage (Workflow),
- * requester cancellation left to the mobile app, comment rules, food cancellation deadline, no open sync conflict and a current version.
- * The status is saved here; BookingStatusExportService sends the decision to the mobile app later.
- */
+/** Validates and applies a status change by a person: checks visibility, Workflow permission, comment rules, deadline, no open conflict and version. BookingStatusExportService sends the decision to the mobile app. */
 class BookingWorkflowService
 {
     public function __construct(
@@ -117,10 +113,7 @@ class BookingWorkflowService
         });
     }
 
-    /**
-     * Checks in order: ownership, current version, visibility at its stage, permission, requester-only, comment, deadline.
-     * A stale version answers "changed" (409) rather than "not allowed" for the stage the booking moved to. With $audit a permission refusal is audited.
-     */
+    /** Checks ownership, version, stage visibility, permission, requester-only, comment and deadline; a stale version answers 409. @param bool $audit log a permission refusal */
     private function assertMayChange(AccessScope $scope, ?Booking $booking, int $serial, StatusBookingEnum $target, string $comment, int $expectedVersion, bool $audit): void
     {
         $user = $scope->user;

@@ -19,11 +19,7 @@ trait AuditsPermissionChanges
             : User::query()->where('personal_number', $validated['personal_number'] ?? null)->first();
     }
 
-    /**
-     * Refuses (403, audited) a grant to a person the logged-in user may not manage: a super admin is nobody's to change here, an admin is the
-     * super admin's alone (see User::unmanageableRoleNames()). Call it OUTSIDE the transaction: the audit row must not be rolled back with it.
-     * @throws DomainError
-     */
+    /** Throws 403 (audited) when the target has a protected role the caller may not change. Call OUTSIDE the transaction. @throws DomainError */
     protected function assertTargetManageable(?User $target): void
     {
         /** @var User $actor Auth::user() is typed as the Authenticatable contract, which has no hasRole(). */

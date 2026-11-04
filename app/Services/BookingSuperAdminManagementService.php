@@ -54,7 +54,7 @@ class BookingSuperAdminManagementService
     {
         try {
 
-            // Before the transaction: a refusal is audited, and that row would be rolled back inside it. A super admin is not given or stripped of anything.
+            // Before the transaction: a refusal's audit row would be rolled back inside it.
             $this->assertTargetManageable($this->grantTargetOf($validated));
 
             DB::beginTransaction();

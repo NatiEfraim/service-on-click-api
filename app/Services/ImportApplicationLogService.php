@@ -13,11 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Saves exported application log files: what was done to a booking (action_type_id), by whom (personal_id) and when, plus the booking's
- * status then, which makes the log its timeline. The booking must be saved first (ImportBookingService);
- * a saved log is recognised by booking, action, person and time, so a re-read adds nothing.
- */
+/** Saves b2r application log files; a log is matched by booking, action, person and time, so re-importing adds nothing. */
 class ImportApplicationLogService
 {
     use ReadsImportJsonFiles;
@@ -53,11 +49,7 @@ class ImportApplicationLogService
             : "{$waiting} logs have no booking saved yet: import the bookings first and run this again (the logs whose booking is saved were saved; the file stays in {$directory})";
     }
 
-    /**
-     * Saves one chunk in a transaction. Unusable rows are logged and skipped; a log whose booking is not saved yet is counted in
-     * booking_not_found and the job looks again later (see ImportApplicationLogJsonChunkJob).
-     * @return array<string, int> created, already_saved, skipped, booking_not_found
-     */
+    /** Saves one chunk; logs without a booking increment booking_not_found (the job retries). @return array<string, int> */
     public function importChunk(array $logsChunk, int $chunkIndex): array
     {
         $stats = ['created' => 0, 'already_saved' => 0, 'skipped' => 0, 'booking_not_found' => 0];
@@ -119,7 +111,6 @@ class ImportApplicationLogService
                 'status_id' => $row['status_id'],
                 'source' => 'external',
                 'user_id' => $userId,
-                // Nothing here is sent back to the mobile app.
                 'is_exported' => true,
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,

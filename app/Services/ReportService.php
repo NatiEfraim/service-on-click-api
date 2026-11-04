@@ -10,10 +10,7 @@ use App\Models\Department;
 use App\Models\Unit;
 use App\Support\AccessScope;
 
-/**
- * The report generator (super admin, admin): returns flat rows with the value of every column the user picked,
- * for the preview and the Excel / PDF files.
- */
+/** Report generator: flat rows with user-picked columns for the preview and Excel/PDF export. */
 class ReportService
 {
     public const MAX_ROWS = 5000;
@@ -22,12 +19,7 @@ class ReportService
     {
     }
 
-    /**
-     * Filters (all optional): serial, types, groups, statuses, units, departments (comma-separated ids; groups are group_booking_types ids),
-     * requester (name), personal_id, opened_from / opened_to / updated_from / updated_to (Y-m-d), stage, overdue (yes | no), min_age_days.
-     * @param array<string, mixed> $filters
-     * @return array{rows: array<int, array<string, mixed>>, total: int, truncated: bool}
-     */
+    /** @param array<string, mixed> $filters serial, types, groups, statuses, units, departments, requester, personal_id, opened/updated from/to, stage, overdue, min_age_days @return array{rows: array<int, array<string, mixed>>, total: int, truncated: bool} */
     public function rows(AccessScope $scope, array $filters): array
     {
         if (!$scope->can('reports.view')) {

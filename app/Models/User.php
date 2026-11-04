@@ -97,11 +97,7 @@ class User extends Authenticatable
         return $role ? RoleEnum::fromSpatieRole($role) : null;
     }
 
-    /**
-     * The roles that put a person out of this user's reach (not listed, no roles or permissions granted or replaced): nobody deals with a
-     * super admin through the API, and an admin is the super admin's to manage, so an admin sees neither.
-     * @return array<int, string>
-     */
+    /** Role names that make a person unmanageable: super_admin for everyone; admin for non-super-admins too. @return array<int, string> */
     public function unmanageableRoleNames(): array
     {
         $names = [RoleEnum::SUPER_ADMIN->toSpatieRoleName()];
@@ -125,23 +121,13 @@ class User extends Authenticatable
         return !$this->hasAnyRole($actor->unmanageableRoleNames());
     }
 
-    /**
-     * The person's roles or permissions changed here, so they wait for the users file again (is_exported_role = 0). updated_at moves too: the file
-     * carries it, and it is how a file being built right now learns that this person changed (see markRolesExported()).
-     * Every code path that grants or takes away a role must call this, inside the transaction that does it.
-     */
+    /** Marks is_exported_role=0 and touches updated_at so the next users file picks up this person; call in every transaction that grants or takes a role. */
     public function markRolesChanged(): void
     {
         $this->forceFill(['is_exported_role' => false])->touch();
     }
 
-    /**
-     * Sets is_exported_role = 1 on the people whose roles went out in the users file. Someone whose roles changed while the file was built has a
-     * newer updated_at (markRolesChanged), so they stay waiting and go in the next file - the check is to the second, as updated_at is.
-     * Not touching updated_at: the flag is bookkeeping, not a change of the person.
-     * @param array<int, ?string> $versions user id => updated_at as stored when the file was built (UsersExportService::payload)
-     * @return int the people marked
-     */
+    /** Sets is_exported_role=1 on people whose roles went in the file; a newer updated_at (changed during the build) keeps them waiting. @param array<int, ?string> $versions user id => updated_at snapshot @return int marked */
     public static function markRolesExported(array $versions): int
     {
         $idsByVersion = [];
@@ -170,11 +156,7 @@ class User extends Authenticatable
         return $marked;
     }
 
-    /**
-     * The permission names that decide what the user may do to a booking (Workflow). The super admin holds no "{role}_{type}" permissions,
-     * so it acts as the admin of every booking type that has bookings. Read once per user instance: a resource calls this for every row.
-     * @return array<int, string>
-     */
+    /** Permission names that drive Workflow checks; super admin holds none so it acts as admin for every type. Cached per instance. @return array<int, string> */
     public function workflowPermissionNames(): array
     {
         if ($this->workflowPermissionNames !== null) {

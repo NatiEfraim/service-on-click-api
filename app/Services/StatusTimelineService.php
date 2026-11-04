@@ -6,10 +6,7 @@ use App\Models\ApplicationLog;
 use App\Models\Booking;
 use Illuminate\Support\Collection;
 
-/**
- * How long bookings stayed in each status, from the application log. Bookings saved before the log carried statuses only know their
- * current status since status_changed_at, so every booking ends in an open interval of its current status.
- */
+/** How long bookings stayed in each status; older bookings (before the log carried statuses) only know their current status open interval. */
 class StatusTimelineService
 {
     /**

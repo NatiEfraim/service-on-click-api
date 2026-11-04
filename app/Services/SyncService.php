@@ -15,10 +15,7 @@ use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-/**
- * The screen for traffic with the mobile app: files sent back, decisions waiting to be sent and sync conflicts, plus settling a conflict and "send now".
- * Sending itself is BookingStatusExportService's.
- */
+/** Sync screen: outbound files, pending decisions, open conflicts; settling a conflict and triggering a manual send. BookingStatusExportService does the writing. */
 class SyncService
 {
     public function __construct(

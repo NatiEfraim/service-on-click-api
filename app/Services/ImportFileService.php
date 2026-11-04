@@ -11,16 +11,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Saves the files and images of the bookings. The booking json only names an attachment ("SrvOnClickFiles_<stored name>", no extension) and
- * ImportBookingService saves its file / image row without a place for the bytes; the bytes arrive separately in one bucket folder
- * (IMPORT_FILES_FOLDER_NAME, "import-files") as SrvOnClickFiles_<stored name>.<ext>. For every received file that a booking names this
- *  - copies it to the folder the bookings serve their files and images from (ATTACHMENTS_FOLDER_NAME, "files": all of them together),
- *  - gives the row the key of that copy, extension included,
- *  - and moves the received file to loaded-files (LOADED_FILES_FOLDER_NAME), a backup like loaded-json.
- * A received file no booking names yet stays in import-files until its booking is saved; a row whose bytes have not arrived keeps waiting.
- * Only names with the system prefix (SrvOnClickFiles_) and a type AttachmentService serves are read. Reading again changes nothing.
- */
+/** Copies received SrvOnClickFiles_* attachments from import-files to the live files folder, links them to their booking rows, moves them to loaded-files. */
 class ImportFileService
 {
     /** At most this many names of the waiting rows and of the received files nobody names are listed for the command to show. */
@@ -32,11 +23,7 @@ class ImportFileService
     ) {
     }
 
-    /**
-     * @return array{busy: bool, in_bucket: int, linked: int, moved: int, already_linked: int, waiting: int, unclaimed: int, waiting_names: array<int, string>, unclaimed_names: array<int, string>, errors: array<int, string>}
-     *         in_bucket = received files in import-files, linked = rows given their bytes now, moved = received files saved and moved to loaded-files,
-     *         already_linked = rows that had them, waiting = rows whose bytes have not arrived, unclaimed = received files no booking takes
-     */
+    /** @return array{busy: bool, in_bucket: int, linked: int, moved: int, already_linked: int, waiting: int, unclaimed: int, waiting_names: array<int, string>, unclaimed_names: array<int, string>, errors: array<int, string>} */
     public function importFromBucket(): array
     {
         $result = [
@@ -91,11 +78,7 @@ class ImportFileService
         return $result;
     }
 
-    /**
-     * Saves the received files of one name: each goes with the rows that take it (the first extension of the row's kind that was received).
-     * @param array<string, string> $files extension => received file name @param Collection<int, File|Image> $rows the rows with this name
-     * @param array<int, string> $unclaimed filled with the received files no row takes
-     */
+    /** Saves received files of one name, one per row that claims it; fills $unclaimed with files no row takes. @param array<string, string> $files extension => file name */
     private function take(array $files, Collection $rows, string $inbox, array &$result, array &$unclaimed): void
     {
         $takenBy = [];

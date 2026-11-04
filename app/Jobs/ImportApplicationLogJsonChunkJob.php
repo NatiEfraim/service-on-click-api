@@ -34,12 +34,7 @@ class ImportApplicationLogJsonChunkJob implements ShouldQueue
         $this->timeout = (int) config('app.jobs.import_application_log_json.timeout');
     }
 
-    /**
-     * A log whose booking is not saved yet (its chunk may still be queued) makes the job wait and look again; the logs that were saved are skipped
-     * next time. When the tries are used up and some logs still have no booking the job FAILS, so it shows in failed_jobs with its rows and
-     * `php artisan queue:retry all` saves them once the bookings are in - they are never dropped quietly.
-     * @return array<string, int>
-     */
+    /** Saves log rows; releases itself if a booking is not in DB yet; throws on last try so the chunk surfaces in failed_jobs. @return array<string, int> */
     public function handle(): array
     {
         try {

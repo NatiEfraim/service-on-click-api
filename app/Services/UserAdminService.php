@@ -8,11 +8,7 @@ use App\Models\User;
 use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Puts a person in a department; an admin (camp commander) works on their own unit's people only (never an admin or a super admin), the super
- * admin on any (never another super admin).
- * Granting roles is done by the assign-*-role endpoints.
- */
+/** Sets department membership; an admin works on their own unit (not other admins), the super admin on any. Role grants are in the assign-*-role endpoints. */
 class UserAdminService
 {
     public function __construct(private readonly AuditService $audit)

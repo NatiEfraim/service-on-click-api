@@ -13,11 +13,7 @@ trait GuardsDigitalHatchRuns
         return (bool) config('services.digital-hatch.enabled');
     }
 
-    /**
-     * Runs $work under a lock named $name, unless the hatch is off (HATCH_ENABLED=false) or another run of that name holds the lock.
-     * The scheduler and a manual run therefore cannot overlap.
-     * @param callable(): array<string, mixed> $work @return array<string, mixed> ['enabled' => false], ['enabled' => true, 'busy' => true] or ['enabled' => true, 'busy' => false, ...$work()]
-     */
+    /** Runs $work under a named lock; returns early when the hatch is disabled or another run holds the lock. @param callable(): array<string, mixed> $work @return array<string, mixed> */
     private function locked(string $name, callable $work): array
     {
         if (!$this->enabled()) {

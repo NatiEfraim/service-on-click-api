@@ -20,12 +20,7 @@ trait ImportsBookingJson
         return app(ImportBookingService::class)->importFromBucket($sync);
     }
 
-    /**
-     * importBookingJson:bucket - the command reads the booking files waiting in the bucket (ImportBookingService), queues their rows as chunk jobs
-     * (ImportBookingJsonChunkJob: a queue worker saves them), moves each file to loaded-json and returns what it did. With $sync the rows are saved
-     * here instead, so no worker is needed.
-     * @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>}
-     */
+    /** Reads booking files from the bucket and queues chunk jobs ($sync saves inline). @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>} */
     protected function importBookingJsonFromBucket(bool $sync = false): array
     {
         if (!config('app.import_json.enabled', true)) {
@@ -37,13 +32,7 @@ trait ImportsBookingJson
         return ['enabled' => true, 'queued' => false, 'result' => ['imported' => app(ImportBookingService::class)->importFromBucket($sync)]];
     }
 
-    /**
-     * importBookingJson:ftp - the command takes the new booking files from the digital hatch (the FTP, or the local test folder) into the bucket and
-     * imports them like importBookingJson:bucket: rows queued as chunk jobs (or saved here with $sync), files moved to loaded-json, names noted in
-     * digital_hatch_fetched_files. Off while HATCH_ENABLED=false.
-     * @param bool $force take the files again even when they were taken before
-     * @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>}
-     */
+    /** Fetches new booking files from the digital hatch FTP into the bucket, then imports them. Off while HATCH_ENABLED=false. @param bool $force re-fetch already-taken files @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>} */
     protected function importBookingJsonFromFtp(bool $force = false, bool $sync = false): array
     {
         if (!config('services.digital-hatch.enabled')) {

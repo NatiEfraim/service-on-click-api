@@ -5,11 +5,7 @@ namespace App\Models;
 use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * A b2r file this system already took in, by its name (the json files SrvOnClick_b2r_... and the files and images SrvOnClickFiles_...): the
- * ":ftp" import commands skip a name that is here, so nothing is fetched twice. The stream says what the file is (export_bookings,
- * application_logs, attachments) and the source where it came from: the FTP, the local test folder, or the bucket (the ":bucket" imports).
- */
+/** Tracks b2r files already taken; ftp imports skip names present here so nothing is fetched twice. Stream: export_bookings | application_logs | attachments; source: ftp | local | bucket. */
 class DigitalHatchFetchedFile extends Model
 {
     use HasUuid;

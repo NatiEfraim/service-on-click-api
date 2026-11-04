@@ -20,7 +20,6 @@ class ResetUsersCommand extends Command
 
     public function handle(): int
     {
-        // The UserSeeder holds real people; it is meant for local development and tests only.
         if (!app()->environment(['local', 'testing'])) {
             $this->error('users:reset runs only on the local and testing environments.');
 
@@ -29,8 +28,6 @@ class ResetUsersCommand extends Command
 
         $wipeUsers = (bool) $this->option('wipe-users');
 
-        // No interactive prompt on purpose: on Windows Symfony switches the code page while it waits for the answer,
-        // which breaks the autoloader when the project path has non-ASCII characters (it does: المستندات).
         if ($wipeUsers && !$this->option('force')) {
             $this->error('--wipe-users DELETES every user together with their bookings, application logs and comments. Add --force to do it.');
 
@@ -47,17 +44,13 @@ class ResetUsersCommand extends Command
                 DB::table($tables['role_has_permissions'])->delete();
 
                 if ($wipeUsers) {
-                    // Bookings, application logs, comments and the like are removed with the user (ON DELETE CASCADE).
                     User::query()->delete();
                 }
 
                 app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-                // Roles and permissions first: the UserSeeder hands them out.
                 $this->call('db:seed', ['--class' => RoleAndPermissionSeeder::class]);
                 $this->call('db:seed', ['--class' => UserSeeder::class]);
-
-                // The assignments were rebuilt, so nobody's roles are known to be the ones that already went to the mobile side: all wait for the users file again.
                 User::query()->toBase()->update(['is_exported_role' => false]);
             });
 

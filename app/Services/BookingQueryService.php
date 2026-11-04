@@ -28,13 +28,7 @@ class BookingQueryService
     /** @var ?array<int, float> handling target hours by booking type id */
     private ?array $targets = null;
 
-    /**
-     * Filters (all optional): q (serial, ID number, personal number or name), statuses, types, units (comma-separated ids), stage,
-     * from / to (Y-m-d, day opened), open_only=1, ids (serial numbers), handler (user uuid), mine=1, overdue=1,
-     * sync (conflict | pending | synced), sort, dir, page, per_page.
-     * @param array<string, mixed> $filters
-     * @return array{data: array<int, array<string, mixed>>, meta: array{total: int, page: int, last_page: int, per_page: int}}
-     */
+    /** @param array<string, mixed> $filters q, statuses, types, units, stage, from/to, open_only, ids, handler, mine, overdue, sync, sort, dir, page, per_page @return array{data: array<int, array<string, mixed>>, meta: array{total: int, page: int, last_page: int, per_page: int}} */
     public function list(AccessScope $scope, array $filters): array
     {
         $query = $scope->applyToBookings(Booking::query())
