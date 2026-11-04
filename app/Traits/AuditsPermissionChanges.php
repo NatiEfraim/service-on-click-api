@@ -26,6 +26,7 @@ trait AuditsPermissionChanges
      */
     protected function assertTargetManageable(?User $target): void
     {
+        /** @var User $actor Auth::user() is typed as the Authenticatable contract, which has no hasRole(). */
         $actor = Auth::user();
 
         if ($target === null || $target->isManageableBy($actor)) {
@@ -55,8 +56,9 @@ trait AuditsPermissionChanges
             return;
         }
 
-        // The users file for the mobile side carries updated_at; a role change is a change of the person.
-        $user->touch();
+        // The users file for the mobile side carries updated_at; a role change is a change of the person, and the file has to carry it again
+        // (is_exported_role = 0). Inside the caller's transaction, so the flag and the roles change together.
+        $user->markRolesChanged();
 
         app(AuditService::class)->record([
             'action' => 'user.permissions.change',

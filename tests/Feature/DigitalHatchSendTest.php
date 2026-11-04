@@ -108,25 +108,37 @@ class DigitalHatchSendTest extends HatchTestCase
         $this->assertSame([], $result['errors']);
         $this->assertTrue($result['built']['written']);
         $this->assertSame($name, $result['file']);
+        $this->assertSame(3, $result['marked'], 'the three people who went out are marked as sent');
         $this->assertStringContainsString(self::RED_TO_BLACK, $result['destination']);
 
         $json = $this->bucket()->get('export-json/users/' . $name);
         $this->assertSame($json, $this->ftp()->get(self::RED_TO_BLACK . $name), 'the same bytes in the bucket and on the FTP');
         $this->assertSame(['000000001', '123456789', '223456789'], array_column(json_decode($json, true)['users'], 'personal_id'));
 
-        // Nothing changed: no new write, no new send.
+        // Nobody is waiting any more: no new write, no new send.
         $again = app(UsersExportService::class)->export();
         $this->assertFalse($again['built']['written']);
-        $this->assertSame('unchanged', $again['built']['reason']);
+        $this->assertSame('nothing_waiting', $again['built']['reason']);
+        $this->assertSame(0, $again['marked']);
         $this->assertNull($again['file']);
         $this->assertSame(1, DigitalHatchSentFile::where('destination', 'ftp')->count());
         $this->assertSame(1, DigitalHatchSentFile::where('destination', 'bucket')->count(), 'what was written to the bucket is remembered too');
 
-        // A role is taken away: the day's file is rewritten and goes again under the same name.
-        User::where('personal_number', self::PLAIN_USER)->firstOrFail()->revokePermissionTo('user_1');
+        // The admin takes a role away: the person waits again, the day's file is rewritten (the others stay in it) and goes again under the same name.
+        $this->app['auth']->forgetGuards();
+        $this->actingAsPersonalNumber(self::ADMIN)
+            ->postJson('/api/bookings-admin-management/assign-approver-role', [
+                'uuid' => User::where('personal_number', self::VICE_APPROVER)->value('uuid'),
+                'role_assignments' => [['booking_type_id' => 1, 'is_approver' => false, 'is_vice_approver' => false]],
+            ])
+            ->assertOk();
+
         $third = app(UsersExportService::class)->export();
 
         $this->assertTrue($third['built']['written']);
+        $this->assertSame(1, $third['built']['users'], 'only the person whose role changed was waiting');
+        $this->assertSame(3, $third['built']['in_file']);
+        $this->assertSame(1, $third['marked']);
         $this->assertSame($name, $third['file']);
         $this->assertNotSame($json, $this->ftp()->get(self::RED_TO_BLACK . $name));
         $this->assertSame($this->bucket()->get('export-json/users/' . $name), $this->ftp()->get(self::RED_TO_BLACK . $name));
@@ -139,6 +151,194 @@ class DigitalHatchSendTest extends HatchTestCase
             DigitalHatchSentFile::where('destination', 'bucket')->orderBy('id')->get(['file_name', 'sha256'])->toArray()
         );
         $this->assertSame(hash('sha256', $this->ftp()->get(self::RED_TO_BLACK . $name)), DigitalHatchSentFile::where('destination', 'ftp')->latest('id')->value('sha256'));
+    }
+
+    //----------------------------- The users file: the is_exported_role flag ------------------------------------//
+
+    private function sent(string $personalNumber): bool
+    {
+        return (bool) User::where('personal_number', $personalNumber)->value('is_exported_role');
+    }
+
+    /** The admin (all the people of these tests are in their unit) grants or takes away approver roles. @param array<int, array<string, mixed>> $assignments */
+    private function grantApprover(string $personalNumber, array $assignments): void
+    {
+        $this->app['auth']->forgetGuards();
+
+        $this->actingAsPersonalNumber(self::ADMIN)
+            ->postJson('/api/bookings-admin-management/assign-approver-role', [
+                'uuid' => User::where('personal_number', $personalNumber)->value('uuid'),
+                'role_assignments' => $assignments,
+            ])
+            ->assertOk();
+    }
+
+    /** @return array<int, array<string, mixed>> the people in the day's users file in the local folder, in file order */
+    private function localUserRows(): array
+    {
+        $content = json_decode(file_get_contents($this->localDir . '/' . $this->usersFileName()), true);
+
+        $this->assertSame(['users'], array_keys($content));
+
+        return $content['users'];
+    }
+
+    public function test_a_new_person_waits_and_only_the_people_waiting_go_in_the_file(): void
+    {
+        $this->useLocalFolder();
+
+        $this->assertFalse($this->sent(self::VICE_APPROVER), 'a new person waits to be sent');
+        $this->assertArrayNotHasKey('is_exported_role', User::where('personal_number', self::VICE_APPROVER)->firstOrFail()->toArray(), 'bookkeeping, not shown');
+
+        // The super admin went out already. The admin has no ID number (the mobile side knows people by it): never in the file, never marked.
+        User::where('personal_number', self::SUPER_ADMIN)->toBase()->update(['is_exported_role' => true]);
+
+        $result = app(UsersExportService::class)->export();
+
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(2, $result['marked']);
+        $this->assertSame(['123456789', '223456789'], array_column($this->localUserRows(), 'personal_id'));
+        $this->assertTrue($this->sent(self::VICE_APPROVER));
+        $this->assertTrue($this->sent(self::PLAIN_USER));
+        $this->assertFalse($this->sent(self::ADMIN), 'not in the file, so still waiting');
+        $this->assertFalse($this->sent(self::APPROVER));
+    }
+
+    public function test_a_role_given_or_taken_away_by_the_admin_or_the_super_admin_sends_the_person_again(): void
+    {
+        $this->useLocalFolder();
+        app(UsersExportService::class)->export();
+
+        $this->assertTrue($this->sent(self::VICE_APPROVER) && $this->sent(self::PLAIN_USER) && $this->sent(self::SUPER_ADMIN));
+
+        // The admin makes the vice approver the approver of booking type 2 as well: only they wait again.
+        $this->grantApprover(self::VICE_APPROVER, [['booking_type_id' => 2, 'is_approver' => true, 'is_vice_approver' => true]]);
+
+        $this->assertFalse($this->sent(self::VICE_APPROVER));
+        $this->assertTrue($this->sent(self::PLAIN_USER));
+        $this->assertTrue($this->sent(self::SUPER_ADMIN));
+
+        $first = app(UsersExportService::class)->export();
+
+        $this->assertSame(1, $first['built']['users']);
+        $this->assertSame(3, $first['built']['in_file'], 'the people sent earlier today stay in the day\'s file');
+        $this->assertSame(1, $first['marked']);
+        $this->assertSame(['000000001', '123456789', '223456789'], array_column($this->localUserRows(), 'personal_id'), 'ordered by ID number');
+
+        $viceApprover = $this->row($this->localUserRows(), '123456789');
+        $this->assertSame(3, $viceApprover['booking_type_roles'][0]['role_id']);
+        $this->assertSame([2], $viceApprover['booking_type_roles'][0]['booking_type_ids']);
+        $this->assertSame(4, $viceApprover['booking_type_roles'][1]['role_id']);
+
+        // The super admin makes the plain user an admin of booking type 1.
+        $this->app['auth']->forgetGuards();
+        $this->actingAsPersonalNumber(self::SUPER_ADMIN)
+            ->postJson('/api/bookings-super-admin-management/assign-admin-role', [
+                'uuid' => User::where('personal_number', self::PLAIN_USER)->value('uuid'),
+                'role_assignments' => [['booking_type_id' => 1, 'is_admin' => true]],
+            ])
+            ->assertOk();
+
+        $this->assertFalse($this->sent(self::PLAIN_USER));
+
+        $second = app(UsersExportService::class)->export();
+
+        $this->assertSame(1, $second['marked']);
+        $this->assertSame(3, $second['built']['in_file']);
+
+        $plainUser = $this->row($this->localUserRows(), '223456789');
+        $this->assertSame([2, 5], array_column($plainUser['booking_type_roles'], 'role_id'));
+        $this->assertSame([1], $plainUser['booking_type_roles'][0]['booking_type_ids']);
+        $this->assertSame($viceApprover, $this->row($this->localUserRows(), '123456789'), 'the vice approver\'s row is the one sent before');
+    }
+
+    public function test_a_grant_that_changes_nothing_leaves_the_person_sent(): void
+    {
+        app(UsersExportService::class)->export();
+        $updatedAt = User::where('personal_number', self::VICE_APPROVER)->toBase()->value('updated_at');
+
+        // The vice approver holds exactly this already (vice approver of booking type 1, not its approver).
+        $this->grantApprover(self::VICE_APPROVER, [['booking_type_id' => 1, 'is_approver' => false, 'is_vice_approver' => true]]);
+
+        $this->assertTrue($this->sent(self::VICE_APPROVER), 'nothing changed, nothing to send');
+        $this->assertSame($updatedAt, User::where('personal_number', self::VICE_APPROVER)->toBase()->value('updated_at'));
+        $this->assertSame('nothing_waiting', app(UsersExportService::class)->export()['built']['reason']);
+    }
+
+    public function test_when_the_send_fails_the_people_keep_waiting_and_go_with_the_next_run(): void
+    {
+        $this->useUnreachableFtp();
+
+        $failed = app(UsersExportService::class)->export();
+
+        $this->assertNotSame([], $failed['errors']);
+        $this->assertSame(0, $failed['marked']);
+        $this->assertTrue($failed['built']['written'], 'the file itself is in the bucket');
+        $this->assertFalse($this->sent(self::VICE_APPROVER), 'not sent, so not marked');
+
+        // The FTP is back: the same people are still waiting, and their file is in the bucket already.
+        Storage::fake('digital-hatch');
+        $ok = app(UsersExportService::class)->export();
+
+        $this->assertSame([], $ok['errors']);
+        $this->assertSame('unchanged', $ok['built']['reason']);
+        $this->assertSame(3, $ok['marked']);
+        $this->assertTrue($this->sent(self::VICE_APPROVER) && $this->sent(self::PLAIN_USER) && $this->sent(self::SUPER_ADMIN));
+        $this->assertTrue($this->ftp()->exists(self::RED_TO_BLACK . $this->usersFileName()));
+    }
+
+    public function test_a_person_whose_roles_changed_while_the_file_was_built_stays_waiting(): void
+    {
+        $service = app(UsersExportService::class);
+
+        $waiting = [];
+        $service->run($waiting);
+        $this->assertCount(3, $waiting);
+
+        // A moment after the file was read, the admin changes the vice approver's roles.
+        $this->travel(5)->seconds();
+        $this->grantApprover(self::VICE_APPROVER, [['booking_type_id' => 2, 'is_approver' => true, 'is_vice_approver' => true]]);
+
+        $this->assertSame(2, User::markRolesExported($waiting));
+        $this->assertFalse($this->sent(self::VICE_APPROVER), 'their new roles are not in that file');
+        $this->assertTrue($this->sent(self::PLAIN_USER));
+        $this->assertTrue($this->sent(self::SUPER_ADMIN));
+
+        $next = $service->export();
+
+        $this->assertSame(1, $next['built']['users']);
+        $this->assertSame(1, $next['marked']);
+        $this->assertTrue($this->sent(self::VICE_APPROVER));
+    }
+
+    public function test_marking_does_not_touch_updated_at_and_a_person_without_one_is_marked_too(): void
+    {
+        User::where('personal_number', self::SUPER_ADMIN)->toBase()->update(['updated_at' => '2020-01-01 00:00:00']);
+        User::where('personal_number', self::PLAIN_USER)->toBase()->update(['updated_at' => null]);
+
+        $waiting = [];
+        app(UsersExportService::class)->run($waiting);
+
+        $this->assertContains('2020-01-01 00:00:00', $waiting);
+        $this->assertContains(null, $waiting);
+
+        $this->assertSame(3, User::markRolesExported($waiting));
+        $this->assertSame('2020-01-01 00:00:00', User::where('personal_number', self::SUPER_ADMIN)->toBase()->value('updated_at'));
+        $this->assertNull(User::where('personal_number', self::PLAIN_USER)->toBase()->value('updated_at'));
+        $this->assertSame(0, User::markRolesExported($waiting), 'a person is marked once');
+    }
+
+    public function test_the_users_command_says_how_many_people_it_marked(): void
+    {
+        $this->artisan('digital-hatch:send-users', ['--sync' => true])
+            ->expectsOutputToContain("Users file written (3 waiting, 3 in the day's file)")
+            ->expectsOutputToContain('Marked as exported (is_exported_role = 1): 3 users.')
+            ->assertExitCode(0);
+
+        $this->artisan('digital-hatch:send-users', ['--sync' => true])
+            ->expectsOutputToContain('no person is waiting')
+            ->expectsOutputToContain('Marked as exported (is_exported_role = 1): 0 users.')
+            ->assertExitCode(0);
     }
 
     //----------------------------- The booking status file ------------------------------------//

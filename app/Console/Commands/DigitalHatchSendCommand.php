@@ -21,6 +21,12 @@ abstract class DigitalHatchSendCommand extends Command
     /** @return class-string the job that sends this stream */
     abstract protected function jobClass(): string;
 
+    /** One line about the rows set to "exported" once the file has gone, for a stream that has such a flag; null for one that has none. */
+    protected function describeMarked(int $marked): ?string
+    {
+        return null;
+    }
+
     public function handle(): int
     {
         try {
@@ -50,9 +56,9 @@ abstract class DigitalHatchSendCommand extends Command
             $this->info($this->describeBuilt($result['built']));
             $this->info($result['file'] !== null ? "Sent: {$result['file']}" : 'Nothing new to send (the same content was sent before; --force sends it again).');
 
-            // Only the booking status stream has a flag to set once its file has gone.
-            if (isset($result['marked'])) {
-                $this->info("Marked as exported (is_status_exported = 1): {$result['marked']} bookings.");
+            // Both streams have a flag to set once their file has gone: bookings.is_status_exported, users.is_exported_role.
+            if (isset($result['marked']) && ($marked = $this->describeMarked($result['marked'])) !== null) {
+                $this->info($marked);
             }
 
             foreach ($result['errors'] as $error) {

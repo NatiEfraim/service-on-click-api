@@ -12,9 +12,15 @@ use App\Traits\GuardsDigitalHatchRuns;
 use App\Traits\HatchExportable;
 
 /**
- * The users stream of the digital hatch (r2b): the people who have a role and the booking types they hold it on, so the mobile side knows
- * who may do what. One snapshot per day under the day's name (SrvOnClick_r2b_users_<Y-m-d>.json), rewritten while the day goes on only when
- * it changed. run() writes it to the bucket (export-json/users); export() does that and puts the newest file on the FTP.
+ * The users stream of the digital hatch (r2b), driven by the flag users.is_exported_role: the people who have a role and the booking types they
+ * hold it on, so the mobile side knows who may do what.
+ *  - a person waits while is_exported_role = 0: they are new, or their roles changed here (User::markRolesChanged, called when an admin or the
+ *    super admin grants or takes a role away);
+ *  - export() puts every waiting person in the day's file (SrvOnClick_r2b_users_<Y-m-d>.json), sends it, and only then sets is_exported_role = 1
+ *    on them (User::markRolesExported).
+ * The day's file keeps what earlier runs of the day put in it, so a later run never takes a person out of it; a person whose roles changed again
+ * replaces their row. The mobile importer upserts each person by ID number, so the file lists the people who changed, not everybody.
+ * run() writes the file to the bucket (export-json/users); export() does that and puts the newest file on the FTP.
  * Queued by SendHatchUsersJob (command digital-hatch:send-users).
  */
 class UsersExportService
@@ -27,65 +33,98 @@ class UsersExportService
 
     /**
      * Builds today's users file and sends it. A failure to build still lets the file already in the bucket go out.
-     * @param bool $force send even when this exact content was sent before
-     * @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, errors?: array<int, string>}
-     *         built = what run() did, file = the name sent (null: nothing new)
+     * @param bool $force send the day's file again even when this exact content was sent before
+     * @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>}
+     *         built = what run() did, file = the name sent (null: nothing new), marked = people set to is_exported_role = 1
      */
     public function export(bool $force = false): array
     {
         return $this->locked('send-users', function () use ($force): array {
             $errors = [];
+            $waiting = [];
 
-            $built = $this->building('users file', fn (): array => $this->run(), $errors);
+            $built = $this->building('users file', function () use (&$waiting): array {
+                return $this->run($waiting);
+            }, $errors);
             $sent = $this->sendNewestFile(DigitalHatchFileEnum::USERS, $force);
+            $errors = [...$errors, ...$sent['errors']];
 
-            return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sent['file'], 'errors' => [...$errors, ...$sent['errors']]];
+            // Only what really went is marked: after a failed build or send the people stay waiting for the next run.
+            $marked = $errors === [] ? User::markRolesExported($waiting) : 0;
+
+            return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sent['file'], 'marked' => $marked, 'errors' => $errors];
         });
     }
 
-    /** @return array{written: bool, file?: string, users?: int, reason?: string} reason: no_users | unchanged */
-    public function run(): array
+    /**
+     * Puts the waiting people in the bucket file of the day (export-json/users), next to what earlier runs of the day put there.
+     * @param array<int, ?string> $waiting filled with the people who are in the file now: user id => updated_at as stored
+     * @return array{written: bool, file?: string, users?: int, in_file?: int, reason?: string} reason: nothing_waiting | unchanged
+     */
+    public function run(array &$waiting = []): array
     {
-        $users = $this->payload();
+        $rows = $this->payload($waiting);
 
-        if ($users === []) {
-            return ['written' => false, 'reason' => 'no_users'];
+        if ($rows === []) {
+            return ['written' => false, 'reason' => 'nothing_waiting'];
         }
 
         // The day is counted in the timezone the mobile side uses for its own "today" (as the status file does).
         $fileName = ExportFileNames::usersFile(now(config('app.export_json.timezone')), DigitalHatchFileEnum::USERS->fileNamePrefix());
         $directory = DigitalHatchFileEnum::USERS->bucketDirectory();
-        $json = json_encode(['users' => $users], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        $existing = $this->storageService->bucketFileContents($fileName, $directory);
 
-        if ($this->storageService->bucketFileContents($fileName, $directory) === $json) {
-            return ['written' => false, 'file' => $fileName, 'users' => count($users), 'reason' => 'unchanged'];
+        $inFile = [];
+        foreach ((json_decode((string) $existing, true)['users'] ?? []) as $row) {
+            if (is_array($row) && isset($row['personal_id'])) {
+                $inFile[(string) $row['personal_id']] = $row;
+            }
+        }
+
+        // A person whose roles changed again replaces their row.
+        foreach ($rows as $row) {
+            $inFile[$row['personal_id']] = $row;
+        }
+
+        $users = array_values($inFile);
+        usort($users, fn (array $first, array $second): int => strcmp((string) $first['personal_id'], (string) $second['personal_id']));
+
+        $json = json_encode(['users' => $users], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        $result = ['file' => $fileName, 'users' => count($rows), 'in_file' => count($users)];
+
+        if ($existing === $json) {
+            return ['written' => false, ...$result, 'reason' => 'unchanged'];
         }
 
         $this->storageService->putJsonToBucket($fileName, $directory, $json);
         $this->noteWrittenToBucket($fileName, $json);
 
-        return ['written' => true, 'file' => $fileName, 'users' => count($users)];
+        return ['written' => true, ...$result];
     }
 
     /**
-     * The "users" list of the file, ordered by ID number. A person is in it when they have an ID number (how the mobile app knows people),
-     * are not deleted and hold a role on at least one booking type. The role is the RoleEnum value (the id both systems share) and the
-     * booking types come from the "{role}_{booking type}" permissions; the super admin holds no such permission and gets every booking type.
+     * The "users" list of a file, ordered by ID number: the people waiting to be sent (is_exported_role = 0). A person is in it when they have an
+     * ID number (how the mobile app knows people), are not deleted and hold a role on at least one booking type. The role is the RoleEnum value
+     * (the id both systems share) and the booking types come from the "{role}_{booking type}" permissions; the super admin holds no such
+     * permission and gets every booking type. A waiting person who does not qualify is left out and stays waiting.
+     * @param array<int, ?string> $waiting filled with the people listed: user id => updated_at as stored (User::markRolesExported checks it)
      * @return array<int, array{personal_id: string, phone: ?string, unit_id: ?int, booking_type_roles: array<int, array{role_id: int, booking_type_ids: array<int, int>}>, created_at: string, updated_at: string}>
      */
-    public function payload(): array
+    public function payload(array &$waiting = []): array
     {
         $superAdmin = RoleEnum::SUPER_ADMIN->toSpatieRoleName();
         $bookingTypeIds = BookingType::query()->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all();
 
         $users = User::query()
             ->where('is_deleted', false)
+            ->where('is_exported_role', false)
             ->whereNotNull('personal_id')
             ->where(fn ($query) => $query->has('permissions')->orWhereHas('roles', fn ($roles) => $roles->where('name', $superAdmin)))
             ->with(['permissions:id,name', 'roles:id,name'])
             ->get();
 
         $rows = [];
+        $waiting = [];
 
         foreach ($users as $user) {
             $personalId = UserService::normalizePersonalId($user->personal_id);
@@ -132,6 +171,7 @@ class UsersExportService
                 'created_at' => (string) ($user->created_at?->getTimestamp() ?? 0),
                 'updated_at' => (string) ($user->updated_at?->getTimestamp() ?? 0),
             ];
+            $waiting[$user->id] = $user->getRawOriginal('updated_at');
         }
 
         usort($rows, fn (array $first, array $second): int => strcmp($first['personal_id'], $second['personal_id']));

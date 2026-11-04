@@ -37,10 +37,12 @@ class User extends Authenticatable
         'updated_at',
         'created_at',
         'is_deleted',
+        'is_exported_role',
     ];
 
     protected $casts = [
         'is_deleted' => 'boolean',
+        'is_exported_role' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -121,6 +123,51 @@ class User extends Authenticatable
     public function isManageableBy(User $actor): bool
     {
         return !$this->hasAnyRole($actor->unmanageableRoleNames());
+    }
+
+    /**
+     * The person's roles or permissions changed here, so they wait for the users file again (is_exported_role = 0). updated_at moves too: the file
+     * carries it, and it is how a file being built right now learns that this person changed (see markRolesExported()).
+     * Every code path that grants or takes away a role must call this, inside the transaction that does it.
+     */
+    public function markRolesChanged(): void
+    {
+        $this->forceFill(['is_exported_role' => false])->touch();
+    }
+
+    /**
+     * Sets is_exported_role = 1 on the people whose roles went out in the users file. Someone whose roles changed while the file was built has a
+     * newer updated_at (markRolesChanged), so they stay waiting and go in the next file - the check is to the second, as updated_at is.
+     * Not touching updated_at: the flag is bookkeeping, not a change of the person.
+     * @param array<int, ?string> $versions user id => updated_at as stored when the file was built (UsersExportService::payload)
+     * @return int the people marked
+     */
+    public static function markRolesExported(array $versions): int
+    {
+        $idsByVersion = [];
+
+        foreach ($versions as $id => $updatedAt) {
+            $idsByVersion[(string) $updatedAt][] = $id;
+        }
+
+        $marked = 0;
+
+        foreach ($idsByVersion as $updatedAt => $ids) {
+            foreach (array_chunk($ids, 2000) as $chunk) {
+                $marked += static::query()
+                    ->whereIn('id', $chunk)
+                    ->where('is_exported_role', false)
+                    ->when(
+                        (string) $updatedAt === '',
+                        fn (Builder $query) => $query->whereNull('updated_at'),
+                        fn (Builder $query) => $query->where('updated_at', $updatedAt),
+                    )
+                    ->toBase()
+                    ->update(['is_exported_role' => true]);
+            }
+        }
+
+        return $marked;
     }
 
     /**

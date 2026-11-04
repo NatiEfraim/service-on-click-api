@@ -56,6 +56,9 @@ class ResetUsersCommand extends Command
                 // Roles and permissions first: the UserSeeder hands them out.
                 $this->call('db:seed', ['--class' => RoleAndPermissionSeeder::class]);
                 $this->call('db:seed', ['--class' => UserSeeder::class]);
+
+                // The assignments were rebuilt, so nobody's roles are known to be the ones that already went to the mobile side: all wait for the users file again.
+                User::query()->toBase()->update(['is_exported_role' => false]);
             });
 
             app(PermissionRegistrar::class)->forgetCachedPermissions();

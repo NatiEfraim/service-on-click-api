@@ -11,15 +11,13 @@ return new class extends Migration {
             $table->id();
             $table->uuid()->unique();
             $table->string('full_name')->nullable();
-            // Web login key: the personal number returned by ADFS.
             $table->string('personal_number')->nullable()->unique();
-            // ID number: how the mobile app identifies people who place bookings.
             $table->string('personal_id')->nullable()->unique();
             $table->string('phone')->nullable();
             $table->foreignId('unit_id')->nullable()->constrained('units')->onDelete('cascade');
-            // Internal only: department inside the unit.
             $table->foreignId('department_id')->nullable()->constrained('departments')->nullOnDelete();
             $table->boolean('is_deleted')->default(false);
+            $table->boolean('is_exported_role')->default(false);
             $table->timestamps();
         });
 

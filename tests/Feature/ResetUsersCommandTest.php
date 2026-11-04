@@ -50,6 +50,17 @@ class ResetUsersCommandTest extends TestCase
         $this->assertNotNull($strayUser->fresh());
     }
 
+    public function test_everybody_waits_for_the_users_file_again_after_a_reset(): void
+    {
+        // The assignments are rebuilt, so what went to the mobile side before may not be what they are now.
+        User::query()->toBase()->update(['is_exported_role' => true]);
+
+        $this->artisan('users:reset')->assertSuccessful();
+
+        $this->assertSame(0, User::where('is_exported_role', true)->count());
+        $this->assertGreaterThan(0, User::where('is_exported_role', false)->count());
+    }
+
     public function test_a_person_who_exists_by_id_number_only_gets_the_personal_number_instead_of_a_duplicate(): void
     {
         $existing = User::where('personal_number', self::SEEDED_USER)->firstOrFail();

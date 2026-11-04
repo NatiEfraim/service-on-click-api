@@ -33,6 +33,11 @@ class DigitalHatchSendBookingStatusCommand extends DigitalHatchSendCommand
         };
     }
 
+    protected function describeMarked(int $marked): ?string
+    {
+        return "Marked as exported (is_status_exported = 1): {$marked} bookings.";
+    }
+
     protected function jobClass(): string
     {
         return SendHatchBookingStatusJob::class;

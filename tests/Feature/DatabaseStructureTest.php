@@ -171,7 +171,7 @@ class DatabaseStructureTest extends ManagementTestCase
             'bookings' => ['version', 'ext_status_id', 'status_source', 'status_changed_at'],
             'application_logs' => ['status_id', 'source', 'correlation_id'],
             'units' => ['internal_name'],
-            'users' => ['department_id'],
+            'users' => ['department_id', 'is_exported_role'],
             'form_fields' => ['version', 'position', 'is_active'],
             'option_fields' => ['is_active'],
         ];
