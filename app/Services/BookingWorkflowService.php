@@ -228,16 +228,22 @@ class BookingWorkflowService
         }
     }
 
-    /** Ties the vice approver who passed the booking on to it, so dashboards can filter by handler. */
+    /** Ties the vice approver who passed the booking on - or the barber who answered it (11, 12) - to it, so dashboards can filter by handler. */
     private function linkViceApprover(Booking $booking, StatusBookingEnum $target, User $user): void
     {
-        if (!in_array($target, [StatusBookingEnum::VICE_APPROVER_APPROVED, StatusBookingEnum::VICE_APPROVER_REJECTED], true)) {
+        $approved = match ($target) {
+            StatusBookingEnum::VICE_APPROVER_APPROVED, StatusBookingEnum::APPROVED_BY_BARBER => true,
+            StatusBookingEnum::VICE_APPROVER_REJECTED, StatusBookingEnum::CANCELED_BY_BARBER => false,
+            default => null,
+        };
+
+        if ($approved === null) {
             return;
         }
 
         ViceApproverHasBooking::query()->updateOrCreate(
             ['booking_id' => $booking->id, 'user_id' => $user->id],
-            ['approved_by_vice_approver' => $target === StatusBookingEnum::VICE_APPROVER_APPROVED, 'is_deleted' => false],
+            ['approved_by_vice_approver' => $approved, 'is_deleted' => false],
         );
     }
 }

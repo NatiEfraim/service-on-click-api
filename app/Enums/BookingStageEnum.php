@@ -8,11 +8,12 @@ enum BookingStageEnum: string
     case CONTROL_OFFICER = 'control_officer';
     case VICE_APPROVER = 'vice_approver';
     case APPROVER = 'approver';
+    // BARBER_BOOKING: the only step of its route - the barber answers.
+    case BARBER = 'barber';
     case SUPPLIER_FILES = 'supplier_files';
     case SUPPLIER_APPROVAL = 'supplier_approval';
     case SUPPLIER_NUMBER = 'supplier_number';
     case REALIZATION = 'realization';
-    case BARBER_DONE = 'barber_done';
     case CLOSED = 'closed';
 
     public function label(): string
@@ -21,11 +22,11 @@ enum BookingStageEnum: string
             self::CONTROL_OFFICER => 'ממתין לרמ"ד תו"ב',
             self::VICE_APPROVER => 'ממתין לגורם מטפל',
             self::APPROVER => 'ממתין להחלטת מפקד תחום',
+            self::BARBER => 'ממתין לספר',
             self::SUPPLIER_FILES => 'ממתין לקבצים מהלקוח',
             self::SUPPLIER_APPROVAL => 'ממתין לאישור ספק',
             self::SUPPLIER_NUMBER => 'ממתין למספר ספק',
             self::REALIZATION => 'אושרה - ממתינה למימוש וסגירה',
-            self::BARBER_DONE => 'טופלה ע"י הספר - ממתינה לסגירה',
             self::CLOSED => 'סגורה',
         };
     }
@@ -34,10 +35,10 @@ enum BookingStageEnum: string
     public function waitKind(): ?string
     {
         return match ($this) {
-            self::CONTROL_OFFICER, self::VICE_APPROVER, self::APPROVER => 'approval',
+            self::CONTROL_OFFICER, self::VICE_APPROVER, self::APPROVER, self::BARBER => 'approval',
             self::SUPPLIER_FILES => 'customer_info',
             self::SUPPLIER_APPROVAL, self::SUPPLIER_NUMBER => 'supplier',
-            self::REALIZATION, self::BARBER_DONE => 'realization',
+            self::REALIZATION => 'realization',
             self::CLOSED => null,
         };
     }
@@ -47,8 +48,9 @@ enum BookingStageEnum: string
     {
         return match ($this) {
             self::CONTROL_OFFICER => RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
-            self::VICE_APPROVER => RoleEnum::VICE_APPROVER,
-            self::APPROVER, self::REALIZATION, self::BARBER_DONE => RoleEnum::APPROVER,
+            // The barber is the vice approver of the barber type.
+            self::VICE_APPROVER, self::BARBER => RoleEnum::VICE_APPROVER,
+            self::APPROVER, self::REALIZATION => RoleEnum::APPROVER,
             default => null,
         };
     }

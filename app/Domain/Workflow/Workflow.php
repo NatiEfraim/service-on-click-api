@@ -13,6 +13,8 @@ use App\Enums\StatusBookingEnum as Status;
  * and approver). A role may also act at a stage below its own, without waiting for the role that owns it (skipTransitions): the approver and the
  * admin decide finally - approve or reject - from the control officer's and the vice approver's stage, and the vice approver takes a booking over
  * from the control officer.
+ * The barber booking is the exception: its route has one step, the barber's answer - approve (11) or reject (12) - and none of the vice approver's
+ * or the approver's statuses (barberMoves). The barber is the vice approver of the type; the approver and the admin may answer in their place.
  * A hold (TRANSPORTATION: 8, 9, 10) never moves a booking: the stage, the buttons and the visibility stay those of the status it was put on hold
  * from. So every method here takes that status as $current - the status that decides whose turn it is (Booking::positionStatus()) - and, where
  * buttons are built, the hold itself as $hold, which is not offered again. A hold with nowhere recorded is its own $current: the supplier stage.
@@ -51,9 +53,28 @@ final class Workflow
         return in_array($bookingTypeId, $this->controlOfficerBookingTypeIds, true);
     }
 
+    private function isBarberBooking(int $bookingTypeId): bool
+    {
+        return $this->barberBookingTypeId !== null && $bookingTypeId === $this->barberBookingTypeId;
+    }
+
+    /**
+     * The barber route has one step: a booking waits for the barber until the barber answers. 11 (approved) is the end of the route here - the
+     * requester may still cancel it in the app and a blocked date may still cancel it, but nobody has anything left to do. A booking left in a status
+     * of the old route (2, 3, 15, 16...) waits for the barber too, so none is stranded.
+     */
+    private function barberStageOf(Status $status): BookingStageEnum
+    {
+        return $status->isTerminal() || $status === Status::APPROVED_BY_BARBER ? BookingStageEnum::CLOSED : BookingStageEnum::BARBER;
+    }
+
     /** Who or what a booking in this status is waiting for. */
     public function stageOf(Status $status, int $bookingTypeId): BookingStageEnum
     {
+        if ($this->isBarberBooking($bookingTypeId)) {
+            return $this->barberStageOf($status);
+        }
+
         return match (true) {
             $status->isTerminal() => BookingStageEnum::CLOSED,
             $status === Status::RECEIVED => $this->hasControlOfficerStage($bookingTypeId) ? BookingStageEnum::CONTROL_OFFICER : BookingStageEnum::VICE_APPROVER,
@@ -63,7 +84,6 @@ final class Workflow
             $status === Status::PENDING_PROCESSING => BookingStageEnum::SUPPLIER_APPROVAL,
             $status === Status::PENDING_APPROVED => BookingStageEnum::SUPPLIER_NUMBER,
             $status === Status::APPROVED => BookingStageEnum::REALIZATION,
-            $status === Status::APPROVED_BY_BARBER => BookingStageEnum::BARBER_DONE,
             default => BookingStageEnum::CLOSED,
         };
     }
@@ -109,8 +129,8 @@ final class Workflow
             BookingStageEnum::SUPPLIER_FILES,
             BookingStageEnum::SUPPLIER_APPROVAL,
             BookingStageEnum::SUPPLIER_NUMBER => $isApprover ? $this->approverMoves($except, $bookingTypeId) : [],
-            BookingStageEnum::REALIZATION => $this->realizationMoves($bookingTypeId, $isViceApprover, $isApprover),
-            BookingStageEnum::BARBER_DONE => $isApprover ? $this->closingMoves() : [],
+            BookingStageEnum::BARBER => $isViceApprover ? $this->barberMoves() : [],
+            BookingStageEnum::REALIZATION => $isApprover ? $this->closingMoves() : [],
             BookingStageEnum::CLOSED => [],
         };
     }
@@ -138,6 +158,11 @@ final class Workflow
 
         if ((!empty($flags['isApprover']) || !empty($flags['isAdmin'])) && $belowTheApprover) {
             $moves = [...$moves, ...$this->finalDecisionMoves()];
+        }
+
+        // The barber's stage is the whole route of a barber booking: the approver answers there as the barber would.
+        if ((!empty($flags['isApprover']) || !empty($flags['isAdmin'])) && $stage === BookingStageEnum::BARBER) {
+            $moves = [...$moves, ...$this->barberMoves()];
         }
 
         return $moves;
@@ -205,29 +230,20 @@ final class Workflow
         return $moves;
     }
 
-    /** After the final approval: the barber marks a haircut done (vice approver's move), the approver completes or cancels. @return array<int, array{status: Status, label: string}> */
-    private function realizationMoves(int $bookingTypeId, bool $isViceApprover, bool $isApprover): array
+    /**
+     * The barber's answer, the one step of a barber booking: approve it (11) or reject it (12, which needs a comment). 13 is never a button: the
+     * system sets it when the barber's schedule changes.
+     * @return array<int, array{status: Status, label: string}>
+     */
+    private function barberMoves(): array
     {
-        $isBarber = $this->barberBookingTypeId !== null && $bookingTypeId === $this->barberBookingTypeId;
-        $moves = [];
-
-        if ($isBarber && $isViceApprover) {
-            $moves[] = ['status' => Status::APPROVED_BY_BARBER, 'label' => 'אישור על ידי הספר'];
-        }
-
-        if ($isApprover) {
-            // A haircut is completed after the barber's mark (BARBER_DONE), not straight from the approval.
-            if (!$isBarber) {
-                $moves[] = ['status' => Status::COMPLETED, 'label' => 'סיום קריאה'];
-            }
-
-            $moves[] = ['status' => Status::CANCELED_BY_APPROVER, 'label' => 'ביטול קריאה'];
-        }
-
-        return $moves;
+        return [
+            ['status' => Status::APPROVED_BY_BARBER, 'label' => 'אישור על ידי הספר'],
+            ['status' => Status::CANCELED_BY_BARBER, 'label' => 'דחייה על ידי הספר'],
+        ];
     }
 
-    /** @return array<int, array{status: Status, label: string}> */
+    /** After the final approval: the approver completes or cancels the booking. @return array<int, array{status: Status, label: string}> */
     private function closingMoves(): array
     {
         return [
@@ -284,7 +300,7 @@ final class Workflow
     public static function validateComment(Status $target, ?string $comment): ?string
     {
         $comment = trim((string) $comment);
-        $required = in_array($target, [Status::CONTROL_OFFICER_REJECTED, Status::VICE_APPROVER_REJECTED, Status::REJECTED, Status::CANCELED_BY_APPROVER], true);
+        $required = in_array($target, [Status::CONTROL_OFFICER_REJECTED, Status::VICE_APPROVER_REJECTED, Status::REJECTED, Status::CANCELED_BY_APPROVER, Status::CANCELED_BY_BARBER], true);
 
         if ($required && $comment === '') {
             return 'יש לצרף הערה לביצוע פעולה זו';

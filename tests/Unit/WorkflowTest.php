@@ -98,13 +98,19 @@ class WorkflowTest extends TestCase
 
     public function test_every_rejection_a_role_is_offered_needs_a_comment(): void
     {
-        $roles = ['transportation_control_officer_8', 'vice_approver_8', 'approver_8', 'admin_8'];
+        $rejections = [S::REJECTED, S::VICE_APPROVER_REJECTED, S::CONTROL_OFFICER_REJECTED, S::CANCELED_BY_APPROVER, S::CANCELED_BY_BARBER];
+        $rolesByType = [
+            8 => ['transportation_control_officer_8', 'vice_approver_8', 'approver_8', 'admin_8'],
+            5 => ['vice_approver_5', 'approver_5', 'admin_5'],
+        ];
 
-        foreach (S::cases() as $from) {
-            foreach ($roles as $permission) {
-                foreach ($this->workflow->availableActions($from, [$permission], 8) as $action) {
-                    if (in_array($action['status'], [S::REJECTED, S::VICE_APPROVER_REJECTED, S::CONTROL_OFFICER_REJECTED, S::CANCELED_BY_APPROVER], true)) {
-                        $this->assertNotNull(Workflow::validateComment($action['status'], ''), "{$permission} from {$from->name} to {$action['status']->name}");
+        foreach ($rolesByType as $bookingTypeId => $roles) {
+            foreach (S::cases() as $from) {
+                foreach ($roles as $permission) {
+                    foreach ($this->workflow->availableActions($from, [$permission], $bookingTypeId) as $action) {
+                        if (in_array($action['status'], $rejections, true)) {
+                            $this->assertNotNull(Workflow::validateComment($action['status'], ''), "{$permission} from {$from->name} to {$action['status']->name}");
+                        }
                     }
                 }
             }
@@ -128,10 +134,9 @@ class WorkflowTest extends TestCase
         $this->assertSame([15, 16, 8, 9, 10, 3, 4], $this->targets(S::CONTROL_OFFICER_APPROVED, ['admin_8'], 8));
         $this->assertSame([3, 4, 8, 10], $this->targets(S::PENDING_PROCESSING, ['admin_8'], 8));
 
-        // The barber route: done by the barber (vice approver's move) first, then completed by the approver's move.
-        $this->assertTrue($this->workflow->canChangeTo(S::APPROVED, S::APPROVED_BY_BARBER, ['admin_5'], 5));
-        $this->assertFalse($this->workflow->canChangeTo(S::APPROVED, S::COMPLETED, ['admin_5'], 5));
-        $this->assertTrue($this->workflow->canChangeTo(S::APPROVED_BY_BARBER, S::COMPLETED, ['admin_5'], 5));
+        // The barber route has one step, the barber's answer, and the admin holds that turn too.
+        $this->assertSame([11, 12], $this->targets(S::RECEIVED, ['admin_5'], 5));
+        $this->assertSame([], $this->targets(S::APPROVED_BY_BARBER, ['admin_5'], 5));
     }
 
     public function test_the_admin_is_strongest_in_the_roles_but_cannot_act_for_the_requester_or_on_a_closed_booking(): void
@@ -297,14 +302,61 @@ class WorkflowTest extends TestCase
         }
     }
 
-    public function test_the_barber_marks_done_after_the_approval_and_the_approver_completes_only_after_that(): void
+    public function test_the_barber_route_has_one_step_the_barber_answers(): void
     {
-        $this->assertTrue($this->workflow->canChangeTo(S::APPROVED, S::APPROVED_BY_BARBER, ['vice_approver_5'], 5));
-        $this->assertFalse($this->workflow->canChangeTo(S::VICE_APPROVER_APPROVED, S::APPROVED_BY_BARBER, ['vice_approver_5'], 5), 'the barber cannot skip the approver');
-        $this->assertFalse($this->workflow->canChangeTo(S::APPROVED, S::COMPLETED, ['approver_5'], 5));
-        $this->assertTrue($this->workflow->canChangeTo(S::APPROVED_BY_BARBER, S::COMPLETED, ['approver_5'], 5));
-        $this->assertTrue($this->workflow->canChangeTo(S::APPROVED, S::CANCELED_BY_APPROVER, ['approver_5'], 5));
-        $this->assertFalse($this->workflow->canChangeTo(S::APPROVED, S::APPROVED_BY_BARBER, ['vice_approver_1'], 1), 'not on a car');
+        // The barber (the vice approver of the type) approves or rejects a received booking - and nothing else: no 15 / 16, no 3 / 4, no 5 / 7.
+        $this->assertSame([11, 12], $this->targets(S::RECEIVED, ['vice_approver_5'], 5));
+        $this->assertSame(BookingStageEnum::BARBER, $this->workflow->stageOf(S::RECEIVED, 5));
+
+        // The approver and the admin may answer in the barber's place; nobody else - not the roles of another type, not the requester.
+        $this->assertSame([11, 12], $this->targets(S::RECEIVED, ['approver_5'], 5));
+        $this->assertSame([11, 12], $this->targets(S::RECEIVED, ['admin_5'], 5));
+        $this->assertSame([], $this->targets(S::RECEIVED, ['vice_approver_1', 'approver_1', 'admin_1', 'user_5'], 5));
+        $this->assertSame([11, 12], array_map(fn (array $action): int => $action['status']->value, $this->workflow->availableActions(S::RECEIVED, ['vice_approver_5', 'admin_5'], 5)), 'listed once');
+
+        // Once answered there is nothing left: 11 is an approved appointment (the requester may still cancel it in the app), 12, 13 and 6 are closed.
+        foreach ([S::APPROVED_BY_BARBER, S::CANCELED_BY_BARBER, S::CANCELED_BY_CHANGING_TIME, S::CANCELED_BY_USER] as $done) {
+            $this->assertSame(BookingStageEnum::CLOSED, $this->workflow->stageOf($done, 5), $done->name);
+            $this->assertSame([], $this->targets($done, ['vice_approver_5', 'approver_5', 'admin_5'], 5), $done->name);
+        }
+
+        // 13 is never a button - the system sets it when the barber's schedule changes - nor is 6 (the requester's) or any status of the standard route.
+        $notButtons = [S::CANCELED_BY_CHANGING_TIME, S::CANCELED_BY_USER, S::VICE_APPROVER_APPROVED, S::VICE_APPROVER_REJECTED, S::APPROVED, S::REJECTED, S::COMPLETED, S::CANCELED_BY_APPROVER];
+
+        foreach ($notButtons as $never) {
+            $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, $never, ['admin_5'], 5), $never->name);
+        }
+
+        // The other types do not get the barber's statuses.
+        $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::APPROVED_BY_BARBER, ['admin_1'], 1));
+        $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::CANCELED_BY_BARBER, ['vice_approver_1'], 1));
+
+        // A booking left in a status of the old route waits for the barber too, so it is not stranded.
+        foreach ([S::PROCESSING, S::APPROVED, S::VICE_APPROVER_APPROVED, S::VICE_APPROVER_REJECTED] as $old) {
+            $this->assertSame([11, 12], $this->targets($old, ['vice_approver_5'], 5), $old->name);
+        }
+
+        // Rejecting needs a comment; approving does not.
+        $this->assertNotNull(Workflow::validateComment(S::CANCELED_BY_BARBER, ''));
+        $this->assertNull(Workflow::validateComment(S::APPROVED_BY_BARBER, ''));
+    }
+
+    public function test_the_barber_corrects_a_date_or_a_time_while_answering_and_the_approver_does_not(): void
+    {
+        $this->assertTrue($this->workflow->canEditValues(S::RECEIVED, ['vice_approver_5'], 5));
+        $this->assertTrue($this->workflow->canEditValues(S::RECEIVED, ['admin_5'], 5));
+        $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['approver_5'], 5), 'the approver answers in the barber\'s place, but does not correct');
+        $this->assertFalse($this->workflow->canEditValues(S::APPROVED_BY_BARBER, ['admin_5'], 5), 'not after the approval');
+    }
+
+    public function test_a_barber_slot_is_held_until_the_booking_is_canceled(): void
+    {
+        $freed = array_map(fn (S $status): int => $status->value, array_values(array_filter(S::cases(), fn (S $status): bool => $status->freesBarberSlot())));
+
+        $this->assertSame([5, 6, 7, 12, 13], $freed);
+        $this->assertFalse(S::APPROVED_BY_BARBER->freesBarberSlot(), 'an approved appointment is still ahead');
+        $this->assertTrue(S::APPROVED_BY_BARBER->canBeCanceledByUser(), 'and the requester may still cancel it');
+        $this->assertFalse(S::CANCELED_BY_BARBER->canBeCanceledByUser());
     }
 
     public function test_nobody_here_sets_the_requesters_own_cancellation(): void
@@ -330,7 +382,8 @@ class WorkflowTest extends TestCase
         $this->assertSame('supplier', $this->workflow->stageOf(S::PENDING_PROCESSING, 8)->waitKind());
         $this->assertSame(BookingStageEnum::CLOSED, $this->workflow->stageOf(S::REJECTED, 1));
         $this->assertSame(BookingStageEnum::REALIZATION, $this->workflow->stageOf(S::APPROVED, 1));
-        $this->assertSame(BookingStageEnum::BARBER_DONE, $this->workflow->stageOf(S::APPROVED_BY_BARBER, 5));
+        $this->assertSame(BookingStageEnum::BARBER, $this->workflow->stageOf(S::RECEIVED, 5));
+        $this->assertSame(BookingStageEnum::CLOSED, $this->workflow->stageOf(S::APPROVED_BY_BARBER, 5));
     }
 
     public function test_values_are_corrected_by_whoever_has_the_turn_until_the_final_approval(): void

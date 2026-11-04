@@ -118,11 +118,12 @@ enum StatusBookingEnum: int
         return $this === self::RECEIVED || $this->isWaitingForViceApprover() || $this->isWaitingForApprover();
     }
 
-    /** Whether the owner can still cancel in this status. */
+    /** Whether the owner can still cancel in this status (a barber booking too once the barber approved it: the appointment is still ahead). */
     public function canBeCanceledByUser(): bool
     {
         return $this === self::RECEIVED
             || $this === self::APPROVED
+            || $this === self::APPROVED_BY_BARBER
             || $this->isWaitingForViceApprover()
             || $this->isWaitingForApprover();
     }
@@ -160,8 +161,10 @@ enum StatusBookingEnum: int
     }
 
     /**
-     * A barber booking in this status no longer holds its slot.
-     * REJECTED and CANCELED_BY_BARBER are deliberately absent: the mobile app keeps those slots.
+     * A barber booking in this status no longer holds its slot: canceled by the requester (6), rejected or canceled by the barber (12) or by a change
+     * of the barber's schedule (13), or closed by the old route (5, 7).
+     * APPROVED_BY_BARBER (11) keeps it: the barber approved an appointment that is still ahead. REJECTED (4) is deliberately absent: the mobile app
+     * keeps that slot.
      */
     public function freesBarberSlot(): bool
     {
@@ -169,7 +172,7 @@ enum StatusBookingEnum: int
             self::COMPLETED,
             self::CANCELED_BY_USER,
             self::CANCELED_BY_APPROVER,
-            self::APPROVED_BY_BARBER,
+            self::CANCELED_BY_BARBER,
             self::CANCELED_BY_CHANGING_TIME,
         ], true);
     }

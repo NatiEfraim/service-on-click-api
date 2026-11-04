@@ -298,6 +298,9 @@ class ImportBookingJsonTest extends ImportJsonTestCase
             $this->barberBooking(9001, '2027-01-03', '09:00'),                           // received
             $this->barberBooking(9002, '2027-01-04', '10:15', ['status_id' => 6]),       // canceled by the user: the slot is free again
             $this->barberBooking(9003, '2027-01-05', '11:00', ['status_id' => 4]),       // rejected: the mobile app keeps the slot
+            $this->barberBooking(9004, '2027-01-06', '09:00', ['status_id' => 11]),      // approved by the barber: the appointment is still ahead
+            $this->barberBooking(9005, '2027-01-07', '09:00', ['status_id' => 12]),      // rejected (canceled) by the barber: the slot is free again
+            $this->barberBooking(9006, '2027-01-10', '09:00', ['status_id' => 13]),      // the barber's schedule changed: the slot is free again
         ]);
 
         $this->import();
@@ -314,7 +317,10 @@ class ImportBookingJsonTest extends ImportJsonTestCase
         $this->assertFalse((bool) $slot->is_deleted);
         $this->assertTrue((bool) $this->slotOf(9002)->is_deleted);
         $this->assertFalse((bool) $this->slotOf(9003)->is_deleted);
-        $this->assertSame(3, BarberBooking::count());
+        $this->assertFalse((bool) $this->slotOf(9004)->is_deleted, 'approved by the barber holds the slot');
+        $this->assertTrue((bool) $this->slotOf(9005)->is_deleted, 'rejected by the barber frees it');
+        $this->assertTrue((bool) $this->slotOf(9006)->is_deleted, 'a schedule change frees it');
+        $this->assertSame(6, BarberBooking::count());
     }
 
     public function test_a_change_record_moves_a_barber_slot_and_frees_it_when_the_booking_ends(): void
@@ -323,7 +329,7 @@ class ImportBookingJsonTest extends ImportJsonTestCase
         $this->import();
 
         $this->putBookingFile([
-            $this->changeRecord(9101, 11, self::CREATED_AT + 600, values: [$this->node(83, null, 3, '2027-01-10'), $this->node(84, null, 4, '10:00')]),
+            $this->changeRecord(9101, 12, self::CREATED_AT + 600, values: [$this->node(83, null, 3, '2027-01-10'), $this->node(84, null, 4, '10:00')]),
         ], 'SrvOnClick_b2r_export_bookings_2026-10-30.json');
         $this->import();
 
@@ -331,7 +337,7 @@ class ImportBookingJsonTest extends ImportJsonTestCase
         $this->assertSame('2027-01-10', substr((string) $slot->date, 0, 10));
         $this->assertSame('10:00', substr($slot->start_time, 0, 5));
         $this->assertSame(Carbon::createFromFormat('H:i', '10:00')->addMinutes($this->barberSlotMinutes())->format('H:i'), substr($slot->end_time, 0, 5));
-        $this->assertTrue((bool) $slot->is_deleted, 'approved by the barber = done, the slot is free');
+        $this->assertTrue((bool) $slot->is_deleted, 'rejected by the barber = the slot is free');
         $this->assertSame(1, BarberBooking::count());
     }
 

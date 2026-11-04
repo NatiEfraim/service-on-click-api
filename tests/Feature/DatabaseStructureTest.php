@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\RoleEnum;
 use Database\Seeders\ProdSeeder;
+use Database\Seeders\ProdSeeders\BookingTypeHasStatusSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -94,7 +95,7 @@ class DatabaseStructureTest extends ManagementTestCase
     {
         $this->assertSame(18, DB::table('statuses')->count());
 
-        $expectedCounts = [1 => 8, 2 => 8, 3 => 8, 4 => 8, 5 => 11, 8 => 13, 10 => 8, 11 => 8, 13 => 8];
+        $expectedCounts = [1 => 8, 2 => 8, 3 => 8, 4 => 8, 5 => 5, 8 => 13, 10 => 8, 11 => 8, 13 => 8];
 
         foreach ($expectedCounts as $bookingTypeId => $count) {
             $this->assertSame(
@@ -103,6 +104,37 @@ class DatabaseStructureTest extends ManagementTestCase
                 'booking type ' . $bookingTypeId
             );
         }
+    }
+
+    /** @return array<int, int> */
+    private function statusIdsOf(int $bookingTypeId): array
+    {
+        return DB::table('booking_type_has_statuses')->where('booking_type_id', $bookingTypeId)->orderBy('status_id')->pluck('status_id')->map(fn ($id): int => (int) $id)->all();
+    }
+
+    /** The barber route has one step - the barber's answer (11, 12) - plus the schedule change (13) and the requester's cancel (6): no statuses of the approver chain. */
+    public function test_the_barber_booking_has_only_its_own_statuses(): void
+    {
+        $this->assertSame([1, 6, 11, 12, 13], $this->statusIdsOf(5));
+        // This is what the barber's dashboard lists, so the vice approver's and the approver's statuses are not on it.
+        $this->assertSame([], array_values(array_intersect($this->statusIdsOf(5), [2, 3, 4, 5, 7, 15, 16, 17, 18])));
+        $this->assertSame([1, 3, 4, 5, 6, 7, 15, 16], $this->statusIdsOf(1), 'the standard route is untouched');
+    }
+
+    public function test_seeding_the_statuses_of_the_types_again_drops_the_ones_a_type_no_longer_has(): void
+    {
+        // A database seeded before the barber route changed still links the old statuses to the barber.
+        DB::table('booking_type_has_statuses')->insert([
+            ['booking_type_id' => 5, 'status_id' => 3, 'created_at' => now(), 'updated_at' => now()],
+            ['booking_type_id' => 5, 'status_id' => 15, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $this->assertSame([1, 3, 6, 11, 12, 13, 15], $this->statusIdsOf(5));
+
+        $this->seed(BookingTypeHasStatusSeeder::class);
+
+        $this->assertSame([1, 6, 11, 12, 13], $this->statusIdsOf(5));
+        $this->assertSame(8, count($this->statusIdsOf(1)));
+        $this->assertSame(13, count($this->statusIdsOf(8)));
     }
 
     /** The management layer's columns are part of the create-table migrations (the development database is rebuilt with run:all), and its tables exist. */
