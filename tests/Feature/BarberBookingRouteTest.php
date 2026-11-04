@@ -7,10 +7,11 @@ use App\Models\BarberBooking;
 use App\Models\Booking;
 use App\Models\Comment;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 /**
- * The barber route: one step - the barber approves (11) or rejects (12, with a comment) a received booking. Who may, what stays behind (the slot,
- * the handler, the comment) and what the barber's dashboard lists.
+ * The barber route: one step - the barber, who is the APPROVER of the barber type (approver_5), approves (11) or rejects (12, with a comment) a
+ * received booking. Who may, what stays behind (the slot, the handler, the comment), the roles of the type and what the barber's dashboard lists.
  */
 class BarberBookingRouteTest extends ManagementTestCase
 {
@@ -73,8 +74,8 @@ class BarberBookingRouteTest extends ManagementTestCase
     {
         $this->barberBooking();
 
-        // The barber (the vice approver of the type) and, in their place, the approver and the admin: the same two buttons.
-        foreach ([self::VICE_APPROVER, self::APPROVER, self::ADMIN] as $person) {
+        // The barber is the approver of the type (approver_5); the admin - and the super admin, who acts as the admin of every type - hold the turn too.
+        foreach ([self::APPROVER, self::ADMIN, self::SUPER_ADMIN] as $person) {
             $this->as($person)
                 ->getJson($this->bookingUrl(self::SERIAL))
                 ->assertOk()
@@ -109,7 +110,7 @@ class BarberBookingRouteTest extends ManagementTestCase
     {
         $booking = $this->barberBooking();
 
-        $this->as(self::VICE_APPROVER)
+        $this->as(self::APPROVER)
             ->postJson($this->statusUrl(self::SERIAL), ['status_id' => 11, 'version' => 1])
             ->assertOk()
             ->assertJsonPath('data.status_id', 11)
@@ -123,12 +124,16 @@ class BarberBookingRouteTest extends ManagementTestCase
         $this->assertDatabaseHas('vice_approver_has_bookings', ['booking_id' => $booking->id, 'approved_by_vice_approver' => true]);
         $this->assertSame([11], ApplicationLog::where('booking_id', $booking->id)->pluck('status_id')->map(fn ($id): int => (int) $id)->all());
 
-        // Nothing is left for anybody: the route has one step.
-        $this->as(self::ADMIN)
-            ->getJson($this->bookingUrl(self::SERIAL))
-            ->assertOk()
-            ->assertJsonPath('data.stage', 'closed')
-            ->assertJsonCount(0, 'data.actions');
+        // Nothing is left for anybody: the route has one step. The barber - an approver, who sees every booking of the type at every stage - still
+        // sees the booking they answered.
+        foreach ([self::APPROVER, self::ADMIN] as $person) {
+            $this->as($person)
+                ->getJson($this->bookingUrl(self::SERIAL))
+                ->assertOk()
+                ->assertJsonPath('data.stage', 'closed')
+                ->assertJsonCount(0, 'data.actions');
+        }
+
         $this->as(self::ADMIN)->postJson($this->statusUrl(self::SERIAL), ['status_id' => 12, 'version' => 2, 'comment' => 'בדיקה'])->assertForbidden();
     }
 
@@ -137,14 +142,14 @@ class BarberBookingRouteTest extends ManagementTestCase
         $booking = $this->barberBooking();
 
         // A rejection needs a comment here as everywhere, and a refusal changes nothing.
-        $this->as(self::VICE_APPROVER)
+        $this->as(self::APPROVER)
             ->postJson($this->statusUrl(self::SERIAL), ['status_id' => 12, 'version' => 1])
             ->assertUnprocessable()
             ->assertJsonPath('message', 'יש לצרף הערה לביצוע פעולה זו');
         $this->assertSame(1, (int) $booking->fresh()->status_id);
         $this->assertFalse($this->slotIsFree($booking));
 
-        $this->as(self::VICE_APPROVER)
+        $this->as(self::APPROVER)
             ->postJson($this->statusUrl(self::SERIAL), ['status_id' => 12, 'version' => 1, 'comment' => 'אין זמינות'])
             ->assertOk()
             ->assertJsonPath('data.status_id', 12);
@@ -156,16 +161,110 @@ class BarberBookingRouteTest extends ManagementTestCase
         $this->assertSame('אין זמינות', Comment::where('booking_id', $booking->id)->value('comment'));
     }
 
-    public function test_the_approver_and_the_admin_may_answer_in_the_barbers_place(): void
+    public function test_the_admin_and_the_super_admin_may_answer_too(): void
     {
         $approved = $this->barberBooking(1, 800000011);
         $rejected = $this->barberBooking(1, 800000012);
 
-        $this->as(self::APPROVER)->postJson($this->statusUrl(800000011), ['status_id' => 11, 'version' => 1])->assertOk();
-        $this->as(self::ADMIN)->postJson($this->statusUrl(800000012), ['status_id' => 12, 'version' => 1, 'comment' => 'אין זמינות'])->assertOk();
+        $this->as(self::ADMIN)->postJson($this->statusUrl(800000011), ['status_id' => 11, 'version' => 1])->assertOk();
+        $this->as(self::SUPER_ADMIN)->postJson($this->statusUrl(800000012), ['status_id' => 12, 'version' => 1, 'comment' => 'אין זמינות'])->assertOk();
 
         $this->assertSame(11, (int) $approved->fresh()->status_id);
         $this->assertSame(12, (int) $rejected->fresh()->status_id);
+    }
+
+    public function test_the_vice_approver_is_not_a_role_of_the_barber_type(): void
+    {
+        // The seeded structure: no vice approver link, so no vice_approver_5 permission - the barber is answered by the approver.
+        $this->assertSame([2, 3, 5], DB::table('booking_type_has_roles')->where('booking_type_id', self::BARBER_TYPE)->orderBy('role_id')->pluck('role_id')->map(fn ($id): int => (int) $id)->all());
+        $this->assertDatabaseMissing('permissions', ['name' => 'vice_approver_5']);
+        $this->assertDatabaseHas('permissions', ['name' => 'approver_5']);
+
+        // A vice approver of the other types has nothing to do with a barber booking.
+        $this->barberBooking();
+        $this->as(self::VICE_APPROVER)->getJson($this->bookingUrl(self::SERIAL))->assertNotFound();
+        $this->as(self::VICE_APPROVER)->postJson($this->statusUrl(self::SERIAL), ['status_id' => 11, 'version' => 1])->assertNotFound();
+        $this->assertSame(1, (int) Booking::where('serial_number', self::SERIAL)->value('status_id'));
+    }
+
+    public function test_the_roles_screen_offers_only_the_approver_for_the_barber_type(): void
+    {
+        $person = User::where('personal_number', self::OTHER_PLAIN_USER)->firstOrFail();
+
+        $permissions = collect(
+            $this->as(self::ADMIN)->getJson('/api/bookings-admin-management/get-approver-permissions/' . $person->uuid)->assertOk()->json('data.permissions')
+        );
+
+        $barber = $permissions->firstWhere('booking_type_id', self::BARBER_TYPE);
+        $car = $permissions->firstWhere('booking_type_id', 1);
+
+        $this->assertArrayHasKey('is_approver', $barber);
+        $this->assertArrayNotHasKey('is_vice_approver', $barber, 'the barber type has no vice approver');
+        $this->assertArrayHasKey('is_approver', $car);
+        $this->assertArrayHasKey('is_vice_approver', $car);
+    }
+
+    public function test_an_admin_makes_a_person_the_approver_of_the_barber_type(): void
+    {
+        // Only the approver flag - exactly what the roles screen offered for this type.
+        $this->as(self::ADMIN)
+            ->postJson('/api/bookings-admin-management/assign-approver-role', [
+                'personal_number' => '2000006',
+                'full_name' => 'ספר חדש',
+                'role_assignments' => [['booking_type_id' => self::BARBER_TYPE, 'is_approver' => true]],
+            ])
+            ->assertOk();
+
+        $barber = User::where('personal_number', '2000006')->firstOrFail();
+        $this->assertTrue($barber->hasRole('approver'));
+        $this->assertSame(['approver_5'], $barber->getDirectPermissions()->pluck('name')->all());
+
+        // A vice approver flag sent anyway for the barber type is ignored: there is no such permission to give.
+        $this->as(self::ADMIN)
+            ->postJson('/api/bookings-admin-management/assign-approver-role', [
+                'personal_number' => '2000007',
+                'full_name' => 'ספר נוסף',
+                'role_assignments' => [['booking_type_id' => self::BARBER_TYPE, 'is_approver' => true, 'is_vice_approver' => true]],
+            ])
+            ->assertOk();
+
+        $other = User::where('personal_number', '2000007')->firstOrFail();
+        $this->assertSame(['approver_5'], $other->getDirectPermissions()->pluck('name')->all());
+        $this->assertFalse($other->hasRole('vice_approver'));
+
+        // The new barber answers a barber booking.
+        $this->barberBooking();
+        $this->app['auth']->forgetGuards();
+        $this->withToken($barber->createToken(self::TOKEN_NAME)->accessToken)
+            ->postJson($this->statusUrl(self::SERIAL), ['status_id' => 11, 'version' => 1])
+            ->assertOk();
+    }
+
+    public function test_the_vice_approver_flag_is_still_required_for_the_types_that_have_the_role(): void
+    {
+        $this->as(self::ADMIN)
+            ->postJson('/api/bookings-admin-management/assign-approver-role', [
+                'personal_number' => '2000008',
+                'full_name' => 'גורם חדש',
+                'role_assignments' => [['booking_type_id' => 1, 'is_approver' => true]],
+            ])
+            ->assertUnprocessable();
+
+        $this->assertDatabaseMissing('users', ['personal_number' => '2000008']);
+    }
+
+    public function test_the_handlers_of_the_barber_type_are_its_approvers(): void
+    {
+        $approver = User::where('personal_number', self::APPROVER)->value('uuid');
+        $vice = User::where('personal_number', self::VICE_APPROVER)->value('uuid');
+
+        // The filter "by handler" of the dashboards: on a barber booking the one who answers is the approver; on the other types, the vice approver.
+        $barberHandlers = array_column($this->as(self::ADMIN)->getJson('/api/bookings-approver-management/get-vice-approvers/' . self::BARBER_TYPE)->assertOk()->json('data'), 'uuid');
+        $carHandlers = array_column($this->as(self::ADMIN)->getJson('/api/bookings-approver-management/get-vice-approvers/1')->assertOk()->json('data'), 'uuid');
+
+        $this->assertContains($approver, $barberHandlers);
+        $this->assertNotContains($vice, $barberHandlers);
+        $this->assertContains($vice, $carHandlers);
     }
 
     public function test_a_barber_booking_that_is_answered_or_closed_has_no_buttons(): void
@@ -186,13 +285,13 @@ class BarberBookingRouteTest extends ManagementTestCase
     {
         $booking = $this->barberBooking(15);
 
-        $this->as(self::VICE_APPROVER)
+        $this->as(self::APPROVER)
             ->getJson($this->bookingUrl(self::SERIAL))
             ->assertOk()
             ->assertJsonPath('data.stage', 'barber')
             ->assertJsonPath('data.actions.0.status_id', 11);
 
-        $this->as(self::VICE_APPROVER)->postJson($this->statusUrl(self::SERIAL), ['status_id' => 11, 'version' => 1])->assertOk();
+        $this->as(self::APPROVER)->postJson($this->statusUrl(self::SERIAL), ['status_id' => 11, 'version' => 1])->assertOk();
         $this->assertSame(11, (int) $booking->fresh()->status_id);
     }
 
@@ -235,5 +334,17 @@ class BarberBookingRouteTest extends ManagementTestCase
         sort($carStatuses);
 
         $this->assertSame([1, 3, 4, 5, 6, 7, 15, 16], $carStatuses);
+    }
+
+    /** Its own test: the controller keeps the first request's user inside one test. */
+    public function test_the_barber_the_approver_of_the_type_opens_the_barber_dashboard(): void
+    {
+        $dashboard = $this->as(self::APPROVER)
+            ->getJson('/api/bookings-approver-management/dashboard/barber-booking')
+            ->assertOk()
+            ->assertJsonPath('data.auth_user_permission', 'approver_5')
+            ->json('data.dashboard');
+
+        $this->assertSame([1, 6, 11, 12, 13], array_column(array_values(array_filter($dashboard, 'is_array')), 'status_id'));
     }
 }

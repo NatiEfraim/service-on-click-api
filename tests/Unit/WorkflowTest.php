@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Domain\Workflow\Workflow;
 use App\Enums\BookingStageEnum;
+use App\Enums\RoleEnum;
 use App\Enums\StatusBookingEnum as S;
 use PHPUnit\Framework\TestCase;
 
@@ -101,7 +102,7 @@ class WorkflowTest extends TestCase
         $rejections = [S::REJECTED, S::VICE_APPROVER_REJECTED, S::CONTROL_OFFICER_REJECTED, S::CANCELED_BY_APPROVER, S::CANCELED_BY_BARBER];
         $rolesByType = [
             8 => ['transportation_control_officer_8', 'vice_approver_8', 'approver_8', 'admin_8'],
-            5 => ['vice_approver_5', 'approver_5', 'admin_5'],
+            5 => ['approver_5', 'admin_5'],
         ];
 
         foreach ($rolesByType as $bookingTypeId => $roles) {
@@ -304,15 +305,17 @@ class WorkflowTest extends TestCase
 
     public function test_the_barber_route_has_one_step_the_barber_answers(): void
     {
-        // The barber (the vice approver of the type) approves or rejects a received booking - and nothing else: no 15 / 16, no 3 / 4, no 5 / 7.
-        $this->assertSame([11, 12], $this->targets(S::RECEIVED, ['vice_approver_5'], 5));
-        $this->assertSame(BookingStageEnum::BARBER, $this->workflow->stageOf(S::RECEIVED, 5));
-
-        // The approver and the admin may answer in the barber's place; nobody else - not the roles of another type, not the requester.
+        // The barber is the APPROVER of the type (approver_5): it approves or rejects a received booking - and nothing else: no 15 / 16, no 3 / 4, no 5 / 7.
         $this->assertSame([11, 12], $this->targets(S::RECEIVED, ['approver_5'], 5));
+        $this->assertSame(BookingStageEnum::BARBER, $this->workflow->stageOf(S::RECEIVED, 5));
+        $this->assertSame(RoleEnum::APPROVER, BookingStageEnum::BARBER->actingRole());
+
+        // The admin of the type holds the turn too; nobody else - not a vice approver (the type has none: even a leftover vice_approver_5 gets nothing),
+        // not the roles of another type, not the requester.
         $this->assertSame([11, 12], $this->targets(S::RECEIVED, ['admin_5'], 5));
+        $this->assertSame([], $this->targets(S::RECEIVED, ['vice_approver_5'], 5));
         $this->assertSame([], $this->targets(S::RECEIVED, ['vice_approver_1', 'approver_1', 'admin_1', 'user_5'], 5));
-        $this->assertSame([11, 12], array_map(fn (array $action): int => $action['status']->value, $this->workflow->availableActions(S::RECEIVED, ['vice_approver_5', 'admin_5'], 5)), 'listed once');
+        $this->assertSame([11, 12], array_map(fn (array $action): int => $action['status']->value, $this->workflow->availableActions(S::RECEIVED, ['approver_5', 'admin_5'], 5)), 'listed once');
 
         // Once answered there is nothing left: 11 is an approved appointment (the requester may still cancel it in the app), 12, 13 and 6 are closed.
         foreach ([S::APPROVED_BY_BARBER, S::CANCELED_BY_BARBER, S::CANCELED_BY_CHANGING_TIME, S::CANCELED_BY_USER] as $done) {
@@ -333,7 +336,7 @@ class WorkflowTest extends TestCase
 
         // A booking left in a status of the old route waits for the barber too, so it is not stranded.
         foreach ([S::PROCESSING, S::APPROVED, S::VICE_APPROVER_APPROVED, S::VICE_APPROVER_REJECTED] as $old) {
-            $this->assertSame([11, 12], $this->targets($old, ['vice_approver_5'], 5), $old->name);
+            $this->assertSame([11, 12], $this->targets($old, ['approver_5'], 5), $old->name);
         }
 
         // Rejecting needs a comment; approving does not.
@@ -341,11 +344,13 @@ class WorkflowTest extends TestCase
         $this->assertNull(Workflow::validateComment(S::APPROVED_BY_BARBER, ''));
     }
 
-    public function test_the_barber_corrects_a_date_or_a_time_while_answering_and_the_approver_does_not(): void
+    public function test_the_barber_corrects_a_date_or_a_time_while_answering(): void
     {
-        $this->assertTrue($this->workflow->canEditValues(S::RECEIVED, ['vice_approver_5'], 5));
+        // The turn is the approver's (and the admin's): whoever may answer may correct, until the answer.
+        $this->assertTrue($this->workflow->canEditValues(S::RECEIVED, ['approver_5'], 5));
         $this->assertTrue($this->workflow->canEditValues(S::RECEIVED, ['admin_5'], 5));
-        $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['approver_5'], 5), 'the approver answers in the barber\'s place, but does not correct');
+        $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['vice_approver_5'], 5), 'the barber type has no vice approver');
+        $this->assertFalse($this->workflow->canEditValues(S::RECEIVED, ['approver_1'], 5), 'the approver of another type');
         $this->assertFalse($this->workflow->canEditValues(S::APPROVED_BY_BARBER, ['admin_5'], 5), 'not after the approval');
     }
 

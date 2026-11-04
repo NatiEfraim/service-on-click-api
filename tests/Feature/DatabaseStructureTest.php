@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\RoleEnum;
 use Database\Seeders\ProdSeeder;
+use Database\Seeders\ProdSeeders\BookingTypeHasRoleSeeder;
 use Database\Seeders\ProdSeeders\BookingTypeHasStatusSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -52,14 +53,19 @@ class DatabaseStructureTest extends ManagementTestCase
         $permissions = DB::table('permissions')->pluck('name')->all();
 
         foreach (array_keys(self::BOOKING_TYPES) as $bookingTypeId) {
-            foreach (['admin_', 'approver_', 'vice_approver_', 'user_'] as $prefix) {
+            // The barber type (5) has no vice approver: its one step is answered by its approver.
+            $prefixes = $bookingTypeId === 5 ? ['admin_', 'approver_', 'user_'] : ['admin_', 'approver_', 'vice_approver_', 'user_'];
+
+            foreach ($prefixes as $prefix) {
                 $this->assertContains($prefix . $bookingTypeId, $permissions);
             }
         }
 
-        // Plus the control officer's, which only the transportation booking type (8) has.
+        $this->assertNotContains('vice_approver_5', $permissions, 'no vice approver on the barber type');
+
+        // Plus the control officer's, which only the transportation booking type (8) has; one vice approver permission fewer (the barber's).
         $this->assertContains('transportation_control_officer_8', $permissions);
-        $this->assertCount(count(self::BOOKING_TYPES) * 4 + 1, $permissions);
+        $this->assertCount(count(self::BOOKING_TYPES) * 4 + 1 - 1, $permissions);
     }
 
     public function test_the_super_admin_has_no_per_booking_type_permission(): void
@@ -87,8 +93,29 @@ class DatabaseStructureTest extends ManagementTestCase
                 $expected[] = RoleEnum::TRANSPORTATION_CONTROL_OFFICER->value;
             }
 
+            // The barber booking is answered by its approver in one step: it has no vice approver.
+            if ($bookingTypeId === 5) {
+                $expected = [RoleEnum::ADMIN->value, RoleEnum::APPROVER->value, RoleEnum::USER->value];
+            }
+
             $this->assertSame($expected, $roleIds, 'booking type ' . $bookingTypeId);
         }
+    }
+
+    public function test_seeding_the_roles_of_the_types_again_drops_the_ones_a_type_no_longer_has(): void
+    {
+        // A database seeded before the barber route changed still links the vice approver to the barber type.
+        DB::table('booking_type_has_roles')->insert(['booking_type_id' => 5, 'role_id' => RoleEnum::VICE_APPROVER->value, 'created_at' => now(), 'updated_at' => now()]);
+        $this->assertSame(4, DB::table('booking_type_has_roles')->where('booking_type_id', 5)->count());
+
+        $this->seed(BookingTypeHasRoleSeeder::class);
+
+        $this->assertSame(
+            [RoleEnum::ADMIN->value, RoleEnum::APPROVER->value, RoleEnum::USER->value],
+            DB::table('booking_type_has_roles')->where('booking_type_id', 5)->orderBy('role_id')->pluck('role_id')->map(fn ($id): int => (int) $id)->all()
+        );
+        $this->assertSame(5, DB::table('booking_type_has_roles')->where('booking_type_id', 8)->count(), 'the other types keep their roles');
+        $this->assertSame(36, DB::table('booking_type_has_roles')->count());
     }
 
     public function test_each_booking_type_can_reach_its_own_statuses(): void

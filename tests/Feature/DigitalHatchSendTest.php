@@ -61,9 +61,10 @@ class DigitalHatchSendTest extends HatchTestCase
 
         $this->assertSame(['000000001', '123456789', '223456789', '323456789'], array_column($payload, 'personal_id'), 'ordered by ID number');
 
-        // The super admin holds the role, not permissions: every booking type.
+        // The super admin holds the role, not permissions: every booking type. The others hold a permission per type that has their role - the
+        // barber type (5) has no vice approver, so the vice approver is listed for every type but that one.
         $this->assertSame([['role_id' => 1, 'booking_type_ids' => $ids]], $this->row($payload, '000000001')['booking_type_roles']);
-        $this->assertSame([['role_id' => 4, 'booking_type_ids' => $ids]], $this->row($payload, '123456789')['booking_type_roles']);
+        $this->assertSame([['role_id' => 4, 'booking_type_ids' => array_values(array_diff($ids, [5]))]], $this->row($payload, '123456789')['booking_type_roles']);
         $this->assertSame([['role_id' => 5, 'booking_type_ids' => $ids]], $this->row($payload, '223456789')['booking_type_roles']);
         $this->assertSame(
             [['role_id' => 4, 'booking_type_ids' => [$first, $second]], ['role_id' => 5, 'booking_type_ids' => [$second]]],

@@ -57,16 +57,17 @@ class BarberValueEditTest extends ImportJsonTestCase
         return $day->toDateString();
     }
 
-    /** Import barber bookings (all of them in status 1: the vice approver's turn). @param array<int, array{0: int, 1: string, 2: string}> $slots serial, date, time */
+    /** Import barber bookings (all of them in status 1: the barber's turn). @param array<int, array{0: int, 1: string, 2: string}> $slots serial, date, time */
     private function importBarberBookings(array $slots): void
     {
         $this->putBookingFile(array_map(fn (array $slot): array => $this->barberBooking($slot[0], $slot[1], $slot[2]), $slots));
         app(ImportBookingService::class)->importFromBucket(sync: true);
     }
 
+    /** The barber - the approver of the barber type - corrects the booking while it waits for the answer. */
     private function correct(int $serial, array $values, int $version = 1)
     {
-        return $this->as(self::VICE_APPROVER)->putJson("/api/bookings-approver-management/bookings/{$serial}/values", ['values' => $values, 'version' => $version]);
+        return $this->as(self::APPROVER)->putJson("/api/bookings-approver-management/bookings/{$serial}/values", ['values' => $values, 'version' => $version]);
     }
 
     private function slotOf(int $serial): BarberBooking

@@ -14,7 +14,8 @@ use App\Enums\StatusBookingEnum as Status;
  * admin decide finally - approve or reject - from the control officer's and the vice approver's stage, and the vice approver takes a booking over
  * from the control officer.
  * The barber booking is the exception: its route has one step, the barber's answer - approve (11) or reject (12) - and none of the vice approver's
- * or the approver's statuses (barberMoves). The barber is the vice approver of the type; the approver and the admin may answer in their place.
+ * or the approver's statuses (barberMoves). The barber is the APPROVER of the type (approver_5); the admin holds that turn too, as on every type.
+ * The type has no vice approver (BookingTypeHasRoleSeeder), so nobody skips or waits for one.
  * A hold (TRANSPORTATION: 8, 9, 10) never moves a booking: the stage, the buttons and the visibility stay those of the status it was put on hold
  * from. So every method here takes that status as $current - the status that decides whose turn it is (Booking::positionStatus()) - and, where
  * buttons are built, the hold itself as $hold, which is not offered again. A hold with nowhere recorded is its own $current: the supplier stage.
@@ -129,7 +130,8 @@ final class Workflow
             BookingStageEnum::SUPPLIER_FILES,
             BookingStageEnum::SUPPLIER_APPROVAL,
             BookingStageEnum::SUPPLIER_NUMBER => $isApprover ? $this->approverMoves($except, $bookingTypeId) : [],
-            BookingStageEnum::BARBER => $isViceApprover ? $this->barberMoves() : [],
+            // The barber is the approver of the type (approver_5); the admin holds the turn too. The type has no vice approver.
+            BookingStageEnum::BARBER => $isApprover ? $this->barberMoves() : [],
             BookingStageEnum::REALIZATION => $isApprover ? $this->closingMoves() : [],
             BookingStageEnum::CLOSED => [],
         };
@@ -158,11 +160,6 @@ final class Workflow
 
         if ((!empty($flags['isApprover']) || !empty($flags['isAdmin'])) && $belowTheApprover) {
             $moves = [...$moves, ...$this->finalDecisionMoves()];
-        }
-
-        // The barber's stage is the whole route of a barber booking: the approver answers there as the barber would.
-        if ((!empty($flags['isApprover']) || !empty($flags['isAdmin'])) && $stage === BookingStageEnum::BARBER) {
-            $moves = [...$moves, ...$this->barberMoves()];
         }
 
         return $moves;

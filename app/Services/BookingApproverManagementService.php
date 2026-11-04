@@ -182,13 +182,18 @@ class BookingApproverManagementService
         }
     }
 
-    /** The auth unit's vice approvers (uuid, full_name) for a booking type. @return HttpStatusCodeEnum|array */
+    /** The auth unit's handlers (uuid, full_name) of a booking type: its vice approvers - on a barber booking its approvers, who answer it. @return HttpStatusCodeEnum|array */
     public function getViceApprovers(int $bookingTypeId): HttpStatusCodeEnum|array
     {
         try {
 
+            // The barber type has no vice approver (no vice_approver_5 permission exists): the one who answers a barber booking is its approver.
+            $handlerPermission = $bookingTypeId === BookingTypeEnum::BARBER_BOOKING->getBookingTypeId()
+                ? PermissionEnum::APPROVER
+                : PermissionEnum::VICE_APPROVER;
+
             return User::where('unit_id', $this->authUser->unit_id)
-                ->permission(PermissionEnum::VICE_APPROVER->keyForId($bookingTypeId))
+                ->permission($handlerPermission->keyForId($bookingTypeId))
                 ->get()
                 ->map(function ($userModel): array {
                     return [

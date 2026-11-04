@@ -48,9 +48,9 @@ enum BookingStageEnum: string
     {
         return match ($this) {
             self::CONTROL_OFFICER => RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
-            // The barber is the vice approver of the barber type.
-            self::VICE_APPROVER, self::BARBER => RoleEnum::VICE_APPROVER,
-            self::APPROVER, self::REALIZATION => RoleEnum::APPROVER,
+            self::VICE_APPROVER => RoleEnum::VICE_APPROVER,
+            // The barber is the approver of the barber type (approver_5).
+            self::APPROVER, self::REALIZATION, self::BARBER => RoleEnum::APPROVER,
             default => null,
         };
     }

@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\RoleEnum;
 use App\Models\BookingTypeHasRole;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 
 class AssignApproverRoleRequest extends FormRequest
@@ -31,7 +33,8 @@ class AssignApproverRoleRequest extends FormRequest
             'role_assignments' => 'required|array|min:1',
             'role_assignments.*.booking_type_id' => 'required|integer|exists:booking_types,id',
             'role_assignments.*.is_approver' => 'required|boolean',
-            'role_assignments.*.is_vice_approver' => 'required|boolean',
+            // Required only for a booking type that has the role (see withValidator): the barber type has no vice approver, so its flag is never offered.
+            'role_assignments.*.is_vice_approver' => 'sometimes|boolean',
         ];
 
         foreach (BookingTypeHasRole::approverManagementRoleEnums() as $roleEnum) {
@@ -41,6 +44,28 @@ class AssignApproverRoleRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    /** A role the booking type has must be answered (true / false); a role it does not have is not offered, and the service ignores it. */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $typesWithViceApprover = BookingTypeHasRole::query()
+                ->where('role_id', RoleEnum::VICE_APPROVER->value)
+                ->pluck('booking_type_id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+
+            foreach ((array) $this->input('role_assignments', []) as $index => $assignment) {
+                if (
+                    is_array($assignment)
+                    && in_array((int) ($assignment['booking_type_id'] ?? 0), $typesWithViceApprover, true)
+                    && !array_key_exists('is_vice_approver', $assignment)
+                ) {
+                    $validator->errors()->add("role_assignments.{$index}.is_vice_approver", 'אחד או יותר מהנתונים שנשלחו אינו תקין.');
+                }
+            }
+        });
     }
 
     public function messages(): array

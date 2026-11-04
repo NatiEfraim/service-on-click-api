@@ -90,9 +90,9 @@ class ManagementHardeningTest extends ManagementTestCase
     {
         $date = $this->workingDay(12);
         $booking = $this->carBookingOn(800000001, 1, $date);
-        $this->viceApproverOfOnly(5);
+        $this->viceApproverOfOnly(11);
 
-        // A vice approver of the barber blocks a date of the cars: nothing is saved, nothing is canceled, and the attempt is on record.
+        // A vice approver of the in-unit food booking blocks a date of the cars: nothing is saved, nothing is canceled, and the attempt is on record.
         $this->as('1000010')
             ->putJson(self::BASE . '/system-references', ['booking_type_id' => 1, 'details_values' => [$this->carRestrictionDatesReferenceId() => ['dates' => [$date]]]])
             ->assertForbidden();

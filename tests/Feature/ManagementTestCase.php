@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\RoleEnum;
 use App\Enums\UnitEnum;
-use App\Models\BookingType;
+use App\Models\BookingTypeHasRole;
 use App\Models\User;
 use Database\Seeders\ProdSeeder;
 use Database\Seeders\TestSeeders\DevBookingSeeder;
@@ -60,10 +60,16 @@ abstract class ManagementTestCase extends TestCase
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
-    /** One person per role, as the seeded system has them: a role and, except for the super admin, "{role}_{booking type}" permissions. */
+    /**
+     * One person per role, as the seeded system has them: a role and, except for the super admin, "{role}_{booking type}" permissions - for the
+     * booking types that have the role (the barber type has no vice approver, so nobody gets vice_approver_5).
+     */
     private function createPeople(): void
     {
-        $bookingTypeIds = BookingType::query()->pluck('id');
+        $bookingTypeIdsByRole = BookingTypeHasRole::query()
+            ->get(['booking_type_id', 'role_id'])
+            ->groupBy(fn (BookingTypeHasRole $link): int => (int) $link->role_id)
+            ->map(fn ($links) => $links->pluck('booking_type_id'));
 
         $people = [
             self::SUPER_ADMIN => RoleEnum::SUPER_ADMIN,
@@ -84,7 +90,9 @@ abstract class ManagementTestCase extends TestCase
 
             if ($roleEnum !== RoleEnum::SUPER_ADMIN) {
                 $user->givePermissionTo(
-                    $bookingTypeIds->map(fn($id): string => $roleEnum->toPermissionEnum()->keyForId((int) $id))->all()
+                    ($bookingTypeIdsByRole->get($roleEnum->value) ?? collect())
+                        ->map(fn($id): string => $roleEnum->toPermissionEnum()->keyForId((int) $id))
+                        ->all()
                 );
             }
         }
