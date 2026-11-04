@@ -10,18 +10,23 @@ use App\Models\BookingType;
 use App\Models\User;
 use App\Traits\GuardsDigitalHatchRuns;
 use App\Traits\HatchExportable;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The users stream of the digital hatch (r2b), driven by the flag users.is_exported_role: the people who have a role and the booking types they
  * hold it on, so the mobile side knows who may do what.
  *  - a person waits while is_exported_role = 0: they are new, or their roles changed here (User::markRolesChanged, called when an admin or the
  *    super admin grants or takes a role away);
- *  - export() puts every waiting person in the day's file (SrvOnClick_r2b_users_<Y-m-d>.json), sends it, and only then sets is_exported_role = 1
- *    on them (User::markRolesExported).
+ *  - the waiting people go in the day's file (SrvOnClick_r2b_users_<Y-m-d>.json), and only once it has gone is_exported_role = 1 is set on them
+ *    (User::markRolesExported).
  * The day's file keeps what earlier runs of the day put in it, so a later run never takes a person out of it; a person whose roles changed again
  * replaces their row. The mobile importer upserts each person by ID number, so the file lists the people who changed, not everybody.
- * run() writes the file to the bucket (export-json/users); export() does that and puts the newest file on the FTP.
- * Queued by SendHatchUsersJob (command digital-hatch:send-users).
+ * run() writes the file to the bucket (export-json/users). Two ways out, ONE flag, so only the one the HATCH_ENABLED switch picks works:
+ *  - HATCH_ENABLED=true: export() = run() and the newest file on the FTP; queued by SendHatchUsersJob (command digital-hatch:send-users);
+ *  - HATCH_ENABLED=false: exportToBucket() = run() alone (command exportUsersJson:bucket); it steps aside while the hatch is on.
+ * Two senders would take turns clearing the flag and each would carry only part of the changes. Both take the same lock and write the same file
+ * name, so switching the hatch on or off in the middle of a day loses nobody: the day's file keeps the people the other way already sent.
  */
 class UsersExportService
 {
@@ -54,6 +59,49 @@ class UsersExportService
 
             return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sent['file'], 'marked' => $marked, 'errors' => $errors];
         });
+    }
+
+    /**
+     * The bucket-only way out, for when the digital hatch is off: puts the waiting people in the day's file in the bucket (run()) and marks them
+     * sent, since the bucket is where the mobile side reads it. The same rule as export(): only is_exported_role = 0 goes out, and they are marked
+     * only if the file is in the bucket; after a failure they stay waiting. It steps aside while the hatch is on (digital-hatch:send-users does
+     * this and puts the file on the FTP too) and while EXPORT_JSON_ENABLED=false.
+     * @return array{skipped?: string, built?: array<string, mixed>, marked?: int, errors?: array<int, string>} skipped = digital_hatch | export_json_disabled | busy
+     */
+    public function exportToBucket(): array
+    {
+        if (!config('app.export_json.enabled', true)) {
+            return ['skipped' => 'export_json_disabled'];
+        }
+
+        if ($this->enabled()) {
+            return ['skipped' => 'digital_hatch'];
+        }
+
+        // The lock of digital-hatch:send-users: the two ways never write the day's file at once, not even while the switch is being flipped.
+        $lock = Cache::lock('digital-hatch:send-users', 600);
+
+        if (!$lock->get()) {
+            Log::info('Digital hatch users export to the bucket skipped: another run is working.');
+
+            return ['skipped' => 'busy'];
+        }
+
+        try {
+            $errors = [];
+            $waiting = [];
+
+            $built = $this->building('users file', function () use (&$waiting): array {
+                return $this->run($waiting);
+            }, $errors);
+
+            // In the bucket (written now, or it held them as they are), so they are sent; after a failure they stay waiting for the next run.
+            $marked = $errors === [] ? User::markRolesExported($waiting) : 0;
+
+            return ['built' => $built, 'marked' => $marked, 'errors' => $errors];
+        } finally {
+            $lock->release();
+        }
     }
 
     /**
