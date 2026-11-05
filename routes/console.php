@@ -22,35 +22,36 @@ Artisan::command('inspire', function () {
 
 // These commands only queue jobs, so a queue worker must be running.
 
-// r2b: today's users file (people with their roles) goes to the FTP.
+// r2b: today's users file (people with their roles) goes to the FTP — every 20 minutes.
 Schedule::command(DigitalHatchSendUsersCommand::class)
-    ->cron(config('app.jobs.digital_hatch_send_users.cron'))
+    ->everyTwentyMinutes()
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(10);
 
-// r2b: the booking status file goes to the FTP (a minute after the export wrote it).
+// r2b: the booking status file goes to the FTP — every 30 minutes.
 Schedule::command(DigitalHatchSendBookingStatusCommand::class)
-    ->cron(config('app.jobs.digital_hatch_send_booking_status.cron'))
+    ->everyThirtyMinutes()
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(10);
 
-// b2r: new booking files are taken from the FTP into the bucket and saved (their rows are queued as chunk jobs).
+// b2r: new booking files are taken from the FTP into the bucket and saved — every 30 seconds.
+// withoutOverlapping(1): cron syntax is minute-level; 1 minute is the shortest usable lock.
 Schedule::command(ImportBookingJsonFtpCommand::class)
-    ->cron(config('app.jobs.digital_hatch_import_booking.cron'))
+    ->everyThirtySeconds()
     ->timezone(config('app.timezone'))
-    ->withoutOverlapping(10);
+    ->withoutOverlapping(1);
 
-// b2r: the same for the application logs, a minute after the bookings because a log belongs to a booking.
+// b2r: application logs, after the bookings because a log belongs to a booking — every 30 seconds.
 Schedule::command(ImportApplicationLogJsonFtpCommand::class)
-    ->cron(config('app.jobs.digital_hatch_import_application_log.cron'))
+    ->everyThirtySeconds()
     ->timezone(config('app.timezone'))
-    ->withoutOverlapping(10);
+    ->withoutOverlapping(1);
 
-// b2r: the files and images the bookings name are taken into the bucket and linked to them.
+// b2r: the files and images the bookings name are taken into the bucket and linked — every 30 seconds.
 Schedule::command(ImportFileFtpCommand::class)
-    ->cron(config('app.jobs.digital_hatch_import_file.cron'))
+    ->everyThirtySeconds()
     ->timezone(config('app.timezone'))
-    ->withoutOverlapping(10);
+    ->withoutOverlapping(1);
 
 
 
