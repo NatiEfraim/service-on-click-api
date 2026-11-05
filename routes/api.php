@@ -94,6 +94,8 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin'])
         Route::controller(UserController::class)
             ->prefix('users')
             ->group(function () {
+                // Vatican lookup must come before the /{identifier?} catch-all.
+                Route::get('/lookup-vatican', 'lookupVatican');
                 Route::get('/{identifier?}', 'index');
                 Route::post('/', 'store');
             });

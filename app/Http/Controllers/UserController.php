@@ -12,6 +12,7 @@ use App\Traits\ImportsApplicationLogJson;
 use App\Traits\ImportsBookingJson;
 use App\Traits\ImportsFile;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -57,6 +58,29 @@ class UserController extends Controller
                 HttpStatusCodeEnum::UNPROCESSABLE_ENTITY => response()->json(['message' => HttpStatusCodeEnum::UNPROCESSABLE_ENTITY->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY),
                 default => response()->json(['message' => HttpStatusCodeEnum::NO_CONTENT->getMessage()], Response::HTTP_NO_CONTENT)
             };
+        }
+
+        return response()->json(['data' => $result], Response::HTTP_OK);
+    }
+
+    /** Look up a person in Vatican by personal number; 404 when not found, 400 on a bad number, 503 when Vatican is unreachable. */
+    public function lookupVatican(Request $request): JsonResponse
+    {
+        $personalNumber = trim((string) $request->query('personal_number', ''));
+
+        if (preg_match('/^\d{7,8}$/', $personalNumber) !== 1) {
+            return response()->json(['message' => 'מספר אישי חייב להכיל 7 או 8 ספרות'], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $result = $this->userService->lookupFromVatican($personalNumber);
+        } catch (\Exception $e) {
+            Log::error('Vatican lookup endpoint error: ' . $e->getMessage());
+            return response()->json(['message' => 'שגיאה בגישה לשירות הפנים'], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        if ($result === null) {
+            return response()->json(['message' => 'המשתמש לא נמצא'], Response::HTTP_NOT_FOUND);
         }
 
         return response()->json(['data' => $result], Response::HTTP_OK);

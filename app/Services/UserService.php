@@ -199,6 +199,12 @@ class UserService
         }
     }
 
+    /** Public entry-point for a Vatican lookup by personal number; null when unknown or unreachable. @return ?array{personal_number: string, personal_id: ?string, full_name: ?string} */
+    public function lookupFromVatican(string $personalNumber): ?array
+    {
+        return $this->getUserFromVatican($personalNumber);
+    }
+
     /** Looks a person up in Vatican for their ID number and name; null when unknown or unreachable. @return ?array{personal_number: string, personal_id: ?string, full_name: ?string} */
     private function getUserFromVatican(string $personalNumber): ?array
     {
