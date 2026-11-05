@@ -24,7 +24,7 @@ Artisan::command('inspire', function () {
 
 // r2b: today's users file (people with their roles) goes to the FTP — every 20 minutes.
 Schedule::command(DigitalHatchSendUsersCommand::class)
-    ->everyTwentyMinutes()
+    ->everyFifteenMinutes()
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(10);
 
