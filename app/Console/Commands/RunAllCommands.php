@@ -12,7 +12,7 @@ class RunAllCommands extends Command
     protected $description = 'Run multiple Artisan commands in sequence';
 
        /** Local copy of the preprod DB - must never be wiped by migrate:fresh. */
-    private const PREPROD_DATABASE = 'srvonclick-db-preprod';
+    private const PREPROD_DATABASE = 'srvonclick-dev';
     public function handle()
     {
         $this->call('optimize:clear');
@@ -32,6 +32,7 @@ class RunAllCommands extends Command
                 '--name' => config('auth.access_token_name'),
                 '--provider' => 'users',
             ]);
+
         if (!$this->hasPersonalAccessClient()) {
             $this->call('passport:client', [
                 '--personal' => true,

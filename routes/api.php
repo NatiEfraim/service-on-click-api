@@ -5,6 +5,7 @@ use App\Http\Controllers\BookingAdminManagementController;
 use App\Http\Controllers\BookingApproverManagementController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\BookingSuperAdminManagementController;
+use App\Http\Controllers\ManagementApplicationSyncStatusController;
 use App\Http\Controllers\ManagementAuditController;
 use App\Http\Controllers\ManagementBookingController;
 use App\Http\Controllers\ManagementBookingReportController;
@@ -185,6 +186,14 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             Route::get('/audit/verify', 'verify');
             Route::match(['put', 'patch', 'delete'], '/audit/{id}', 'immutable');
         });
+
+        // Application sync status: read-only view of what has been synced to the mobile app.
+        Route::controller(ManagementApplicationSyncStatusController::class)
+            ->prefix('application-sync')
+            ->group(function () {
+                Route::get('/bookings', 'bookings');
+                Route::get('/users', 'users');
+            });
 
         // Digital hatch: r2b exports + b2r imports run by the scheduler; GET or POST; sync=0 to queue.
         Route::controller(ManagementDigitalHatchController::class)
