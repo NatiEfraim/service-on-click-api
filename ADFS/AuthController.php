@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\AuthService;
 use App\Services\UserService;
 
@@ -22,7 +23,7 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse|string
     {
         try {
-            // The token goes into the ADFS URL, which is called with the service account: it must stay one path segment.
+
             $token = $request->token;
             if (!is_string($token) || $token === '' || strlen($token) > 2048) {
                 return response()->json('בקשה שגויה', Response::HTTP_BAD_REQUEST);
@@ -55,20 +56,25 @@ class AuthController extends Controller
 
             $personalNumber = $userDecoded->personal_number ?? null;
             if (!is_null($personalNumber)) {
-                // the number in the user name (ARMY\c9810738) may be how the system stores the person
                 $usernameNumber = preg_match('/(\d+)$/', (string) ($userDecoded->username ?? ''), $match) ? $match[1] : null;
-                // By personal number, else by the ID number Vatican holds for it. Nobody is created at login.
                 $user = $this->UserService->findForAdfsLogin((string) $personalNumber, $usernameNumber);
             } else {
                 return response()->json('מספר אישי לא תקין', Response::HTTP_NOT_FOUND);
             }
 
-            // Whoever the system does not know is turned away, like a deleted user.
-            if (is_null($user) || $user->is_deleted) {
+            if (is_null($user)) {
                 return response()->json(["errors" => ["message" => 'המשתמש לא קיים במערכת']], Response::HTTP_FORBIDDEN);
             }
 
-            // Revokes the earlier tokens, issues the personal access token and sets it in the cookie.
+            if (!User::where('id', $user->id)->where('is_deleted', false)->exists()) {
+                return response()->json(["errors" => ["message" => 'המשתמש לא קיים במערכת']], Response::HTTP_FORBIDDEN);
+            }
+
+
+            if ($user->roles()->doesntExist()) {
+                return response()->json(["errors" => ["message" => 'המשתמש לא קיים במערכת']], Response::HTTP_FORBIDDEN);
+            }
+
             return $this->AuthService->loginResponse($user);
         } catch (\Exception $e) {
             Log::error($e->getMessage());

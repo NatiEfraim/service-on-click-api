@@ -51,21 +51,16 @@ class AuthService
         $tokenName = config('auth.access_token_name');
         $token = $user->createToken($tokenName);
 
-        $roles = [];
-        $userRoles = $user->roles()->orderBy('id')->pluck('name')->toArray();
-        if (count($userRoles) > 0) $roles[] = $userRoles[0];
+        $roles = $user->roles()->orderBy('id')->pluck('name')->all();
 
-        $userPermissions = [];
-        foreach ($user->getDirectPermissions() as $permission) {
-            $userPermissions[] = $permission->name;
-        }
+        $permissions = $user->getAllPermissions()->pluck('name')->all();
 
         return response()->json(
             [
                 "full name" => $user->full_name,
                 "personal_number" => $user->personal_number,
                 "role" => $roles,
-                "permissions" => $userPermissions
+                "permissions" => $permissions
             ],
             Response::HTTP_CREATED
         )
