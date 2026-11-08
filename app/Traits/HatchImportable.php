@@ -149,10 +149,15 @@ trait HatchImportable
     {
         $local = trim((string) config("services.digital-hatch.local.import.{$localKey}"));
 
-        if ($local !== '') {
+        // HATCH_FORCE_FTP=true overrides any local path so the server always uses the real FTP.
+        if ($local !== '' && !config('services.digital-hatch.force_ftp', false)) {
             // Not created when missing (unlike the export folder): a mistyped path must not leave an empty folder behind.
             if (!is_dir($local)) {
-                throw new \RuntimeException("the local folder {$local} does not exist");
+                $envKey = $localKey === 'path' ? 'DIGITAL_HATCH_IMPORT_PATH' : 'DIGITAL_HATCH_IMPORT_FILES_PATH';
+                throw new \RuntimeException(
+                    "the local folder {$local} does not exist " .
+                    "(set by {$envKey} — clear it in .env to use the FTP instead)"
+                );
             }
 
             return [

@@ -39,7 +39,6 @@ return [
             ]
         ],
 
-        // Local development only; the s3 disk is for the servers.
         'minio' => [
             'driver' => 's3',
             'key' => env('MINIO_ACCESS_KEY_ID'),
@@ -53,8 +52,7 @@ return [
             'report' => false,
         ],
 
-        // The digital hatch: the FTP the two systems exchange their files through (DigitalHatchService).
-        // "throw" is on so an unreachable server fails the run instead of looking like an empty folder.
+
         'digital-hatch' => [
             'driver' => 'ftp',
             'host' => env('HATCH_FTP_HOST'),
@@ -75,20 +73,17 @@ return [
         public_path('storage') => storage_path('app/public'),
     ],
 
-    // "minio" locally, "s3" on the servers.
     'storage_service' => env('STORAGE_SERVICE', 'minio'),
 
     'storage_dir' => env('STORAGE_DIR', 'public'),
 
-    // Minutes a signed URL for the private bucket stays valid.
     'temp_url_lifetime' => (int) env('TEMP_URL_LIFETIME', 30),
 
     // Folder names inside the bucket.
     'folder_name' => [
         'log_folder_name' => (string) env('LOG_FOLDER_NAME', 'logs'),
 
-        // b2r json files dropped by the mobile side: SrvOnClick_b2r_export_bookings_* and SrvOnClick_b2r_application_logs_*. Both kinds go straight into
-        // "base", told apart by their names; fill the two folders below to read them from subfolders of it instead (e.g. booking-data, application-log).
+
         'import_json' => [
             'base' => (string) env('IMPORT_JSON', 'import-json'),
 
@@ -96,17 +91,13 @@ return [
             'application_log' => (string) env('APPLICATION_LOG_JSON_FOLDER_NAME', ''),
         ],
 
-        // A json file that was saved in the database moves here (a backup of what was read).
         'loaded_json' => (string) env('LOADED_JSON_FOLDER_NAME', 'loaded-json'),
 
-        // b2r files and images, SrvOnClickFiles_<stored name>.<ext>: they arrive in "import_files". Once one is saved in the database - linked to the
-        // booking whose json names it - it is copied to "attachments" (where the bookings serve their files and images from, all of them in one
-        // folder) and the received file moves to "loaded_files" (a backup, like loaded_json).
+
         'import_files' => (string) env('IMPORT_FILES_FOLDER_NAME', 'import-files'),
         'loaded_files' => (string) env('LOADED_FILES_FOLDER_NAME', 'loaded-files'),
         'attachments' => (string) env('ATTACHMENTS_FOLDER_NAME', 'files'),
 
-        // r2b files written for the mobile side.
         'export_json' => [
             'base' => (string) env('EXPORT_JSON', 'export-json'),
 
@@ -116,7 +107,6 @@ return [
             'users' => (string) env('USERS_JSON_FOLDER_NAME', 'users'),
         ],
 
-        // The bookings report (xlsx) a super admin or admin exports: bookings_<date>_<time>.xlsx is sent back and also kept here, as a backup.
         'export_report' => (string) env('EXPORT_REPORT_FOLDER_NAME', 'export-report'),
     ],
 
