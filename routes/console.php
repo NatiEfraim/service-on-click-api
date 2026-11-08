@@ -23,35 +23,40 @@ Artisan::command('inspire', function () {
 // These commands only queue jobs, so a queue worker must be running.
 
 // r2b: today's users file (people with their roles) goes to the FTP — every 20 minutes.
-Schedule::command(DigitalHatchSendUsersCommand::class)
-    ->everyFifteenMinutes()
-    ->timezone(config('app.timezone'))
-    ->withoutOverlapping(10);
+// Schedule::command(DigitalHatchSendUsersCommand::class)
+//     ->everyFiveMinutes()
+//     ->timezone(config('app.timezone'))
+//     ->onOneServer()
+//     ->withoutOverlapping(10);
 
 // r2b: the booking status file goes to the FTP — every 30 minutes.
-Schedule::command(DigitalHatchSendBookingStatusCommand::class)
-    ->everyThirtyMinutes()
-    ->timezone(config('app.timezone'))
-    ->withoutOverlapping(10);
+// Schedule::command(DigitalHatchSendBookingStatusCommand::class)
+//     ->everyThirtyMinutes()
+//     ->timezone(config('app.timezone'))
+//        ->onOneServer()
+//     ->withoutOverlapping(10);
 
 // b2r: new booking files are taken from the FTP into the bucket and saved — every 30 seconds.
 // withoutOverlapping(1): cron syntax is minute-level; 1 minute is the shortest usable lock.
-Schedule::command(ImportBookingJsonFtpCommand::class)
-    ->everyThirtySeconds()
-    ->timezone(config('app.timezone'))
-    ->withoutOverlapping(1);
+// Schedule::command(ImportBookingJsonFtpCommand::class)
+//     ->everyThirtySeconds()
+//     ->timezone(config('app.timezone'))
+//        ->onOneServer()
+//     ->withoutOverlapping(1);
 
 // b2r: application logs, after the bookings because a log belongs to a booking — every 30 seconds.
-Schedule::command(ImportApplicationLogJsonFtpCommand::class)
-    ->everyThirtySeconds()
-    ->timezone(config('app.timezone'))
-    ->withoutOverlapping(1);
+// Schedule::command(ImportApplicationLogJsonFtpCommand::class)
+//     ->everyThirtySeconds()
+//     ->timezone(config('app.timezone'))
+//        ->onOneServer()
+//     ->withoutOverlapping(1);
 
 // b2r: the files and images the bookings name are taken into the bucket and linked — every 30 seconds.
-Schedule::command(ImportFileFtpCommand::class)
-    ->everyThirtySeconds()
-    ->timezone(config('app.timezone'))
-    ->withoutOverlapping(1);
+// Schedule::command(ImportFileFtpCommand::class)
+//     ->everyThirtySeconds()
+//     ->timezone(config('app.timezone'))
+//     ->onOneServer()
+//     ->withoutOverlapping(1);
 
 
 
