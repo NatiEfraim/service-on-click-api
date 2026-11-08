@@ -34,6 +34,9 @@ return [
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
             'report' => false,
+            'http' => [
+                'verify' => false,
+            ]
         ],
 
         // Local development only; the s3 disk is for the servers.
