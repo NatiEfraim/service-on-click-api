@@ -115,13 +115,19 @@ class AttachmentService
                 return null;
             }
 
-            $base = $this->storage->buildBucketKey((string) config('filesystems.folder_name.attachments'), $name);
+            // Search 'files' first (the live location after import), then 'loaded-files' as fallback.
+            foreach ([
+                (string) config('filesystems.folder_name.attachments'),
+                (string) config('filesystems.folder_name.loaded_files'),
+            ] as $folder) {
+                $base = $this->storage->buildBucketKey($folder, $name);
 
-            foreach (self::extensionsFor($attachment) as $extension) {
-                if ($disk->exists("{$base}.{$extension}")) {
-                    $this->link($attachment, "{$base}.{$extension}");
+                foreach (self::extensionsFor($attachment) as $extension) {
+                    if ($disk->exists("{$base}.{$extension}")) {
+                        $this->link($attachment, "{$base}.{$extension}");
 
-                    return "{$base}.{$extension}";
+                        return "{$base}.{$extension}";
+                    }
                 }
             }
 
