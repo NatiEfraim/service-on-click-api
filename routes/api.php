@@ -17,19 +17,14 @@ use App\Http\Controllers\ManagementSyncController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
-// ── Authentication ───────────────────────────────────────────────────────────────────────────────
 Route::controller(AuthController::class)->group(function () {
     Route::post('/login', 'login')->middleware(['throttle:api']);
     Route::post('/logout', 'logout')->middleware(['auth:api', 'throttle:api']);
     Route::get('/user', [UserController::class, 'user'])->middleware(['auth:api', 'throttle:api']);
 });
 
-// Token-free on APP_ENV=local; super admin only on every other environment.
-Route::get('/test-import', [UserController::class, 'testImport'])
-    ->middleware(app()->environment('local') ? [] : ['auth:api', 'throttle:api', 'role:super_admin']);
 
-// ── super_admin | admin | approver | vice_approver | user ────────────────────────────────────────
-// Mobile-app users can also read their own bookings from the web app.
+
 Route::controller(BookingController::class)
     ->prefix('bookings')
     ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|user'])
@@ -38,8 +33,7 @@ Route::controller(BookingController::class)
         Route::get('/{bookingUuid}', 'show')->whereUuid('bookingUuid');
     });
 
-// ── super_admin | admin | approver | vice_approver ───────────────────────────────────────────────
-// Transportation control officer excluded; they cannot see these screens.
+
 Route::controller(BookingApproverManagementController::class)
     ->prefix('bookings-approver-management')
     ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver'])
@@ -54,8 +48,7 @@ Route::controller(BookingApproverManagementController::class)
         Route::put('/system-references', 'updateSystemReferences');
     });
 
-// ── super_admin | admin | approver | vice_approver | transportation_control_officer ─────────────
-// Access inside each action is further checked per booking by AccessScope and the Workflow rules.
+
 Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer'])
     ->prefix('bookings-approver-management')
     ->group(function () {
@@ -66,18 +59,15 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|
                 ->whereNumber('serial')->whereIn('kind', ['file', 'image'])->whereNumber('id');
             Route::post('/bookings/{serial}/status', 'changeStatus')->whereNumber('serial');
             Route::put('/bookings/{serial}/values', 'updateValues')->whereNumber('serial');
-            // Creating a booking from the web is blocked (405) and recorded in the audit log.
             Route::match(['post', 'put'], '/bookings', 'createBlocked');
             Route::post('/bookings/{bookingTypeId}/create', 'createBlocked')->whereNumber('bookingTypeId');
         });
 
-        // Booking-type settings and restriction-impact check.
         Route::controller(ManagementSettingsController::class)->group(function () {
             Route::get('/settings/{unitId}/{bookingTypeId}', 'settings')->whereNumber(['unitId', 'bookingTypeId']);
             Route::post('/settings/references/{id}/impact', 'restrictionImpact')->whereNumber('id');
         });
 
-        // Insights; domain dashboard and bottlenecks also check access inside the service.
         Route::controller(ManagementInsightController::class)->group(function () {
             Route::get('/me', 'me');
             Route::get('/catalog', 'catalog');
@@ -87,40 +77,33 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|
         });
     });
 
-// ── super_admin | admin ──────────────────────────────────────────────────────────────────────────
 Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin'])
     ->group(function () {
-        // Admin scoped to their own unit by the service.
         Route::controller(UserController::class)
             ->prefix('users')
             ->group(function () {
-                // Vatican lookup must come before the /{identifier?} catch-all.
                 Route::get('/lookup-vatican', 'lookupVatican');
                 Route::get('/{identifier?}', 'index');
                 Route::post('/', 'store');
             });
 
         Route::prefix('bookings-admin-management')->group(function () {
-            // Approver and vice-approver role assignment per booking type.
             Route::controller(BookingAdminManagementController::class)->group(function () {
                 Route::post('/assign-approver-role', 'assignApproverRole');
                 Route::get('/get-approvers', 'getApprovers');
                 Route::get('/get-approver-permissions/{userUuid}', 'getApproverPermissions');
             });
 
-            // Booking-type targets (read and set) and admin home screen.
             Route::controller(ManagementSettingsController::class)->group(function () {
                 Route::get('/targets', 'targets');
                 Route::put('/targets', 'setTarget');
             });
 
-            // Admin home screen figures and report list.
             Route::controller(ManagementInsightController::class)->group(function () {
                 Route::get('/home', 'home');
                 Route::get('/reports', 'reports');
             });
 
-            // Bookings report list (GET) and Excel export kept in the bucket (POST).
             Route::controller(ManagementBookingReportController::class)
                 ->prefix('bookings-report')
                 ->group(function () {
@@ -128,16 +111,13 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin'])
                     Route::post('/export', 'export');
                 });
 
-            // Move a user to a different department within the admin's unit.
             Route::put('/users/{uuid}/department', [ManagementOrgController::class, 'setUserDepartment'])->whereUuid('uuid');
         });
     });
 
-// ── super_admin ──────────────────────────────────────────────────────────────────────────────────
 Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
     ->prefix('bookings-super-admin-management')
     ->group(function () {
-        // Admin-role assignment and the form-field options / statement editor.
         Route::controller(BookingSuperAdminManagementController::class)->group(function () {
             Route::post('/assign-admin-role', 'assignAdminRole');
             Route::get('/get-admins', 'getAdmins');
@@ -155,7 +135,6 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             Route::delete('/remove-option/{formFieldId}', 'removeOption');
         });
 
-        // Organisation tree: units and departments.
         Route::controller(ManagementOrgController::class)->group(function () {
             Route::get('/org', 'listing');
             Route::post('/org/units', 'createUnit');
@@ -164,7 +143,6 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             Route::put('/org/departments/{id}', 'updateDepartment')->whereNumber('id');
         });
 
-        // Form fields: changes push to mobile on next sync; fields with values are archived, not deleted.
         Route::controller(ManagementSettingsController::class)->group(function () {
             Route::post('/form-fields/{unitId}/{bookingTypeId}', 'createField')->whereNumber(['unitId', 'bookingTypeId']);
             Route::put('/form-fields/{unitId}/{bookingTypeId}/order', 'reorderFields')->whereNumber(['unitId', 'bookingTypeId']);
@@ -173,7 +151,6 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             Route::delete('/form-fields/{id}', 'removeField')->whereNumber('id');
         });
 
-        // Mobile app sync: health overview, file inspection, conflict resolution and a manual send.
         Route::controller(ManagementSyncController::class)->group(function () {
             Route::get('/sync', 'overview');
             Route::get('/sync/files/{id}', 'file')->whereNumber('id');
@@ -182,14 +159,12 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             Route::post('/sync/run', 'run');
         });
 
-        // Audit log: every write attempt is refused (405) and recorded; the log is append-only.
         Route::controller(ManagementAuditController::class)->group(function () {
             Route::get('/audit', 'index');
             Route::get('/audit/verify', 'verify');
             Route::match(['put', 'patch', 'delete'], '/audit/{id}', 'immutable');
         });
 
-        // Application sync status: read-only view of what has been synced to the mobile app.
         Route::controller(ManagementApplicationSyncStatusController::class)
             ->prefix('application-sync')
             ->group(function () {
@@ -197,7 +172,6 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
                 Route::get('/users', 'users');
             });
 
-        // Digital hatch: r2b exports + b2r imports run by the scheduler; GET or POST; sync=0 to queue.
         Route::controller(ManagementDigitalHatchController::class)
             ->prefix('digital-hatch')
             ->group(function () {

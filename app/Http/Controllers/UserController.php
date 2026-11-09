@@ -107,39 +107,4 @@ class UserController extends Controller
         return response()->json(['data' => $result], Response::HTTP_CREATED);
     }
 
-    /**
-     * Runs the scheduled import commands' work (bookings, then logs, then files and images) inside this request, chunk jobs included, and returns
-     * the imported data. ?page, ?per_page (max 50), ?booking_type_id and ?serial_number (or its start) choose which bookings are shown.
-     */
-    public function testImport(TestImportRequest $request): JsonResponse
-    {
-        try {
-            // The bookings first: a log and a file belong to a booking.
-            $import = [
-                'bookings' => $this->importBookingJson(sync: true),
-                'application_logs' => $this->importApplicationLogJson(sync: true),
-                'files' => $this->importFile(),
-            ];
-
-            $imported = $this->importBookingService->importedData(
-                perPage: (int) $request->query('per_page', 10),
-                bookingTypeId: $request->filled('booking_type_id') ? (int) $request->query('booking_type_id') : null,
-                serialNumber: $request->filled('serial_number') ? (string) $request->query('serial_number') : null,
-            );
-        } catch (\Exception $e) {
-            Log::error($e->getMessage());
-            $this->storageService->logToS3();
-
-            $body = ['message' => HttpStatusCodeEnum::INTERNAL_SERVER_ERROR->getMessage()];
-
-            // The reason (e.g. a missing bucket) is for developers only: never with APP_DEBUG=false.
-            if (config('app.debug')) {
-                $body['error'] = $e->getMessage();
-            }
-
-            return response()->json($body, Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-
-        return response()->json(['data' => ['import' => $import] + $imported], Response::HTTP_OK);
-    }
 }

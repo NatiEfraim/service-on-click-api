@@ -222,8 +222,22 @@ class StorageService
             throw new \RuntimeException("File {$from} not found in the bucket");
         }
 
-        if (!$disk->copy($from, $to)) {
-            throw new \RuntimeException("Could not copy {$from} to {$toDirectory}");
+        // Use readStream + put instead of disk->copy(): some MinIO setups deny s3:CopyObject
+        // while allowing s3:GetObject + s3:PutObject, causing copy() to silently return false.
+        $stream = $disk->readStream($from);
+
+        if (!is_resource($stream)) {
+            throw new \RuntimeException("Could not read {$from} from the bucket");
+        }
+
+        try {
+            if (!$disk->put($to, $stream)) {
+                throw new \RuntimeException("Could not copy {$from} to {$toDirectory}");
+            }
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
         }
 
         return $to;
@@ -248,8 +262,21 @@ class StorageService
                 . ($extension === '' ? '' : ".{$extension}");
         }
 
-        if (!$disk->copy($from, $this->buildBucketKey($toDirectory, $toFileName))) {
-            throw new \RuntimeException("Could not copy {$from} to {$toDirectory}");
+        // Use readStream + put instead of disk->copy() — same reason as copyBucketFile.
+        $stream = $disk->readStream($from);
+
+        if (!is_resource($stream)) {
+            throw new \RuntimeException("Could not read {$from} from the bucket");
+        }
+
+        try {
+            if (!$disk->put($this->buildBucketKey($toDirectory, $toFileName), $stream)) {
+                throw new \RuntimeException("Could not copy {$from} to {$toDirectory}");
+            }
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
         }
 
         if (!$disk->delete($from)) {
