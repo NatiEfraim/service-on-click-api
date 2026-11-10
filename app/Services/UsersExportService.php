@@ -28,11 +28,12 @@ class UsersExportService
         return $this->locked('send-users', function () use ($force): array {
             $errors = [];
             $waiting = [];
+            $ftpDir = DigitalHatchFileEnum::USERS->ftpBucketDirectory();
 
-            $built = $this->building('users file', function () use (&$waiting): array {
-                return $this->run($waiting);
+            $built = $this->building('users file', function () use (&$waiting, $ftpDir): array {
+                return $this->run($waiting, $ftpDir);
             }, $errors);
-            $sent = $this->sendNewestFile(DigitalHatchFileEnum::USERS, $force);
+            $sent = $this->sendNewestFile(DigitalHatchFileEnum::USERS, $force, $ftpDir);
             $errors = [...$errors, ...$sent['errors']];
 
             // Only what really went is marked: after a failed build or send the people stay waiting for the next run.
@@ -79,8 +80,8 @@ class UsersExportService
         }
     }
 
-    /** Builds the day's users file in the bucket, merging with what earlier runs put there. @param array<int, ?string> $waiting user id => updated_at @return array{written: bool, file?: string, users?: int, in_file?: int, reason?: string} */
-    public function run(array &$waiting = []): array
+    /** Builds the day's users file in the bucket, merging with what earlier runs put there. @param array<int, ?string> $waiting user id => updated_at @param ?string $directory bucket folder to use; null = the stream's default bucket directory @return array{written: bool, file?: string, users?: int, in_file?: int, reason?: string} */
+    public function run(array &$waiting = [], ?string $directory = null): array
     {
         $rows = $this->payload($waiting);
 
@@ -90,7 +91,7 @@ class UsersExportService
 
         // The day is counted in the timezone the mobile side uses for its own "today" (as the status file does).
         $fileName = ExportFileNames::usersFile(now(config('app.export_json.timezone')), DigitalHatchFileEnum::USERS->fileNamePrefix());
-        $directory = DigitalHatchFileEnum::USERS->bucketDirectory();
+        $directory ??= DigitalHatchFileEnum::USERS->bucketDirectory();
         $existing = $this->storageService->bucketFileContents($fileName, $directory);
 
         $inFile = [];

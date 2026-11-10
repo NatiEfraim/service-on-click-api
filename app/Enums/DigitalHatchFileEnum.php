@@ -62,8 +62,27 @@ enum DigitalHatchFileEnum: string
         };
     }
 
+    /** The bucket folder for the backup of what this r2b stream sent to the FTP: export-json/ftp/{stream-folder}. @throws \LogicException for b2r streams */
+    public function ftpBucketDirectory(): string
+    {
+        return match ($this) {
+            self::BOOKING_STATUS => $this->ftpExportDirectory('booking_status'),
+            self::USERS => $this->ftpExportDirectory('users'),
+            self::SYSTEM_REFERENCES => $this->ftpExportDirectory('system_references'),
+            default => throw new \LogicException("{$this->value} has no FTP backup directory"),
+        };
+    }
+
     private function exportDirectory(string $folder): string
     {
         return trim((string) config('filesystems.folder_name.export_json.base'), '/') . '/' . config('filesystems.folder_name.export_json.' . $folder);
+    }
+
+    private function ftpExportDirectory(string $folder): string
+    {
+        $base = trim((string) config('filesystems.folder_name.export_json.base'), '/');
+        $sub = trim((string) config('filesystems.folder_name.export_json.ftp_sub', 'ftp'), '/');
+
+        return $base . '/' . $sub . '/' . config('filesystems.folder_name.export_json.' . $folder);
     }
 }

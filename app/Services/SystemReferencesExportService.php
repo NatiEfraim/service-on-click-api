@@ -26,10 +26,12 @@ class SystemReferencesExportService
             $errors = [];
             $waiting = [];
 
-            $built = $this->building('system references file', function () use (&$waiting): array {
-                return $this->run($waiting);
+            $ftpDir = DigitalHatchFileEnum::SYSTEM_REFERENCES->ftpBucketDirectory();
+
+            $built = $this->building('system references file', function () use (&$waiting, $ftpDir): array {
+                return $this->run($waiting, $ftpDir);
             }, $errors);
-            $sent = $this->sendNewestFile(DigitalHatchFileEnum::SYSTEM_REFERENCES, $force);
+            $sent = $this->sendNewestFile(DigitalHatchFileEnum::SYSTEM_REFERENCES, $force, $ftpDir);
             $errors = [...$errors, ...$sent['errors']];
 
             $marked = $errors === [] ? SystemReference::markExported($waiting) : 0;
@@ -69,8 +71,8 @@ class SystemReferencesExportService
         }
     }
 
-    /** Builds the day's system references file in the bucket, merging with what earlier runs put there. @param array<int, ?string> $waiting filled: record id => updated_at @return array{written: bool, file?: string, records?: int, in_file?: int, reason?: string} */
-    public function run(array &$waiting = []): array
+    /** Builds the day's system references file in the bucket, merging with what earlier runs put there. @param array<int, ?string> $waiting filled: record id => updated_at @param ?string $directory bucket folder to use; null = the stream's default bucket directory @return array{written: bool, file?: string, records?: int, in_file?: int, reason?: string} */
+    public function run(array &$waiting = [], ?string $directory = null): array
     {
         $rows = $this->payload($waiting);
 
@@ -79,7 +81,7 @@ class SystemReferencesExportService
         }
 
         $fileName = ExportFileNames::systemReferencesFile(now(config('app.export_json.timezone')), DigitalHatchFileEnum::SYSTEM_REFERENCES->fileNamePrefix());
-        $directory = DigitalHatchFileEnum::SYSTEM_REFERENCES->bucketDirectory();
+        $directory ??= DigitalHatchFileEnum::SYSTEM_REFERENCES->bucketDirectory();
         $existing = $this->storageService->bucketFileContents($fileName, $directory);
 
         $inFile = [];

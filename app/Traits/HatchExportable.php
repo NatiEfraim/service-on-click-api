@@ -13,14 +13,14 @@ use Illuminate\Support\Facades\Storage;
 /** Shared r2b export logic: writes bucket files to the FTP (or local test folder), deduplicates by sha256, records every send in digital_hatch_sent_files. */
 trait HatchExportable
 {
-    /** Sends the newest bucket file of this stream to the FTP; skipped when the same content was already sent ($force overrides). @return array{file: ?string, errors: array<int, string>} */
-    public function sendNewestFile(DigitalHatchFileEnum $stream, bool $force = false): array
+    /** Sends the newest bucket file of this stream to the FTP; skipped when the same content was already sent ($force overrides). Pass $directoryOverride to read from a different bucket folder than the stream's default (e.g. the FTP backup folder). @return array{file: ?string, errors: array<int, string>} */
+    public function sendNewestFile(DigitalHatchFileEnum $stream, bool $force = false, ?string $directoryOverride = null): array
     {
         $result = ['file' => null, 'errors' => []];
 
         try {
             $storage = app(StorageService::class);
-            $directory = $stream->bucketDirectory();
+            $directory = $directoryOverride ?? $stream->bucketDirectory();
             $fileName = Arr::last($storage->listJsonFilesInBucket('', $directory));
 
             if ($fileName === null) {
