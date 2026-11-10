@@ -17,14 +17,19 @@ use Symfony\Component\HttpFoundation\Response;
 
 class UpdateSystemReferenceRequest extends FormRequest
 {
-    /** The role must manage the booking type being edited (blocking dates cancels bookings); a refusal is audited and answered 403. */
+    /** The role must be admin or approver for the booking type being edited (handlers-only are blocked); a refusal is audited and answered 403. */
     public function authorize(): bool
     {
         $user = Auth::user();
         $bookingTypeId = (int) $this->input('booking_type_id');
 
         // No booking type yet: the validation says so.
-        if ($user === null || $bookingTypeId <= 0 || (new AccessScope($user))->managesBookingType($bookingTypeId)) {
+        if ($user === null || $bookingTypeId <= 0) {
+            return true;
+        }
+
+        // canManageSettings: super admin always; otherwise admin or approver for the type in their own unit (not handlers-only).
+        if ((new AccessScope($user))->canManageSettings((int) $user->unit_id, $bookingTypeId)) {
             return true;
         }
 

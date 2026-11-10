@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\BookingApproverManagementService;
-use App\Http\Requests\UpdateSystemReferenceRequest;
-use Illuminate\Support\Facades\Validator;
+use App\Enums\BookingTypeEnum;
 use App\Enums\HttpStatusCodeEnum;
+use App\Http\Requests\UpdateSystemReferenceRequest;
+use App\Services\BookingApproverManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
 
@@ -169,6 +170,12 @@ class BookingApproverManagementController extends Controller
     /** Fetch the system reference settings of a booking type. */
     public function getSystemReferences(string $bookingType): JsonResponse
     {
+        $scope = $this->accessScope();
+        $bookingTypeId = BookingTypeEnum::getBookingTypeIdFromRouteName($bookingType);
+
+        if ($bookingTypeId !== null && !$scope->canManageSettings((int) $scope->user->unit_id, $bookingTypeId)) {
+            return response()->json(['message' => 'אין לך הרשאה לנהל הגדרות בתחום זה'], Response::HTTP_FORBIDDEN);
+        }
 
         $result = $this->bookingApproverManagementService->getSystemReferences(
             bookingType: $bookingType
