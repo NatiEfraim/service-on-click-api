@@ -78,7 +78,7 @@ trait HatchImportable
         return $result;
     }
 
-    /** Lands new SrvOnClickFiles_* attachments from the FTP into the import-files bucket folder; only types AttachmentService serves are taken. @param bool $force re-fetch even if already taken @return array{source: string, files: array<int, string>, errors: array<int, string>} */
+    /** Lands new SrvOnClickFiles_* attachments from the FTP into the import-files bucket folder; only types AttachmentService serves are taken. Extension-less files (the mobile sends bare names) have their type detected from the bytes. @param bool $force re-fetch even if already taken @return array{source: string, files: array<int, string>, errors: array<int, string>} */
     public function downloadAttachments(bool $force = false): array
     {
         $result = ['source' => '', 'files' => [], 'errors' => []];
@@ -94,7 +94,10 @@ trait HatchImportable
         try {
             $names = array_values(array_filter(
                 $this->hatchFileNames($source['disk'], $source['folder']),
-                fn (string $fileName): bool => $this->isAttachmentName($fileName),
+                // Accept names with a known extension and also bare names (no extension): the mobile
+                // exports files without an extension; we detect the type from the bytes below.
+                fn (string $fileName): bool => $this->isAttachmentName($fileName)
+                    || $this->isAttachmentBaseName($fileName),
             ));
         } catch (\Throwable $e) {
             return $this->hatchFailed($result, "listing {$source['label']}", $e);
@@ -116,11 +119,25 @@ trait HatchImportable
                     continue;
                 }
 
-                // The ledger first (see downloadFiles).
+                // For extension-less files: detect MIME type from the bytes and append the extension
+                // so the rest of the pipeline (ImportFileService, AttachmentService) can find the file.
+                $saveFileName = $fileName;
+                if (AttachmentService::servedExtension($fileName) === null) {
+                    $extension = $this->detectFileExtension($content);
+
+                    if ($extension === null) {
+                        $result['errors'][] = "{$fileName}: could not determine file type from bytes, skipped";
+                        continue;
+                    }
+
+                    $saveFileName = "{$fileName}.{$extension}";
+                }
+
+                // The ledger first (see downloadFiles). Ledger key is the FTP name (may differ from $saveFileName).
                 static::markProcessed($fileName, DigitalHatchFetchedFile::STREAM_ATTACHMENTS, $source['kind']);
 
                 try {
-                    if (!$disk->put($this->attachmentStoragePathFor($fileName), $content)) {
+                    if (!$disk->put($this->attachmentStoragePathFor($saveFileName), $content)) {
                         throw new \RuntimeException('could not write it to the bucket');
                     }
                 } catch (\Throwable $e) {
@@ -129,7 +146,7 @@ trait HatchImportable
                     throw $e;
                 }
 
-                $result['files'][] = $fileName;
+                $result['files'][] = $saveFileName;
             } catch (\Throwable $e) {
                 $this->hatchFailed($result, $fileName, $e);
             }
@@ -196,6 +213,30 @@ trait HatchImportable
         return str_starts_with($fileName, DigitalHatchFileEnum::attachmentFileNamePrefix())
             && AttachmentService::isValidName($fileName)
             && AttachmentService::servedExtension($fileName) !== null;
+    }
+
+    /** An attachment base name with no extension: the mobile may upload files without an extension; type is detected from bytes. */
+    private function isAttachmentBaseName(string $fileName): bool
+    {
+        return str_starts_with($fileName, DigitalHatchFileEnum::attachmentFileNamePrefix())
+            && AttachmentService::isValidName($fileName)
+            && AttachmentService::servedExtension($fileName) === null;
+    }
+
+    /** Detects the served file extension from the first bytes of a file; null when the type is not one AttachmentService serves. */
+    private function detectFileExtension(string $bytes): ?string
+    {
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->buffer($bytes);
+
+        return match ($mime) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'application/pdf' => 'pdf',
+            default => null,
+        };
     }
 
     /** Which of these names were fetched before, in a query per thousand names instead of one per file. @param array<int, string> $names @return array<string, true> */

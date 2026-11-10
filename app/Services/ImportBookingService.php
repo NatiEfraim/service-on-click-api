@@ -297,6 +297,8 @@ class ImportBookingService
 
     /**
      * Stored names of the files/images a row lists; names that are not plain are logged and skipped, never used for bucket lookups.
+     * The mobile may include a file extension in the path (e.g. "SrvOnClickFiles_xxx.jpeg"); we strip it so the DB always
+     * holds the base name, and AttachmentService::resolve() probes extensions to find the bytes.
      * @return array<int, string>
      */
     private function attachmentNames(mixed $list, int $serialNumber): array
@@ -309,6 +311,14 @@ class ImportBookingService
             if (!AttachmentService::isValidName($name)) {
                 Log::warning("ImportBookingService: booking {$serialNumber}: a file or image without a valid name was skipped.");
                 continue;
+            }
+
+            // Strip a served extension the mobile may include; store only the base name.
+            if (AttachmentService::servedExtension($name) !== null) {
+                $base = pathinfo($name, PATHINFO_FILENAME);
+                if (AttachmentService::isValidName($base)) {
+                    $name = $base;
+                }
             }
 
             $names[] = $name;

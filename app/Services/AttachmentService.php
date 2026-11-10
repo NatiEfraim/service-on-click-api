@@ -157,7 +157,7 @@ class AttachmentService
                     'mime' => $available ? $type[0] : null,
                     'inline' => $available && $type[1],
                     'available' => $available,
-                    'url' => $available ? "/api/bookings-approver-management/bookings/{$booking->serial_number}/attachments/{$kind}/{$attachment->id}" : null,
+                    'url' => $available ? $this->signedUrl($key) : null,
                 ];
             }
         }
@@ -227,5 +227,15 @@ class AttachmentService
     private function extensionOf(string $key): ?string
     {
         return self::servedExtension($key);
+    }
+
+    /** Pre-signed MinIO/S3 URL valid for TEMP_URL_LIFETIME minutes; falls back to the stream endpoint when the disk cannot sign. */
+    private function signedUrl(string $key): string
+    {
+        try {
+            return $this->storage->generateImageTemporaryUrl($key);
+        } catch (\Throwable) {
+            return '';
+        }
     }
 }
