@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Domain\Sync\ExportFileNames;
 use App\Enums\DigitalHatchFileEnum;
+use App\Enums\SystemReferenceEnum;
 use App\Models\SystemReference;
 use App\Traits\GuardsDigitalHatchRuns;
 use App\Traits\HatchExportable;
@@ -123,11 +124,16 @@ class SystemReferencesExportService
         $waiting = [];
 
         foreach ($records as $record) {
+            $isRestrictionDates = SystemReferenceEnum::isRestrictionDatesReference((int) $record->booking_type_id, (int) $record->id);
+            $value = $isRestrictionDates
+                ? ['dates' => SystemReferenceEnum::getBookingRestrictionDates((int) $record->booking_type_id)]
+                : $record->decodedValue();
+
             $rows[] = [
                 'booking_type_id' => (int) $record->booking_type_id,
                 'id' => (int) $record->id,
                 'name' => (string) $record->name,
-                'value' => $record->decodedValue(),
+                'value' => $value,
             ];
             $waiting[$record->id] = $record->getRawOriginal('updated_at');
         }

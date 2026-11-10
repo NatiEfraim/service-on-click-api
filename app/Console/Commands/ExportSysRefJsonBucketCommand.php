@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\ExportSysRefJsonBucketJob;
 use App\Services\StorageService;
 use App\Services\SystemReferencesExportService;
 use App\Traits\DescribesSystemReferencesFileRun;
@@ -12,14 +13,22 @@ class ExportSysRefJsonBucketCommand extends Command
 {
     use DescribesSystemReferencesFileRun;
 
-    protected $signature = 'exportSysRefJson:bucket';
+    protected $signature = 'exportSysRefJson:bucket
+        {--sync : Write the file here and show the result, instead of queueing a job (no queue worker needed)}';
 
     protected $description = 'Put the system references whose values were not sent yet (system_references.is_exported = 0) in the day\'s file in the bucket (export-json/system-references/SrvOnClick_r2b_system_references_YYYY-MM-DD.json) and mark them sent (is_exported = 1). exportSysRefJson:ftp also puts the file on the FTP';
 
-    public function handle(SystemReferencesExportService $exportService): int
+    public function handle(): int
     {
         try {
-            $result = $exportService->exportToBucket();
+            if (!$this->option('sync')) {
+                ExportSysRefJsonBucketJob::dispatch();
+                $this->info('ExportSysRefJsonBucketJob queued: a queue worker (php artisan queue:work) writes the file. Add --sync to write it here and see the result.');
+
+                return self::SUCCESS;
+            }
+
+            $result = app(SystemReferencesExportService::class)->exportToBucket();
 
             if (isset($result['skipped'])) {
                 $this->info(match ($result['skipped']) {
