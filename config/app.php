@@ -108,6 +108,13 @@ return [
             'timeout' => (int) env('DIGITAL_HATCH_SEND_BOOKING_STATUS_JOB_TIMEOUT', 300),
         ],
 
+        'digital_hatch_send_system_references' => [
+            'cron' => env('DIGITAL_HATCH_SEND_SYSTEM_REFERENCES_CRON', '1-59/2 * * * *'),
+            'tries' => (int) env('DIGITAL_HATCH_SEND_SYSTEM_REFERENCES_JOB_TRIES', 3),
+            'backoff' => (int) env('DIGITAL_HATCH_SEND_SYSTEM_REFERENCES_JOB_BACKOFF', 60),
+            'timeout' => (int) env('DIGITAL_HATCH_SEND_SYSTEM_REFERENCES_JOB_TIMEOUT', 300),
+        ],
+
         // The files and images wait in the bucket folder import-files; a file belongs to a booking, so this comes after the two crons above.
         'import_file' => [
             'cron' => env('IMPORT_FILE_CRON', '4-59/5 * * * *'),

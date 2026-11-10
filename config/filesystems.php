@@ -105,6 +105,7 @@ return [
             'booking_values' => (string) env('BOOKING_VALUES_JSON_FOLDER_NAME', 'booking-values'),
             'system_config' => (string) env('SYSTEM_CONFIG_JSON_FOLDER_NAME', 'system-config'),
             'users' => (string) env('USERS_JSON_FOLDER_NAME', 'users'),
+            'system_references' => (string) env('SYSTEM_REFERENCES_JSON_FOLDER_NAME', 'system-references'),
         ],
 
         'export_report' => (string) env('EXPORT_REPORT_FOLDER_NAME', 'export-report'),

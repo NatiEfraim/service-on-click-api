@@ -11,6 +11,7 @@ enum DigitalHatchFileEnum: string
     // r2b: this system -> the mobile side
     case BOOKING_STATUS = 'booking_status';
     case USERS = 'users';
+    case SYSTEM_REFERENCES = 'system_references';
 
     // b2r: the mobile side -> this system
     case EXPORT_BOOKINGS = 'export_bookings';
@@ -19,7 +20,7 @@ enum DigitalHatchFileEnum: string
     /** Streams this system sends. @return array<int, self> */
     public static function exportable(): array
     {
-        return [self::BOOKING_STATUS, self::USERS];
+        return [self::BOOKING_STATUS, self::USERS, self::SYSTEM_REFERENCES];
     }
 
     /** Streams this system fetches. @return array<int, self> */
@@ -57,6 +58,7 @@ enum DigitalHatchFileEnum: string
         return match ($this) {
             self::BOOKING_STATUS => $this->exportDirectory('booking_status'),
             self::USERS => $this->exportDirectory('users'),
+            self::SYSTEM_REFERENCES => $this->exportDirectory('system_references'),
             self::EXPORT_BOOKINGS => JsonModelTypeEnum::EXPORT_BOOKING->importRemoteDirectory(),
             self::APPLICATION_LOGS => JsonModelTypeEnum::APPLICATION_LOG->importRemoteDirectory(),
         };

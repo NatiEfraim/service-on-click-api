@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\DigitalHatchSendBookingStatusCommand;
+use App\Console\Commands\DigitalHatchSendSystemReferencesCommand;
 use App\Console\Commands\DigitalHatchSendUsersCommand;
 use App\Console\Commands\ExportBookingStatusJsonCommand;
 use App\Console\Commands\ImportApplicationLogJsonBucketCommand;
@@ -24,6 +25,13 @@ Artisan::command('inspire', function () {
 
 // r2b: today's users file (people with their roles) goes to the FTP — every 20 minutes.
 // Schedule::command(DigitalHatchSendUsersCommand::class)
+//     ->everyFiveMinutes()
+//     ->timezone(config('app.timezone'))
+//     ->onOneServer()
+//     ->withoutOverlapping(10);
+
+// r2b: today's system references file (settings with their values) goes to the FTP.
+// Schedule::command(DigitalHatchSendSystemReferencesCommand::class)
 //     ->everyFiveMinutes()
 //     ->timezone(config('app.timezone'))
 //     ->onOneServer()

@@ -22,6 +22,12 @@ final class ExportFileNames
         return ($prefix ?? self::R2B_PREFIX . 'users_') . $day->format('Y-m-d') . '.json';
     }
 
+    /** One snapshot of the system references and their values per day, e.g. SrvOnClick_r2b_system_references_2026-09-23.json (rewritten during the day when a value changes). */
+    public static function systemReferencesFile(\DateTimeInterface $day, ?string $prefix = null): string
+    {
+        return ($prefix ?? self::R2B_PREFIX . 'system_references_') . $day->format('Y-m-d') . '.json';
+    }
+
     /** $uniqueId keeps two corrections made in the same second from overwriting each other in the bucket. */
     public static function bookingValuesFile(\DateTimeInterface $at, ?string $uniqueId = null): string
     {

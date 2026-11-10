@@ -489,6 +489,7 @@ class BookingApproverManagementService
 
                 $record->update([
                     'value' => json_encode($currentDetails),
+                    'is_exported' => false,
                 ]);
 
                 $this->auditConfigChange(
