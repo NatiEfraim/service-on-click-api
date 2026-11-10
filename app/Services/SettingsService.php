@@ -128,6 +128,7 @@ class SettingsService
                 ->whereNotIn('status_id', StatusBookingEnum::terminalIds())
                 ->count(),
             'can_edit_global' => $scope->can('config.global'),
+            'has_blocking_dates' => BookingTypeEnum::hasRestrictionDates($bookingTypeId),
         ];
     }
 

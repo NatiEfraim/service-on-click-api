@@ -348,6 +348,19 @@ enum BookingTypeEnum
         return $mapping[$bookingTypeId] ?? null;
     }
 
+    /** Whether this booking type has a restriction-dates (תאריכים חסומים) system reference. */
+    public static function hasRestrictionDates(int $bookingTypeId): bool
+    {
+        return in_array($bookingTypeId, array_filter([
+            self::CAR_BOOKING->getBookingTypeId(),
+            self::BARBER_BOOKING->getBookingTypeId(),
+            self::IN_UNIT_FOOD_BOOKING->getBookingTypeId(),
+            self::OUT_UNIT_FOOD_BOOKING->getBookingTypeId(),
+            self::TRANSPORTATION_BOOKING->getBookingTypeId(),
+            self::CAR_MAINTENANCE_BOOKING->getBookingTypeId(),
+        ]), true);
+    }
+
     public static function getCancelStatusForRestrictionDates(int $bookingTypeId): StatusBookingEnum
     {
         return match ($bookingTypeId) {
