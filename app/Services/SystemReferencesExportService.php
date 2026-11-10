@@ -88,13 +88,15 @@ class SystemReferencesExportService
         $inFile = [];
         foreach ((json_decode((string) $existing, true)['system_references'] ?? []) as $row) {
             if (is_array($row) && isset($row['booking_type_id'], $row['name'])) {
-                $inFile[$row['booking_type_id'] . '_' . $row['name']] = $row;
+                $unitKey = $row['unit_id'] ?? 0;
+                $inFile[$row['booking_type_id'] . '_' . $unitKey . '_' . $row['name']] = $row;
             }
         }
 
         // A record updated again replaces its row.
         foreach ($rows as $row) {
-            $inFile[$row['booking_type_id'] . '_' . $row['name']] = $row;
+            $unitKey = $row['unit_id'] ?? 0;
+            $inFile[$row['booking_type_id'] . '_' . $unitKey . '_' . $row['name']] = $row;
         }
 
         $refs = array_values($inFile);
@@ -113,24 +115,50 @@ class SystemReferencesExportService
         return ['written' => true, ...$result];
     }
 
-    /** Waiting records (is_exported=0), mapped to the JSON payload. @param array<int, ?string> $waiting filled: record id => updated_at @return array<int, array{booking_type_id: int, id: int, name: string, value: array<string, mixed>}> */
+    /** Waiting records (is_exported=0), mapped to the JSON payload. Each value carries ALL keys defined for that booking type — null for keys not set on this specific record — so the mobile importer always sees a stable, uniform schema. @param array<int, ?string> $waiting filled: record id => updated_at @return array<int, array{booking_type_id: int, unit_id: int|null, id: int, name: string, value: array<string, mixed>}> */
     public function payload(array &$waiting = []): array
     {
         $records = SystemReference::query()
             ->where('is_exported', false)
-            ->get(['id', 'booking_type_id', 'name', 'value', 'updated_at']);
+            ->get(['id', 'booking_type_id', 'unit_id', 'name', 'value', 'updated_at']);
+
+        if ($records->isEmpty()) {
+            $waiting = [];
+
+            return [];
+        }
+
+        // Build the full value-key schema per booking type from ALL records (not just those waiting), so the unified format is complete even when only some records changed today.
+        $typeIds = $records->pluck('booking_type_id')->unique()->values()->all();
+        $keysByType = [];
+        foreach (
+            SystemReference::query()
+                ->whereIn('booking_type_id', $typeIds)
+                ->get(['id', 'booking_type_id', 'value']) as $r
+        ) {
+            foreach (array_keys($r->decodedValue()) as $key) {
+                $keysByType[(int) $r->booking_type_id][$key] = true;
+            }
+        }
 
         $rows = [];
         $waiting = [];
 
         foreach ($records as $record) {
-            $isRestrictionDates = SystemReferenceEnum::isRestrictionDatesReference((int) $record->booking_type_id, (int) $record->id);
-            $value = $isRestrictionDates
-                ? ['dates' => SystemReferenceEnum::getBookingRestrictionDates((int) $record->booking_type_id)]
+            $typeId = (int) $record->booking_type_id;
+            $isRestrictionDates = SystemReferenceEnum::isRestrictionDatesReference($typeId, (int) $record->id);
+
+            $ownValue = $isRestrictionDates
+                ? ['dates' => SystemReferenceEnum::getBookingRestrictionDates($typeId)]
                 : $record->decodedValue();
 
+            // All keys for this booking type, null by default; this record's own values override their own keys.
+            $allKeys = array_keys($keysByType[$typeId] ?? []);
+            $value = array_merge(array_fill_keys($allKeys, null), $ownValue);
+
             $rows[] = [
-                'booking_type_id' => (int) $record->booking_type_id,
+                'booking_type_id' => $typeId,
+                'unit_id' => $record->unit_id !== null ? (int) $record->unit_id : null,
                 'id' => (int) $record->id,
                 'name' => (string) $record->name,
                 'value' => $value,

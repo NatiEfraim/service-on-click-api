@@ -70,7 +70,9 @@ class SettingsService
                     'title' => $reference->title,
                     'description' => $reference->description,
                     'field_type_id' => $reference->field_type_id,
-                    'value' => $reference->decodedValue(),
+                    'value' => SystemReferenceEnum::isRestrictionDatesReference($bookingTypeId, (int) $reference->id)
+                        ? array_replace($reference->decodedValue(), ['dates' => SystemReferenceEnum::getBookingRestrictionDates($bookingTypeId)])
+                        : $reference->decodedValue(),
                 ])
                 ->all(),
             'form_fields' => $fields->map(fn (FormField $field): array => [
