@@ -8,12 +8,10 @@ namespace App\Enums;
  */
 enum DigitalHatchFileEnum: string
 {
-    // r2b: this system -> the mobile side
     case BOOKING_STATUS = 'booking_status';
     case USERS = 'users';
     case SYSTEM_REFERENCES = 'system_references';
 
-    // b2r: the mobile side -> this system
     case EXPORT_BOOKINGS = 'export_bookings';
     case APPLICATION_LOGS = 'application_logs';
 

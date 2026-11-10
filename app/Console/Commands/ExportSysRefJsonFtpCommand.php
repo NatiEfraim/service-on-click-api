@@ -6,12 +6,12 @@ use App\Jobs\SendHatchSystemReferencesJob;
 use App\Traits\DescribesSystemReferencesFileRun;
 use App\Traits\ExportsHatchSystemReferences;
 
-class DigitalHatchSendSystemReferencesCommand extends DigitalHatchSendCommand
+class ExportSysRefJsonFtpCommand extends DigitalHatchSendCommand
 {
     use DescribesSystemReferencesFileRun;
     use ExportsHatchSystemReferences;
 
-    protected $signature = 'digital-hatch:send-system-references
+    protected $signature = 'exportSysRefJson:ftp
         {--force : Send the file again even if this exact content was sent before}
         {--sync : Send it here and show the result, instead of queueing a job (no queue worker needed)}';
 

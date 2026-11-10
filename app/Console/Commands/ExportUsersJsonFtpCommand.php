@@ -6,12 +6,12 @@ use App\Jobs\SendHatchUsersJob;
 use App\Traits\DescribesUsersFileRun;
 use App\Traits\ExportsHatchUsers;
 
-class DigitalHatchSendUsersCommand extends DigitalHatchSendCommand
+class ExportUsersJsonFtpCommand extends DigitalHatchSendCommand
 {
     use DescribesUsersFileRun;
     use ExportsHatchUsers;
 
-    protected $signature = 'digital-hatch:send-users
+    protected $signature = 'exportUsersJson:ftp
         {--force : Send the file again even if this exact content was sent before}
         {--sync : Send it here and show the result, instead of queueing a job (no queue worker needed)}';
 

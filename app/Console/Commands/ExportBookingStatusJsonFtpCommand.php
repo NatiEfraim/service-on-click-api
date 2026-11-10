@@ -5,11 +5,11 @@ namespace App\Console\Commands;
 use App\Jobs\SendHatchBookingStatusJob;
 use App\Traits\ExportsHatchBookingStatus;
 
-class DigitalHatchSendBookingStatusCommand extends DigitalHatchSendCommand
+class ExportBookingStatusJsonFtpCommand extends DigitalHatchSendCommand
 {
     use ExportsHatchBookingStatus;
 
-    protected $signature = 'digital-hatch:send-booking-status
+    protected $signature = 'exportBookingStatusJson:ftp
         {--force : Send the file again even if this exact content was sent before}
         {--sync : Send it here and show the result, instead of queueing a job (no queue worker needed)}';
 

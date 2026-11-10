@@ -7,9 +7,9 @@ use App\Services\StorageService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
-class ExportBookingStatusJsonCommand extends Command
+class ExportBookingStatusJsonBucketCommand extends Command
 {
-    protected $signature = 'exportBookingStatusJson:mysql';
+    protected $signature = 'exportBookingStatusJson:bucket';
 
     protected $description = 'Send the decisions made here, the corrected values and the changes of the configuration back to the mobile app: r2b files in the bucket (export-json/booking-status, booking-values, system-config)';
 
@@ -44,11 +44,11 @@ class ExportBookingStatusJsonCommand extends Command
                 $this->{$needsLook ? 'error' : 'info'}("Configuration files stopped at file {$config['stopped_at']}: {$config['reason']}" . (($config['error'] ?? '') !== '' ? " ({$config['error']})" : '') . '.');
             }
 
-            Log::info('ExportBookingStatusJsonCommand: status ' . json_encode($status) . ', value files ' . $result['values']['sent'] . ', config ' . json_encode($config) . '.');
+            Log::info('ExportBookingStatusJsonBucketCommand: status ' . json_encode($status) . ', value files ' . $result['values']['sent'] . ', config ' . json_encode($config) . '.');
 
             return isset($status['error']) || $needsLook ? self::FAILURE : self::SUCCESS;
         } catch (\Exception $e) {
-            Log::error('ExportBookingStatusJsonCommand: failed: ' . $e->getMessage());
+            Log::error('ExportBookingStatusJsonBucketCommand: failed: ' . $e->getMessage());
             $this->error($e->getMessage());
 
             return self::FAILURE;

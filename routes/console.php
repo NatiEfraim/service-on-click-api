@@ -1,9 +1,9 @@
 <?php
 
-use App\Console\Commands\DigitalHatchSendBookingStatusCommand;
-use App\Console\Commands\DigitalHatchSendSystemReferencesCommand;
-use App\Console\Commands\DigitalHatchSendUsersCommand;
-use App\Console\Commands\ExportBookingStatusJsonCommand;
+use App\Console\Commands\ExportBookingStatusJsonFtpCommand;
+use App\Console\Commands\ExportSysRefJsonFtpCommand;
+use App\Console\Commands\ExportUsersJsonFtpCommand;
+use App\Console\Commands\ExportBookingStatusJsonBucketCommand;
 use App\Console\Commands\ImportApplicationLogJsonBucketCommand;
 use App\Console\Commands\ImportApplicationLogJsonFtpCommand;
 use App\Console\Commands\ImportBookingJsonBucketCommand;
@@ -24,21 +24,21 @@ Artisan::command('inspire', function () {
 // These commands only queue jobs, so a queue worker must be running.
 
 // r2b: today's users file (people with their roles) goes to the FTP — every 20 minutes.
-// Schedule::command(DigitalHatchSendUsersCommand::class)
+// Schedule::command(ExportUsersJsonFtpCommand::class)
 //     ->everyFiveMinutes()
 //     ->timezone(config('app.timezone'))
 //     ->onOneServer()
 //     ->withoutOverlapping(10);
 
 // r2b: today's system references file (settings with their values) goes to the FTP.
-// Schedule::command(DigitalHatchSendSystemReferencesCommand::class)
+// Schedule::command(ExportSysRefJsonFtpCommand::class)
 //     ->everyFiveMinutes()
 //     ->timezone(config('app.timezone'))
 //     ->onOneServer()
 //     ->withoutOverlapping(10);
 
 // r2b: the booking status file goes to the FTP — every 30 minutes.
-// Schedule::command(DigitalHatchSendBookingStatusCommand::class)
+// Schedule::command(ExportBookingStatusJsonFtpCommand::class)
 //     ->everyThirtyMinutes()
 //     ->timezone(config('app.timezone'))
 //        ->onOneServer()

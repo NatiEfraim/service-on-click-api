@@ -38,15 +38,11 @@ class SystemReferencesExportService
         });
     }
 
-    /** Bucket-only export for when HATCH_ENABLED=false; steps aside while the hatch is on. @return array{skipped?: string, built?: array<string, mixed>, marked?: int, errors?: array<int, string>} */
+    /** Writes the day's file to the bucket; use exportSysRefJson:ftp to also send it to the FTP. @return array{skipped?: string, built?: array<string, mixed>, marked?: int, errors?: array<int, string>} */
     public function exportToBucket(): array
     {
         if (!config('app.export_json.enabled', true)) {
             return ['skipped' => 'export_json_disabled'];
-        }
-
-        if ($this->enabled()) {
-            return ['skipped' => 'digital_hatch'];
         }
 
         $lock = Cache::lock('digital-hatch:send-system-references', 600);

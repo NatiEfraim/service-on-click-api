@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignId('field_type_id')->constrained('field_types')->onDelete('cascade');
             $table->json('value')->nullable();
             $table->boolean('limit')->default(0);
-            $table->boolean('is_exported')->default(false);
+            $table->boolean('is_exported')->default(true);
             $table->timestamps();
         });
     }
