@@ -207,7 +207,7 @@ class ExportUsersJsonBucketTest extends HatchTestCase
         $this->assertSame(0, $failed['marked']);
         $this->assertFalse($this->sent(self::VICE_APPROVER), 'not written, so not marked');
 
-        $this->artisan('exportUsersJson:bucket')->expectsOutputToContain('bucket full')->assertExitCode(1);
+        $this->artisan('exportUsersJson:bucket', ['--sync' => true])->expectsOutputToContain('bucket full')->assertExitCode(1);
 
         // The bucket is back: the same people were still waiting.
         $this->app->forgetInstance(StorageService::class);
