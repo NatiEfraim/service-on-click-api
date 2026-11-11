@@ -138,6 +138,106 @@ class BookingTypeSeeder extends Seeder
                     ],
                 ],
             ],
+
+            // ביטחון מידע – two sub-groups, both under topic='infosec'
+            [
+                'group_booking_types' => [
+                    0 => [
+                        'id' => 5,
+                        'name' => 'isec_clearance',
+                        'display_name' => 'סיווג ביטחוני',
+                        'icon' => BookingTypeIconEnum::INFOSEC_GROUP->value,
+                        'position' => '30',
+                        'topic' => 'infosec',
+                    ],
+                ],
+                'booking_types' => [
+                    0 => [
+                        'id' => 14,
+                        'name' => 'clearance_grant',
+                        'display_name' => 'מתן סיווג ביטחוני',
+                        'description' => 'בקשה לקבלת סיווג ביטחוני או העלאת רמת סיווג',
+                        'icon' => BookingTypeIconEnum::CLEARANCE_GRANT_BOOKING->value,
+                        'position' => BookingTypePositionEnum::CLEARANCE_GRANT_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                ],
+            ],
+            [
+                'group_booking_types' => [
+                    0 => [
+                        'id' => 6,
+                        'name' => 'isec_protection',
+                        'display_name' => 'אבטחת מידע',
+                        'icon' => BookingTypeIconEnum::INFOSEC_GROUP->value,
+                        'position' => '31',
+                        'topic' => 'infosec',
+                    ],
+                ],
+                'booking_types' => [
+                    0 => [
+                        'id' => 15,
+                        'name' => 'removable_media',
+                        'display_name' => 'אישור הכנסת מדיה נתיקה',
+                        'description' => 'אישור להכנסת התקן אחסון נייד לרשת',
+                        'icon' => BookingTypeIconEnum::REMOVABLE_MEDIA_BOOKING->value,
+                        'position' => BookingTypePositionEnum::REMOVABLE_MEDIA_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                    1 => [
+                        'id' => 16,
+                        'name' => 'security_incident',
+                        'display_name' => 'דיווח על אירוע ביטחון מידע',
+                        'description' => 'דיווח על חשד לאירוע או חשיפת מידע',
+                        'icon' => BookingTypeIconEnum::SECURITY_INCIDENT_BOOKING->value,
+                        'position' => BookingTypePositionEnum::SECURITY_INCIDENT_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                ],
+            ],
+
+            // תקשוב – one sub-group under topic='ict'
+            [
+                'group_booking_types' => [
+                    0 => [
+                        'id' => 7,
+                        'name' => 'ict_permissions',
+                        'display_name' => 'הרשאות',
+                        'icon' => BookingTypeIconEnum::ICT_GROUP->value,
+                        'position' => '32',
+                        'topic' => 'ict',
+                    ],
+                ],
+                'booking_types' => [
+                    0 => [
+                        'id' => 17,
+                        'name' => 'folder_permission',
+                        'display_name' => 'הרשאות לתיקייה',
+                        'description' => 'הוספה או שינוי של הרשאות לתיקייה קיימת',
+                        'icon' => BookingTypeIconEnum::FOLDER_PERMISSION_BOOKING->value,
+                        'position' => BookingTypePositionEnum::FOLDER_PERMISSION_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                    1 => [
+                        'id' => 18,
+                        'name' => 'manta_permission',
+                        'display_name' => 'הרשאות למנת"ה',
+                        'description' => 'בקשת הרשאה למערכת מנת"ה',
+                        'icon' => BookingTypeIconEnum::MANTA_PERMISSION_BOOKING->value,
+                        'position' => BookingTypePositionEnum::MANTA_PERMISSION_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                    2 => [
+                        'id' => 19,
+                        'name' => 'network_folder',
+                        'display_name' => 'יצירת תיקיית רשת',
+                        'description' => 'פתיחת תיקייה משותפת חדשה ברשת',
+                        'icon' => BookingTypeIconEnum::NETWORK_FOLDER_BOOKING->value,
+                        'position' => BookingTypePositionEnum::NETWORK_FOLDER_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                ],
+            ],
         ];
 
         Model::unguarded(function () use ($bookingTypeGroups) {

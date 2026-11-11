@@ -26,6 +26,9 @@ class RoleAndPermissionSeeder extends Seeder
         RoleEnum::USER,
         // Linked to the transportation booking type only (BookingTypeHasRoleSeeder): the first stage of its route.
         RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
+        // Domain-specific handlers for infosec and ICT types.
+        RoleEnum::INFOSEC_OFFICER,
+        RoleEnum::ICT_HANDLER,
     ];
 
     public function run(): void

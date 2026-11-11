@@ -35,4 +35,16 @@ enum BookingTypeIconEnum: string
     case WE_WORK_BOOKING = '27'; // we-work
     case TECH_HAMAMA_FIRST_BOOKING = '28'; // חממה טכנולוגית 1
     case TECH_HAMAMA_SECOND_BOOKING = '29'; // חממה טכנולוגית 2
+
+    // ביטחון מידע (Infosec)
+    case INFOSEC_GROUP = '30';
+    case CLEARANCE_GRANT_BOOKING = '31';
+    case REMOVABLE_MEDIA_BOOKING = '32';
+    case SECURITY_INCIDENT_BOOKING = '33';
+
+    // תקשוב (ICT)
+    case ICT_GROUP = '34';
+    case FOLDER_PERMISSION_BOOKING = '35';
+    case MANTA_PERMISSION_BOOKING = '36';
+    case NETWORK_FOLDER_BOOKING = '37';
 }

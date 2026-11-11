@@ -13,6 +13,10 @@ enum PermissionEnum: string
     // Only seeded for TRANSPORTATION_BOOKING.
     case TRANSPORTATION_CONTROL_OFFICER = 'transportation_control_officer_';
 
+    // Domain-specific handlers: seeded only for their own booking types.
+    case INFOSEC_OFFICER = 'infosec_officer_';
+    case ICT_HANDLER = 'ict_handler_';
+
     public function trimSuffix(): string
     {
         return rtrim(string: $this->value, characters: '_');
@@ -78,6 +82,8 @@ enum PermissionEnum: string
             self::VICE_APPROVER => RoleEnum::VICE_APPROVER,
             self::USER => RoleEnum::USER,
             self::TRANSPORTATION_CONTROL_OFFICER => RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
+            self::INFOSEC_OFFICER => RoleEnum::INFOSEC_OFFICER,
+            self::ICT_HANDLER => RoleEnum::ICT_HANDLER,
         };
     }
 

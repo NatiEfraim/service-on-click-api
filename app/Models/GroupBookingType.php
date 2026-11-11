@@ -11,6 +11,7 @@ class GroupBookingType extends Model
         'display_name',
         'icon',
         'position',
+        'topic',
     ];
 
 

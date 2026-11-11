@@ -14,6 +14,7 @@ return new class extends Migration
             $table->string('display_name');
             $table->string('icon');
             $table->string('position');
+            $table->string('topic')->nullable();
             $table->timestamps();
         });
     }

@@ -17,6 +17,7 @@ return new class extends Migration
             $table->longText('url')->nullable();
             $table->string('position');
             $table->boolean('has_group')->default(false);
+            $table->string('description')->nullable();
             $table->timestamps();
         });
     }

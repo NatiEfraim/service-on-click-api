@@ -14,6 +14,7 @@ use App\Http\Controllers\ManagementInsightController;
 use App\Http\Controllers\ManagementOrgController;
 use App\Http\Controllers\ManagementSettingsController;
 use App\Http\Controllers\ManagementSyncController;
+use App\Http\Controllers\RequesterController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -27,10 +28,22 @@ Route::controller(AuthController::class)->group(function () {
 
 Route::controller(BookingController::class)
     ->prefix('bookings')
-    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|user'])
+    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|user|infosec_officer|ict_handler'])
     ->group(function () {
         Route::get('/my-bookings', 'myBookings');
         Route::get('/{bookingUuid}', 'show')->whereUuid('bookingUuid');
+    });
+
+// Requester portal (web submission): catalog, form, counters, create booking.
+Route::controller(RequesterController::class)
+    ->middleware(['auth:api', 'throttle:api', 'role:user|infosec_officer|ict_handler'])
+    ->group(function () {
+        Route::prefix('requester')->group(function () {
+            Route::get('/catalog', 'catalog');
+            Route::get('/form/{bookingTypeId}', 'form')->whereNumber('bookingTypeId');
+            Route::get('/counters', 'counters');
+        });
+        Route::post('/bookings/{bookingTypeId}', 'store')->whereNumber('bookingTypeId');
     });
 
 
@@ -49,7 +62,7 @@ Route::controller(BookingApproverManagementController::class)
     });
 
 
-Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer'])
+Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|infosec_officer|ict_handler'])
     ->prefix('bookings-approver-management')
     ->group(function () {
         Route::controller(ManagementBookingController::class)->group(function () {

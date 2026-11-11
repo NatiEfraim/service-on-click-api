@@ -10,6 +10,7 @@ class BookingType extends Model
     protected $fillable = [
         'name',
         'display_name',
+        'description',
         'icon',
         'is_outsource',
         'url',

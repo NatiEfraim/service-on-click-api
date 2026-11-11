@@ -34,7 +34,13 @@ enum BookingTypePositionEnum:string
     case WEAPON_FORM_BOOKING = '28';
     case ENTRY_PERMISSION_BOOKING = '29';
 
+    // ביטחון מידע (Infosec)
+    case CLEARANCE_GRANT_BOOKING = '30';
+    case REMOVABLE_MEDIA_BOOKING = '31';
+    case SECURITY_INCIDENT_BOOKING = '32';
 
-    
-
+    // תקשוב (ICT)
+    case FOLDER_PERMISSION_BOOKING = '33';
+    case MANTA_PERMISSION_BOOKING = '34';
+    case NETWORK_FOLDER_BOOKING = '35';
 }

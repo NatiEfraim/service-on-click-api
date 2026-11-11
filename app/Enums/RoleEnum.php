@@ -12,6 +12,10 @@ enum RoleEnum: int
 
     case TRANSPORTATION_CONTROL_OFFICER = 6;
 
+    // Domain-specific handlers for infosec and ICT booking types.
+    case INFOSEC_OFFICER = 7;
+    case ICT_HANDLER = 8;
+
     /** Hebrew display name of the role. */
     public function getPermissionDisplayName(): string
     {
@@ -22,6 +26,8 @@ enum RoleEnum: int
             self::VICE_APPROVER => 'גורם מטפל',
             self::USER => 'משתמש ',
             self::TRANSPORTATION_CONTROL_OFFICER => 'רמ"ד תו"ב',
+            self::INFOSEC_OFFICER => 'קצין ביטחון מידע',
+            self::ICT_HANDLER => 'מנהל תקשוב',
         };
     }
 
@@ -35,6 +41,8 @@ enum RoleEnum: int
             'vice_approver' => self::VICE_APPROVER,
             'user' => self::USER,
             'transportation_control_officer' => self::TRANSPORTATION_CONTROL_OFFICER,
+            'infosec_officer' => self::INFOSEC_OFFICER,
+            'ict_handler' => self::ICT_HANDLER,
             default => null,
         };
     }
@@ -49,6 +57,8 @@ enum RoleEnum: int
             self::VICE_APPROVER => PermissionEnum::VICE_APPROVER,
             self::USER => PermissionEnum::USER,
             self::TRANSPORTATION_CONTROL_OFFICER => PermissionEnum::TRANSPORTATION_CONTROL_OFFICER,
+            self::INFOSEC_OFFICER => PermissionEnum::INFOSEC_OFFICER,
+            self::ICT_HANDLER => PermissionEnum::ICT_HANDLER,
         };
     }
 
@@ -76,6 +86,14 @@ enum RoleEnum: int
             self::VICE_APPROVER => 'vice_approver',
             self::USER => 'user',
             self::TRANSPORTATION_CONTROL_OFFICER => 'transportation_control_officer',
+            self::INFOSEC_OFFICER => 'infosec_officer',
+            self::ICT_HANDLER => 'ict_handler',
         };
+    }
+
+    /** Whether this role is a domain-specific handler (acts like an approver for its own types). */
+    public function isDomainHandler(): bool
+    {
+        return in_array($this, [self::INFOSEC_OFFICER, self::ICT_HANDLER], true);
     }
 }

@@ -37,6 +37,16 @@ enum BookingTypeEnum
     case TECH_HAMAMA_FIRST_BOOKING;
     case TECH_HAMAMA_SECOND_BOOKING;
 
+    // ביטחון מידע (Infosec)
+    case CLEARANCE_GRANT_BOOKING;
+    case REMOVABLE_MEDIA_BOOKING;
+    case SECURITY_INCIDENT_BOOKING;
+
+    // תקשוב (ICT)
+    case FOLDER_PERMISSION_BOOKING;
+    case MANTA_PERMISSION_BOOKING;
+    case NETWORK_FOLDER_BOOKING;
+
     /** The booking type's DB id, memoized per request. */
     public function getBookingTypeId(): ?int
     {
@@ -127,6 +137,14 @@ enum BookingTypeEnum
             self::LECTURE_ROOM_BOOKING => 'lecture_room_booking',
             self::TECH_HAMAMA_FIRST_BOOKING => 'tech_hamama_first_booking',
             self::TECH_HAMAMA_SECOND_BOOKING => 'tech_hamama_second_booking',
+
+            self::CLEARANCE_GRANT_BOOKING => 'clearance_grant',
+            self::REMOVABLE_MEDIA_BOOKING => 'removable_media',
+            self::SECURITY_INCIDENT_BOOKING => 'security_incident',
+            self::FOLDER_PERMISSION_BOOKING => 'folder_permission',
+            self::MANTA_PERMISSION_BOOKING => 'manta_permission',
+            self::NETWORK_FOLDER_BOOKING => 'network_folder',
+
             default => null,
         };
     }
@@ -168,6 +186,14 @@ enum BookingTypeEnum
             'lecture_room_booking' => self::LECTURE_ROOM_BOOKING,
             'tech_hamama_first_booking' => self::TECH_HAMAMA_FIRST_BOOKING,
             'tech_hamama_second_booking' => self::TECH_HAMAMA_SECOND_BOOKING,
+
+            'clearance_grant' => self::CLEARANCE_GRANT_BOOKING,
+            'removable_media' => self::REMOVABLE_MEDIA_BOOKING,
+            'security_incident' => self::SECURITY_INCIDENT_BOOKING,
+            'folder_permission' => self::FOLDER_PERMISSION_BOOKING,
+            'manta_permission' => self::MANTA_PERMISSION_BOOKING,
+            'network_folder' => self::NETWORK_FOLDER_BOOKING,
+
             default => null,
         };
     }

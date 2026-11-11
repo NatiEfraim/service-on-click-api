@@ -53,6 +53,24 @@ class BookingTypeHasRoleSeeder extends Seeder
         }
     }
 
+    /** Infosec types: USER submits, INFOSEC_OFFICER handles. No generic ADMIN/APPROVER/VICE_APPROVER. @var array<int> */
+    private array $infosecRoleIds = [
+        RoleEnum::USER->value,
+        RoleEnum::INFOSEC_OFFICER->value,
+    ];
+
+    /** ICT types: USER submits, ICT_HANDLER handles. No generic ADMIN/APPROVER/VICE_APPROVER. @var array<int> */
+    private array $ictRoleIds = [
+        RoleEnum::USER->value,
+        RoleEnum::ICT_HANDLER->value,
+    ];
+
+    /** Infosec booking type ids (resolved once and cached). @var array<int>|null */
+    private ?array $infosecIds = null;
+
+    /** ICT booking type ids (resolved once and cached). @var array<int>|null */
+    private ?array $ictIds = null;
+
     /** @return array<int> Every role the booking type has. */
     private function roleIdsByBookingType(int $bookingTypeId): array
     {
@@ -60,10 +78,46 @@ class BookingTypeHasRoleSeeder extends Seeder
             return $this->barberRoleIds;
         }
 
+        if (in_array($bookingTypeId, $this->getInfosecIds(), true)) {
+            return $this->infosecRoleIds;
+        }
+
+        if (in_array($bookingTypeId, $this->getIctIds(), true)) {
+            return $this->ictRoleIds;
+        }
+
         return [
             ...$this->commonRoleIds,
             ...$this->extraRoleIdsByBookingType($bookingTypeId),
         ];
+    }
+
+    /** @return array<int> */
+    private function getInfosecIds(): array
+    {
+        if ($this->infosecIds === null) {
+            $this->infosecIds = array_filter([
+                BookingTypeEnum::CLEARANCE_GRANT_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::REMOVABLE_MEDIA_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::SECURITY_INCIDENT_BOOKING->getBookingTypeId(),
+            ]);
+        }
+
+        return $this->infosecIds;
+    }
+
+    /** @return array<int> */
+    private function getIctIds(): array
+    {
+        if ($this->ictIds === null) {
+            $this->ictIds = array_filter([
+                BookingTypeEnum::FOLDER_PERMISSION_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::MANTA_PERMISSION_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::NETWORK_FOLDER_BOOKING->getBookingTypeId(),
+            ]);
+        }
+
+        return $this->ictIds;
     }
 
     /** @return array<int> Roles on top of $commonRoleIds, only for specific booking types. */
