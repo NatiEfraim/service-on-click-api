@@ -171,7 +171,7 @@ class RequesterService
     /**
      * @return array<int> booking_type ids the user may submit
      */
-    private function availableBookingTypeIds(User $user): array
+    public function availableBookingTypeIds(User $user): array
     {
         $unitIds = UnitHasBookingType::where('unit_id', $user->unit_id)->pluck('booking_type_id');
 
@@ -181,7 +181,18 @@ class RequesterService
             ->map(fn ($p) => (int) substr($p, strlen(PermissionEnum::USER->value)))
             ->values();
 
-        return $permittedIds->intersect($unitIds)->all();
+        // Management roles may open infosec / ICT types (topic groups, ids 14–19)
+        // without holding a user_<id> permission.
+        $managementRoles = ['super_admin', 'admin', 'approver', 'vice_approver', 'transportation_control_officer'];
+        if ($user->hasAnyRole($managementRoles)) {
+            $topicTypeIds = GroupBookingType::whereNotNull('topic')
+                ->with('bookingTypes:id')
+                ->get()
+                ->flatMap(fn ($group) => $group->bookingTypes->pluck('id'));
+            $permittedIds = $permittedIds->merge($topicTypeIds)->unique()->values();
+        }
+
+        return $permittedIds->intersect($unitIds)->values()->all();
     }
 
     /**

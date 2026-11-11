@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreBookingRequest;
 use App\Services\RequesterService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class RequesterController extends Controller
@@ -22,11 +23,12 @@ class RequesterController extends Controller
     /** GET /requester/form/{bookingTypeId} */
     public function form(int $bookingTypeId): JsonResponse
     {
-        $fields = $this->requesterService->getFormDetails($bookingTypeId);
-
-        if ($fields === null) {
-            return response()->json(['message' => 'לא נמצאו שדות עבור סוג הבקשה'], Response::HTTP_NOT_FOUND);
+        $available = $this->requesterService->availableBookingTypeIds(Auth::user());
+        if (!in_array($bookingTypeId, $available, true)) {
+            return response()->json(['message' => 'אין הרשאה לסוג בקשה זה'], Response::HTTP_FORBIDDEN);
         }
+
+        $fields = $this->requesterService->getFormDetails($bookingTypeId);
 
         return response()->json(['data' => $fields], Response::HTTP_OK);
     }

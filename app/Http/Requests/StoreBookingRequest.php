@@ -2,11 +2,9 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\PermissionEnum;
-use App\Models\BookingType;
 use App\Models\FormField;
 use App\Models\OptionField;
-use App\Models\UnitHasBookingType;
+use App\Services\RequesterService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 
@@ -23,17 +21,9 @@ class StoreBookingRequest extends FormRequest
     public function authorize(): bool
     {
         $bookingTypeId = (int) $this->route('bookingTypeId');
+        $available = app(RequesterService::class)->availableBookingTypeIds(Auth::user());
 
-        // User must hold the user_{id} permission for this type.
-        $permissionName = PermissionEnum::USER->keyForId($bookingTypeId);
-        if (!Auth::user()->hasPermissionTo($permissionName)) {
-            return false;
-        }
-
-        // The type must be available in the user's unit.
-        return UnitHasBookingType::where('unit_id', Auth::user()->unit_id)
-            ->where('booking_type_id', $bookingTypeId)
-            ->exists();
+        return in_array($bookingTypeId, $available, true);
     }
 
     public function rules(): array

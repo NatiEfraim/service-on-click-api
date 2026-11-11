@@ -28,7 +28,7 @@ Route::controller(AuthController::class)->group(function () {
 
 Route::controller(BookingController::class)
     ->prefix('bookings')
-    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|user|infosec_officer|ict_handler'])
+    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler'])
     ->group(function () {
         Route::get('/my-bookings', 'myBookings');
         Route::get('/{bookingUuid}', 'show')->whereUuid('bookingUuid');
@@ -36,7 +36,7 @@ Route::controller(BookingController::class)
 
 // Requester portal (web submission): catalog, form, counters, create booking.
 Route::controller(RequesterController::class)
-    ->middleware(['auth:api', 'throttle:api', 'role:user|infosec_officer|ict_handler'])
+    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler'])
     ->group(function () {
         Route::prefix('requester')->group(function () {
             Route::get('/catalog', 'catalog');
