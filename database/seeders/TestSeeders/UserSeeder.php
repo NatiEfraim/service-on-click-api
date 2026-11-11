@@ -4,7 +4,7 @@ namespace Database\Seeders\TestSeeders;
 
 use App\Enums\RoleEnum;
 use App\Enums\UnitEnum;
-use App\Models\BookingType;
+use App\Models\BookingTypeHasRole;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -44,8 +44,6 @@ class UserSeeder extends Seeder
             ['full_name' => 'טובה קלנר', 'personal_id' => '303009245', 'phone' => '0525607795', 'personal_number' => '99805335', 'role' => RoleEnum::USER],
         ];
 
-        $bookingTypeIds = BookingType::query()->pluck('id');
-
         foreach ($managers as $manager) {
             $roleEnum = $manager['role'];
 
@@ -66,9 +64,16 @@ class UserSeeder extends Seeder
             $user->assignRole($roleEnum->value);
 
             // Super admin manages the whole system; other roles work per booking type.
+            // Only grant permissions for booking types this role is actually linked to —
+            // infosec/ICT types have no ADMIN/APPROVER/VICE_APPROVER rows in booking_type_has_roles.
             if ($roleEnum !== RoleEnum::SUPER_ADMIN) {
+                $linkedTypeIds = BookingTypeHasRole::where('role_id', $roleEnum->value)
+                    ->pluck('booking_type_id');
+
                 $user->givePermissionTo(
-                    $bookingTypeIds->map(fn(int $id): string => $roleEnum->toPermissionEnum()->keyForId($id))->all()
+                    $linkedTypeIds
+                        ->map(fn(int $id): string => $roleEnum->toPermissionEnum()->keyForId($id))
+                        ->all()
                 );
             }
         }

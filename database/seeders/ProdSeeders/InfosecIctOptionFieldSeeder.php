@@ -3,6 +3,7 @@
 namespace Database\Seeders\ProdSeeders;
 
 use App\Enums\BookingTypeEnum;
+use App\Enums\FieldTypeEnum;
 use App\Enums\UnitEnum;
 use App\Models\FormField;
 use App\Models\OptionField;
@@ -107,14 +108,14 @@ class InfosecIctOptionFieldSeeder extends Seeder
             return;
         }
 
-        foreach ($options as $position => $name) {
+        foreach ($options as $name) {
             OptionField::updateOrCreate(
                 [
                     'form_field_id' => $formField->id,
                     'name' => $name,
                 ],
                 [
-                    'position' => $position,
+                    'field_type_id' => FieldTypeEnum::TEXT->value,
                     'is_active' => true,
                 ]
             );

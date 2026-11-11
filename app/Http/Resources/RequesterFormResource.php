@@ -39,7 +39,7 @@ class RequesterFormResource extends JsonResource
         return $this->optionField
             ->whereNull('option_field_id')
             ->where('is_active', true)
-            ->sortBy('position')
+            ->sortBy('id')
             ->map(fn ($opt) => [
                 'id'   => $opt->id,
                 'name' => $opt->name,
@@ -70,7 +70,7 @@ class RequesterFormResource extends JsonResource
                     ? $child->optionField
                         ->whereNull('option_field_id')
                         ->where('is_active', true)
-                        ->sortBy('position')
+                        ->sortBy('id')
                         ->map(fn ($o) => ['id' => $o->id, 'name' => $o->name])
                         ->values()
                         ->all()
