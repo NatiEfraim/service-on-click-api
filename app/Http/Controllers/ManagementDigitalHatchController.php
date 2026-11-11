@@ -22,7 +22,7 @@ class ManagementDigitalHatchController extends Controller
     ) {
     }
 
-    /** Manually run digital-hatch:send-booking-status; params: force, sync (default 1), booking_type_id, status_id. */
+    /** Manually run exportBookingStatusJson:ftp; params: force, sync (default 1), booking_type_id, status_id. */
     public function exportBookingStatus(Request $request): JsonResponse
     {
         if (!config('services.digital-hatch.enabled')) {
@@ -45,7 +45,7 @@ class ManagementDigitalHatchController extends Controller
         return response()->json(['data' => ['enabled' => true, 'queued' => false, 'result' => $result]], Response::HTTP_OK);
     }
 
-    /** Manually run digital-hatch:send-users (hatch on) or exportUsersJson:bucket (hatch off); params: force, sync (default 1). */
+    /** Manually run exportUsersJson:ftp (hatch on) or exportUsersJson:bucket (hatch off); params: force, sync (default 1). */
     public function exportUsers(Request $request): JsonResponse
     {
         $force = (bool) $request->input('force', false);

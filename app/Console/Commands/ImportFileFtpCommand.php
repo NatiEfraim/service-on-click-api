@@ -9,10 +9,10 @@ class ImportFileFtpCommand extends ImportCommand
     use ImportsFile;
 
     protected $signature = 'importFile:ftp
-        {--force : Take the files again even if they were taken before (digital_hatch_fetched_files is ignored)}
-        {--sync : Import here and show the result, instead of queueing a job (no queue worker needed)}';
+        {--force : Re-take files already noted in digital_hatch_fetched_files}
+        {--sync : Import synchronously (no queue worker needed)}';
 
-    protected $description = 'Take the new SrvOnClickFiles_<stored name>.<ext> files from the digital hatch (the FTP, or DIGITAL_HATCH_IMPORT_FILES_PATH when it is set) into the bucket folder import-files, then save them like importFile:bucket (linked to their booking, copied to files, moved to loaded-files)';
+    protected $description = 'Take new b2r attachment files from the FTP into the bucket and save them like importFile:bucket.';
 
     protected function importFrom(bool $force, bool $sync): array
     {

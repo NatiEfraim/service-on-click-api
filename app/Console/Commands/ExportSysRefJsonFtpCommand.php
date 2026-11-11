@@ -7,7 +7,7 @@ use App\Services\SystemReferencesExportService;
 
 class ExportSysRefJsonFtpCommand extends DigitalHatchSendCommand
 {
-    protected $signature = 'digital-hatch:send-sys-ref {--force} {--sync}';
+    protected $signature = 'exportSysRefJson:ftp {--force} {--sync}';
 
     protected $description = 'Send the r2b system references file to the digital hatch FTP.';
 

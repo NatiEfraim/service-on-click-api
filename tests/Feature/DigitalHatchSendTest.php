@@ -315,8 +315,8 @@ class DigitalHatchSendTest extends HatchTestCase
 
     public function test_the_users_command_sends_and_exits_cleanly(): void
     {
-        $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(0);
-        $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(0);
+        $this->artisan('exportUsersJson:ftp', ['--sync' => true])->assertExitCode(0);
+        $this->artisan('exportUsersJson:ftp', ['--sync' => true])->assertExitCode(0);
     }
 
     //----------------------------- The booking status file ------------------------------------//
@@ -524,12 +524,12 @@ class DigitalHatchSendTest extends HatchTestCase
     {
         Queue::fake();
 
-        $this->artisan('digital-hatch:send-users')->expectsOutputToContain('SendHatchUsersJob queued')->assertExitCode(0);
+        $this->artisan('exportUsersJson:ftp')->expectsOutputToContain('SendHatchUsersJob queued')->assertExitCode(0);
 
         Queue::assertPushed(SendHatchUsersJob::class, 1);
         Queue::assertNotPushed(SendHatchBookingStatusJob::class);
 
-        $this->artisan('digital-hatch:send-booking-status')->expectsOutputToContain('SendHatchBookingStatusJob queued')->assertExitCode(0);
+        $this->artisan('exportBookingStatusJson:ftp')->expectsOutputToContain('SendHatchBookingStatusJob queued')->assertExitCode(0);
 
         Queue::assertPushed(SendHatchBookingStatusJob::class, 1);
         $this->assertSame([], $this->ftp()->allFiles());
@@ -540,7 +540,7 @@ class DigitalHatchSendTest extends HatchTestCase
     {
         Queue::fake();
 
-        $this->artisan('digital-hatch:send-users', ['--force' => true])->assertExitCode(0);
+        $this->artisan('exportUsersJson:ftp', ['--force' => true])->assertExitCode(0);
 
         Queue::assertPushed(SendHatchUsersJob::class, fn (SendHatchUsersJob $job): bool => $job->force === true);
     }
@@ -560,13 +560,13 @@ class DigitalHatchSendTest extends HatchTestCase
     {
         $this->putStatusFile($this->statusFileName(), [$this->decision(2, 4)]);
 
-        $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(0);
+        $this->artisan('exportUsersJson:ftp', ['--sync' => true])->assertExitCode(0);
         $this->assertSame([self::RED_TO_BLACK . $this->usersFileName()], $this->ftp()->allFiles());
 
-        $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])->assertExitCode(0);
+        $this->artisan('exportBookingStatusJson:ftp', ['--sync' => true])->assertExitCode(0);
 
-        $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(0);
-        $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])->assertExitCode(0);
+        $this->artisan('exportUsersJson:ftp', ['--sync' => true])->assertExitCode(0);
+        $this->artisan('exportBookingStatusJson:ftp', ['--sync' => true])->assertExitCode(0);
     }
 
     public function test_nothing_is_queued_or_sent_while_the_hatch_is_disabled(): void
@@ -578,8 +578,8 @@ class DigitalHatchSendTest extends HatchTestCase
         $this->assertSame(['enabled' => false], app(UsersExportService::class)->export());
         $this->assertSame(['enabled' => false], app(BookingStatusSnapshotService::class)->export());
 
-        $this->artisan('digital-hatch:send-users')->expectsOutputToContain('disabled')->assertExitCode(0);
-        $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])->expectsOutputToContain('disabled')->assertExitCode(0);
+        $this->artisan('exportUsersJson:ftp')->expectsOutputToContain('disabled')->assertExitCode(0);
+        $this->artisan('exportBookingStatusJson:ftp', ['--sync' => true])->expectsOutputToContain('disabled')->assertExitCode(0);
 
         Queue::assertNothingPushed();
         $this->assertSame([], $this->ftp()->allFiles());
@@ -594,8 +594,8 @@ class DigitalHatchSendTest extends HatchTestCase
         $this->assertNotSame([], app(UsersExportService::class)->export()['errors']);
         $this->assertNotSame([], app(BookingStatusSnapshotService::class)->export()['errors']);
 
-        $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(1);
-        $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])->assertExitCode(1);
+        $this->artisan('exportUsersJson:ftp', ['--sync' => true])->assertExitCode(1);
+        $this->artisan('exportBookingStatusJson:ftp', ['--sync' => true])->assertExitCode(1);
 
         // Thrown, so the queue tries again after the back-off.
         $this->expectException(\RuntimeException::class);

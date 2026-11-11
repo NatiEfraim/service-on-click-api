@@ -225,9 +225,7 @@ class BookingStatusExportService
             return ['sent' => true, 'file_id' => $file->id];
         } catch (\Throwable $e) {
             $maxAttempts = (int) config('app.export_json.max_attempts', 8);
-            // 2, 4, 8 ... minutes, at most an hour.
             $delay = min(3600, 60 * (2 ** min((int) $file->attempts, 6)));
-            // A signed URL in the message would leak its signature.
             $error = mb_substr((string) preg_replace('/\?\S+/', '?<redacted>', $e->getMessage()), 0, 500);
 
             $file->update([

@@ -7,7 +7,7 @@ use App\Services\BookingStatusSnapshotService;
 
 class ExportBookingStatusJsonFtpCommand extends DigitalHatchSendCommand
 {
-    protected $signature = 'digital-hatch:send-booking-status {--force} {--sync}';
+    protected $signature = 'exportBookingStatusJson:ftp {--force} {--sync}';
 
     protected $description = 'Send the r2b booking status file to the digital hatch FTP.';
 

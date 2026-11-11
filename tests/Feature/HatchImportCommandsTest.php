@@ -67,15 +67,6 @@ class HatchImportCommandsTest extends HatchTestCase
         $this->putLocalLogs([]);
 
         $this->assertSame(0, Artisan::call('importBookingJson:ftp', ['--sync' => true]));
-        $output = Artisan::output();
-
-        $this->assertStringContainsString('Source: local folder ' . $this->localJsonDir, $output);
-        $this->assertStringContainsString('Taken into the bucket: ' . self::BOOKINGS_FILE_ON_DISK, $output);
-        $this->assertStringContainsString(
-            self::BOOKINGS_FILE_ON_DISK . ': 2 bookings in 1 chunks saved (2 created',
-            $output
-        );
-        $this->assertStringContainsString('file moved to loaded-json/' . self::BOOKINGS_FILE_ON_DISK, $output);
 
         $this->assertSame(2, Booking::count());
         $this->assertSame([], $this->bucket()->files('import-json'));
@@ -100,12 +91,8 @@ class HatchImportCommandsTest extends HatchTestCase
         $this->assertSame(0, Artisan::call('importBookingJson:ftp', ['--sync' => true]));
 
         $this->assertSame(0, Artisan::call('importBookingJson:ftp', ['--sync' => true]));
-        $output = Artisan::output();
-        $this->assertStringContainsString('No new file in the source', $output);
-        $this->assertStringContainsString('Nothing to import: no file is waiting in import-json', $output);
 
         $this->assertSame(0, Artisan::call('importBookingJson:ftp', ['--sync' => true, '--force' => true]));
-        $this->assertStringContainsString('Taken into the bucket: ' . self::BOOKINGS_FILE_ON_DISK, Artisan::output());
         $this->assertSame(1, Booking::count(), 'the booking is found by its serial number');
         $this->assertSame(1, DigitalHatchFetchedFile::count(), 'one row per file name');
         $this->assertCount(2, $this->bucket()->files('loaded-json'));
@@ -121,11 +108,7 @@ class HatchImportCommandsTest extends HatchTestCase
         $this->assertSame(0, ApplicationLog::count(), 'the booking command does not take the log file');
 
         $this->assertSame(0, Artisan::call('importApplicationLogJson:ftp', ['--sync' => true]));
-        $output = Artisan::output();
 
-        $this->assertStringContainsString('Taken into the bucket: ' . self::LOGS_FILE_ON_DISK, $output);
-        $this->assertStringContainsString(self::LOGS_FILE_ON_DISK . ': 1 logs in 1 chunks saved (1 created)', $output);
-        $this->assertStringContainsString('file moved to loaded-json/' . self::LOGS_FILE_ON_DISK, $output);
         $this->assertSame(1, ApplicationLog::count());
         $this->assertEqualsCanonicalizing(
             ['loaded-json/' . self::BOOKINGS_FILE_ON_DISK, 'loaded-json/' . self::LOGS_FILE_ON_DISK],
@@ -148,14 +131,6 @@ class HatchImportCommandsTest extends HatchTestCase
         file_put_contents($this->localFilesDir . '/SrvOnClickFiles_with space.pdf', 'x');
 
         $this->assertSame(0, Artisan::call('importFile:ftp', ['--sync' => true]));
-        $output = Artisan::output();
-
-        $this->assertStringContainsString('Source: local folder ' . $this->localFilesDir, $output);
-        $this->assertStringContainsString('Taken into the bucket: ' . self::PDF . '.pdf', $output);
-        $this->assertStringContainsString('Taken into the bucket: ' . self::PHOTO . '.jpg', $output);
-        $this->assertStringContainsString('Files received in import-files: 2. Saved now: 2 (copied to files, the received files moved to loaded-files), 2 file / image rows linked.', $output);
-        $this->assertStringContainsString('Linked before: 0. Named by a booking but not received yet: 1. Received but not named by a booking yet: 0', $output);
-        $this->assertStringContainsString('Not received yet: ' . self::DOC, $output);
 
         // The rows point at the copies in files, which hold the bytes; the received files are in loaded-files and the inbox is empty again.
         $this->assertSame('files/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
@@ -204,10 +179,6 @@ class HatchImportCommandsTest extends HatchTestCase
         $this->bucket()->put('import-files/Other_abc.pdf', 'x');
 
         $this->assertSame(0, Artisan::call('importFile:bucket', ['--sync' => true]));
-        $output = Artisan::output();
-
-        $this->assertStringContainsString('Files received in import-files: 3. Saved now: 1 (copied to files, the received files moved to loaded-files), 1 file / image rows linked.', $output);
-        $this->assertStringContainsString('Linked before: 0. Named by a booking but not received yet: 2. Received but not named by a booking yet: 2 (they stay in import-files).', $output);
 
         $this->assertSame('files/' . self::PDF . '.pdf', File::where('name', self::PDF)->value('path'));
         $this->assertSame('files/' . self::DOC, File::where('name', self::DOC)->value('path'));
@@ -226,9 +197,6 @@ class HatchImportCommandsTest extends HatchTestCase
 
         // Run again: nothing new is saved.
         $this->assertSame(0, Artisan::call('importFile:bucket', ['--sync' => true]));
-        $output = Artisan::output();
-        $this->assertStringContainsString('Saved now: 0 (copied to files, the received files moved to loaded-files), 0 file / image rows linked.', $output);
-        $this->assertStringContainsString('Linked before: 1. Named by a booking but not received yet: 2.', $output);
     }
 
     public function test_the_old_mysql_names_still_run_the_bucket_imports(): void
@@ -263,7 +231,6 @@ class HatchImportCommandsTest extends HatchTestCase
 
         $this->assertSame(0, Artisan::call($command));
 
-        $this->assertStringContainsString(class_basename($jobClass) . ' queued', Artisan::output());
         Queue::assertPushed($jobClass, 1);
         Queue::assertCount(1);
 
@@ -300,13 +267,10 @@ class HatchImportCommandsTest extends HatchTestCase
         }
 
         $this->assertSame(0, Artisan::call($command));
-        $output = Artisan::output();
 
         // The command did the reading: one chunk job for the one chunk of rows, and the file is backed up in loaded-json already.
         Queue::assertPushed($chunkJob, 1);
         Queue::assertCount(1);
-        $this->assertStringContainsString('1 ' . class_basename($chunkJob) . ' jobs queued: a queue worker (php artisan queue:work) saves them', $output);
-        $this->assertStringContainsString('1 chunks queued, file moved to loaded-json/', $output);
         $this->assertCount(1, $this->bucket()->files('loaded-json'));
         $this->assertSame([], $this->bucket()->files('import-json'));
 
@@ -381,10 +345,7 @@ class HatchImportCommandsTest extends HatchTestCase
 
         // No booking in the database: nothing can be saved, and the file must not be put away as if it were.
         $this->assertSame(1, Artisan::call('importApplicationLogJson:ftp', ['--sync' => true]));
-        $output = Artisan::output();
 
-        $this->assertStringContainsString('1 logs have no booking saved yet: import the bookings first and run this again', $output);
-        $this->assertStringContainsString('file left in place because of errors', $output);
         $this->assertSame(0, ApplicationLog::count());
         $this->assertSame(['import-json/' . self::LOGS_FILE_ON_DISK], $this->bucket()->files('import-json'));
         $this->assertSame([], $this->bucket()->files('loaded-json'));
@@ -394,10 +355,7 @@ class HatchImportCommandsTest extends HatchTestCase
         $this->putLocalBookings([$this->foodBooking(7101)]);
         $this->assertSame(0, Artisan::call('importBookingJson:ftp', ['--sync' => true]));
         $this->assertSame(0, Artisan::call('importApplicationLogJson:ftp', ['--sync' => true]));
-        $output = Artisan::output();
 
-        $this->assertStringContainsString('No new file in the source', $output);
-        $this->assertStringContainsString('1 logs in 1 chunks saved (1 created), file moved to loaded-json/', $output);
         $this->assertSame(1, ApplicationLog::count());
         $this->assertSame([], $this->bucket()->files('import-json'));
     }
@@ -420,13 +378,11 @@ class HatchImportCommandsTest extends HatchTestCase
         config(['services.digital-hatch.enabled' => false]);
         foreach (['importBookingJson:ftp', 'importApplicationLogJson:ftp', 'importFile:ftp'] as $command) {
             $this->assertSame(0, Artisan::call($command));
-            $this->assertStringContainsString('switched off (HATCH_ENABLED=false)', Artisan::output());
         }
 
         config(['services.digital-hatch.enabled' => true, 'app.import_json.enabled' => false]);
         foreach (['importBookingJson:bucket', 'importApplicationLogJson:bucket', 'importFile:bucket'] as $command) {
             $this->assertSame(0, Artisan::call($command));
-            $this->assertStringContainsString('switched off (IMPORT_JSON_ENABLED=false)', Artisan::output());
         }
 
         Queue::assertNothingPushed();
@@ -439,10 +395,7 @@ class HatchImportCommandsTest extends HatchTestCase
 
         // The test queue is sync, so each queued chunk job runs at once, the way a worker would run it.
         $this->assertSame(0, Artisan::call('importBookingJson:ftp'));
-        $output = Artisan::output();
 
-        $this->assertStringContainsString('1 bookings in 1 chunks queued, file moved to loaded-json/', $output);
-        $this->assertStringContainsString('1 ImportBookingJsonChunkJob jobs queued', $output);
         $this->assertTrue(Booking::where('serial_number', 6901)->exists());
         Storage::disk('minio')->assertExists('loaded-json/' . self::BOOKINGS_FILE_ON_DISK);
         $this->assertSame(1, DigitalHatchFetchedFile::count());

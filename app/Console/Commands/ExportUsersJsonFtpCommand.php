@@ -7,7 +7,7 @@ use App\Services\UsersExportService;
 
 class ExportUsersJsonFtpCommand extends DigitalHatchSendCommand
 {
-    protected $signature = 'digital-hatch:send-users {--force} {--sync}';
+    protected $signature = 'exportUsersJson:ftp {--force} {--sync}';
 
     protected $description = 'Send the r2b users file to the digital hatch FTP.';
 
