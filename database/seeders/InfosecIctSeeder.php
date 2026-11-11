@@ -7,6 +7,7 @@ use Database\Seeders\ProdSeeders\BookingTypeSeeder;
 use Database\Seeders\ProdSeeders\InfosecIctFormFieldSeeder;
 use Database\Seeders\ProdSeeders\InfosecIctOptionFieldSeeder;
 use Database\Seeders\ProdSeeders\RoleAndPermissionSeeder;
+use Database\Seeders\ProdSeeders\StatusSeeder;
 use Database\Seeders\ProdSeeders\UnitHasBookingTypeSeeder;
 use Illuminate\Database\Seeder;
 
@@ -24,13 +25,15 @@ class InfosecIctSeeder extends Seeder
             BookingTypeSeeder::class,
             // 2. Register INFOSEC_OFFICER + ICT_HANDLER roles and emit their permissions.
             RoleAndPermissionSeeder::class,
-            // 3. Assign the common statuses to all types (idempotent loop).
+            // 3. Ensure all statuses exist before linking them to booking types.
+            StatusSeeder::class,
+            // 4. Assign the common statuses to all types (idempotent loop).
             BookingTypeHasStatusSeeder::class,
-            // 4. Seed form fields.
+            // 5. Seed form fields.
             InfosecIctFormFieldSeeder::class,
-            // 5. Seed dropdown options.
+            // 6. Seed dropdown options.
             InfosecIctOptionFieldSeeder::class,
-            // 6. Link unit H to every booking type including the new ones.
+            // 7. Link unit H to every booking type including the new ones.
             UnitHasBookingTypeSeeder::class,
         ]);
     }

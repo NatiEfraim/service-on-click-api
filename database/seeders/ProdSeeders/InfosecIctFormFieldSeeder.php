@@ -196,12 +196,12 @@ class InfosecIctFormFieldSeeder extends Seeder
         FormField::updateOrCreate(
             [
                 'booking_type_id' => $bookingTypeId,
-                'unit_id' => UnitEnum::H->value,
+                'unit_id' => UnitEnum::H->getUnitId(),
                 'field_name' => $fieldName,
             ],
             [
                 'field_display_name' => $displayName,
-                'field_type_id' => $fieldType->value,
+                'field_type_id' => $fieldType->getFieldTypeId(),
                 'is_required' => $required,
                 'field_validations' => empty($validations) ? null : json_encode($validations, JSON_UNESCAPED_UNICODE),
                 'editable' => false,

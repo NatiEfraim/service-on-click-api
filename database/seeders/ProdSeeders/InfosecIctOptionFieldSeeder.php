@@ -99,7 +99,7 @@ class InfosecIctOptionFieldSeeder extends Seeder
     private function seedOptions(int $bookingTypeId, string $fieldName, array $options): void
     {
         $formField = FormField::where('booking_type_id', $bookingTypeId)
-            ->where('unit_id', UnitEnum::H->value)
+            ->where('unit_id', UnitEnum::H->getUnitId())
             ->where('field_name', $fieldName)
             ->first();
 
@@ -115,7 +115,7 @@ class InfosecIctOptionFieldSeeder extends Seeder
                     'name' => $name,
                 ],
                 [
-                    'field_type_id' => FieldTypeEnum::TEXT->value,
+                    'field_type_id' => FieldTypeEnum::TEXT->getFieldTypeId(),
                     'is_active' => true,
                 ]
             );
