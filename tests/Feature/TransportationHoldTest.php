@@ -352,17 +352,16 @@ class TransportationHoldTest extends HatchTestCase
 
     //----------------------------- The hold goes to the mobile app with the next round --------------------------------//
 
-    /** @return array<int, array<string, mixed>> the rows of the day's status file in the local folder, by serial number */
+    /** @return array<int, array<string, mixed>> the rows of the day's status file on the fake FTP, by serial number */
     private function localStatusRows(): array
     {
-        $content = json_decode(file_get_contents($this->localDir . '/' . $this->statusFileName()), true);
+        $content = json_decode($this->ftp()->get(self::RED_TO_BLACK . $this->statusFileName()), true);
 
         return collect($content['bookings'])->keyBy('serial_number')->all();
     }
 
     public function test_a_hold_is_sent_to_the_mobile_app_with_the_next_round_of_the_digital_hatch_status_file(): void
     {
-        $this->useLocalFolder();
         $booking = $this->booking();
         $officer = $this->controlOfficer();
 

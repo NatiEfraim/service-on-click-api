@@ -8,6 +8,8 @@ use App\Models\Booking;
 use App\Models\SyncConflict;
 use App\Traits\GuardsDigitalHatchRuns;
 use App\Traits\HatchExportable;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /** r2b booking status stream: writes a cumulative daily snapshot to the bucket and sends it to the FTP; driven by bookings.is_status_exported. */
 class BookingStatusSnapshotService
@@ -21,27 +23,69 @@ class BookingStatusSnapshotService
     }
 
     /**
-     * @param bool $force re-send even if this content was already sent
+     * @param bool $force accepted for callers that still pass it; the trait always sends when new content is written
      * @param int|null $bookingTypeId optional filter (manual web trigger)
      * @param int|null $statusId optional filter (manual web trigger)
      * @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>}
      */
     public function export(bool $force = false, ?int $bookingTypeId = null, ?int $statusId = null): array
     {
-        return $this->locked('send-booking-status', function () use ($force, $bookingTypeId, $statusId): array {
-            $errors = [];
+        return $this->locked('send-booking-status', function () use ($bookingTypeId, $statusId): array {
             $waiting = [];
+            $errors = [];
 
-            $built = $this->building('booking status file', function () use (&$waiting, $bookingTypeId, $statusId): array {
-                return $this->run($waiting, $bookingTypeId, $statusId);
-            }, $errors);
-            $sent = $this->sendNewestFile(DigitalHatchFileEnum::BOOKING_STATUS, $force);
-            $errors = [...$errors, ...$sent['errors']];
+            try {
+                $built = $this->run($waiting, $bookingTypeId, $statusId);
+            } catch (\Throwable $e) {
+                Log::error('BookingStatusSnapshotService: could not build booking status file: ' . $e->getMessage());
 
-            // Only what really went is marked: after a failed build or send the bookings stay waiting for the next run.
+                return ['destination' => $this->exportDestination(), 'built' => ['written' => false, 'reason' => 'error'], 'file' => null, 'marked' => 0, 'errors' => [$e->getMessage()]];
+            }
+
+            $sentFile = null;
+
+            if (($built['written'] ?? false) || ($built['reason'] ?? '') === 'unchanged') {
+                try {
+                    $this->send($built['bucket_key']);
+                    $sentFile = $built['file'];
+                } catch (\Throwable $e) {
+                    Log::error('BookingStatusSnapshotService: could not send booking status file: ' . $e->getMessage());
+                    $errors[] = $e->getMessage();
+                }
+            } elseif ($built['reason'] === 'nothing_waiting') {
+                $directory = DigitalHatchFileEnum::BOOKING_STATUS->bucketDirectory();
+                $files = $this->storageService->listJsonFilesInBucket(DigitalHatchFileEnum::BOOKING_STATUS->fileNamePrefix(), $directory);
+
+                if ($files !== []) {
+                    $newestFileName = end($files);
+                    $newestKey = $this->storageService->buildBucketKey($directory, $newestFileName);
+                    $bucketContent = $this->storageService->bucketFileContents($newestFileName, $directory);
+                    $ftpPath = rtrim((string) config('services.digital-hatch.red_to_black_ftp_path'), '/') . '/' . $newestFileName;
+
+                    try {
+                        $ftpContent = Storage::disk('digital-hatch')->exists($ftpPath)
+                            ? Storage::disk('digital-hatch')->get($ftpPath)
+                            : null;
+                    } catch (\Throwable) {
+                        $ftpContent = null;
+                    }
+
+                    if ($bucketContent !== $ftpContent) {
+                        try {
+                            $this->send($newestKey);
+                            $sentFile = $newestFileName;
+                        } catch (\Throwable $e) {
+                            Log::error('BookingStatusSnapshotService: could not send booking status file: ' . $e->getMessage());
+                            $errors[] = $e->getMessage();
+                        }
+                    }
+                }
+            }
+
+            // Only what really went is marked: after a failed send the bookings stay waiting for the next run.
             $marked = $errors === [] ? $this->markExported($waiting) : 0;
 
-            return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sent['file'], 'marked' => $marked, 'errors' => $errors];
+            return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sentFile, 'marked' => $marked, 'errors' => $errors];
         });
     }
 
@@ -78,13 +122,12 @@ class BookingStatusSnapshotService
         $result = ['file' => $fileName, 'bookings' => count($rows), 'in_file' => count($inFile)];
 
         if ($existing === $json) {
-            return ['written' => false, ...$result, 'reason' => 'unchanged'];
+            return ['written' => false, ...$result, 'reason' => 'unchanged', 'bucket_key' => $this->storageService->buildBucketKey($directory, $fileName)];
         }
 
-        $this->storageService->putJsonToBucket($fileName, $directory, $json);
-        $this->noteWrittenToBucket($fileName, $json);
+        $bucketKey = $this->storageService->putJsonToBucket($fileName, $directory, $json);
 
-        return ['written' => true, ...$result];
+        return ['written' => true, 'bucket_key' => $bucketKey, ...$result];
     }
 
     /**

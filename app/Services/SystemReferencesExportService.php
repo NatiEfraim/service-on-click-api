@@ -20,24 +20,36 @@ class SystemReferencesExportService
     {
     }
 
-    /** Builds today's system references file and sends it to the FTP. @param bool $force re-send even if this content was already sent @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>} */
+    /** Builds today's system references file and sends it to the FTP. @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>} */
     public function export(bool $force = false): array
     {
-        return $this->locked('send-system-references', function () use ($force): array {
-            $errors = [];
+        return $this->locked('send-system-references', function (): array {
             $waiting = [];
+            $errors = [];
 
-            $ftpDir = DigitalHatchFileEnum::SYSTEM_REFERENCES->ftpBucketDirectory();
+            try {
+                $built = $this->run($waiting);
+            } catch (\Throwable $e) {
+                Log::error('SystemReferencesExportService: could not build system references file: ' . $e->getMessage());
 
-            $built = $this->building('system references file', function () use (&$waiting, $ftpDir): array {
-                return $this->run($waiting, $ftpDir);
-            }, $errors);
-            $sent = $this->sendNewestFile(DigitalHatchFileEnum::SYSTEM_REFERENCES, $force, $ftpDir);
-            $errors = [...$errors, ...$sent['errors']];
+                return ['destination' => $this->exportDestination(), 'built' => ['written' => false, 'reason' => 'error'], 'file' => null, 'marked' => 0, 'errors' => [$e->getMessage()]];
+            }
+
+            $sentFile = null;
+
+            if (($built['written'] ?? false) || ($built['reason'] ?? '') === 'unchanged') {
+                try {
+                    $this->send($built['bucket_key']);
+                    $sentFile = $built['file'];
+                } catch (\Throwable $e) {
+                    Log::error('SystemReferencesExportService: could not send system references file: ' . $e->getMessage());
+                    $errors[] = $e->getMessage();
+                }
+            }
 
             $marked = $errors === [] ? SystemReference::markExported($waiting) : 0;
 
-            return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sent['file'], 'marked' => $marked, 'errors' => $errors];
+            return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sentFile, 'marked' => $marked, 'errors' => $errors];
         });
     }
 
@@ -57,16 +69,19 @@ class SystemReferencesExportService
         }
 
         try {
-            $errors = [];
             $waiting = [];
 
-            $built = $this->building('system references file', function () use (&$waiting): array {
-                return $this->run($waiting);
-            }, $errors);
+            try {
+                $built = $this->run($waiting);
+            } catch (\Throwable $e) {
+                Log::error('SystemReferencesExportService: could not build system references file for bucket: ' . $e->getMessage());
 
-            $marked = $errors === [] ? SystemReference::markExported($waiting) : 0;
+                return ['built' => ['written' => false, 'reason' => 'error'], 'marked' => 0, 'errors' => [$e->getMessage()]];
+            }
 
-            return ['built' => $built, 'marked' => $marked, 'errors' => $errors];
+            $marked = SystemReference::markExported($waiting);
+
+            return ['built' => $built, 'marked' => $marked, 'errors' => []];
         } finally {
             $lock->release();
         }
@@ -106,13 +121,12 @@ class SystemReferencesExportService
         $result = ['file' => $fileName, 'records' => count($rows), 'in_file' => count($refs)];
 
         if ($existing === $json) {
-            return ['written' => false, ...$result, 'reason' => 'unchanged'];
+            return ['written' => false, ...$result, 'reason' => 'unchanged', 'bucket_key' => $this->storageService->buildBucketKey($directory, $fileName)];
         }
 
-        $this->storageService->putJsonToBucket($fileName, $directory, $json);
-        $this->noteWrittenToBucket($fileName, $json);
+        $bucketKey = $this->storageService->putJsonToBucket($fileName, $directory, $json);
 
-        return ['written' => true, ...$result];
+        return ['written' => true, 'bucket_key' => $bucketKey, ...$result];
     }
 
     /** Waiting records (is_exported=0), mapped to the JSON payload. Each value carries ALL keys defined for that booking type — null for keys not set on this specific record — so the mobile importer always sees a stable, uniform schema. @param array<int, ?string> $waiting filled: record id => updated_at @return array<int, array{booking_type_id: int, unit_id: int|null, id: int, name: string, value: array<string, mixed>}> */

@@ -32,7 +32,6 @@
         <!-- The developer's .env must never reach a test: no FTP, and above all no write into a local r2b folder. -->
         <env name="HATCH_ENABLED" value="false"/>
         <env name="HATCH_FTP_HOST" value=""/>
-        <env name="DIGITAL_HATCH_EXPORT_PATH" value=""/>
         <env name="DIGITAL_HATCH_IMPORT_PATH" value=""/>
         <env name="DIGITAL_HATCH_IMPORT_FILES_PATH" value=""/>
         <!-- The bucket folders: a .env that renames one must not change what the tests read and write. -->

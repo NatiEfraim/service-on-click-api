@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\DigitalHatchSentFile;
 use App\Models\User;
 use App\Services\StorageService;
 use App\Services\UsersExportService;
@@ -83,8 +82,6 @@ class ExportUsersJsonBucketTest extends HatchTestCase
 
         // The bucket is the only place it goes to.
         $this->assertSame([], $this->ftp()->allFiles());
-        $this->assertSame(1, DigitalHatchSentFile::where('destination', 'bucket')->count(), 'what was written to the bucket is remembered');
-        $this->assertSame(0, DigitalHatchSentFile::whereIn('destination', ['ftp', 'local'])->count());
 
         // Nobody is waiting any more: nothing is written.
         $again = app(UsersExportService::class)->exportToBucket();
@@ -209,7 +206,6 @@ class ExportUsersJsonBucketTest extends HatchTestCase
         $this->assertStringContainsString('bucket full', $failed['errors'][0]);
         $this->assertSame(0, $failed['marked']);
         $this->assertFalse($this->sent(self::VICE_APPROVER), 'not written, so not marked');
-        $this->assertSame(0, DigitalHatchSentFile::where('destination', 'bucket')->count(), 'not written, so not remembered');
 
         $this->artisan('exportUsersJson:bucket')->expectsOutputToContain('bucket full')->assertExitCode(1);
 

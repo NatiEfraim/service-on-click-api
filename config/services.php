@@ -47,9 +47,6 @@ return [
         'files_prefix' => env('HATCH_FILES_PREFIX', 'SrvOnClickFiles'),
 
         'local' => [
-            'export' => [
-                'path' => env('DIGITAL_HATCH_EXPORT_PATH'),
-            ],
             'import' => [
                 'path' => env('DIGITAL_HATCH_IMPORT_PATH'),
                 'files_path' => env('DIGITAL_HATCH_IMPORT_FILES_PATH'),

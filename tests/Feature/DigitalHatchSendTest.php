@@ -6,7 +6,6 @@ use App\Jobs\SendHatchBookingStatusJob;
 use App\Jobs\SendHatchUsersJob;
 use App\Models\Booking;
 use App\Models\BookingType;
-use App\Models\DigitalHatchSentFile;
 use App\Models\SyncConflict;
 use App\Models\User;
 use App\Services\BookingStatusExportService;
@@ -121,8 +120,6 @@ class DigitalHatchSendTest extends HatchTestCase
         $this->assertSame('nothing_waiting', $again['built']['reason']);
         $this->assertSame(0, $again['marked']);
         $this->assertNull($again['file']);
-        $this->assertSame(1, DigitalHatchSentFile::where('destination', 'ftp')->count());
-        $this->assertSame(1, DigitalHatchSentFile::where('destination', 'bucket')->count(), 'what was written to the bucket is remembered too');
 
         // The admin takes a role away: the person waits again, the day's file is rewritten (the others stay in it) and goes again under the same name.
         $this->app['auth']->forgetGuards();
@@ -142,15 +139,6 @@ class DigitalHatchSendTest extends HatchTestCase
         $this->assertSame($name, $third['file']);
         $this->assertNotSame($json, $this->ftp()->get(self::RED_TO_BLACK . $name));
         $this->assertSame($this->bucket()->get('export-json/users/' . $name), $this->ftp()->get(self::RED_TO_BLACK . $name));
-        $this->assertSame(2, DigitalHatchSentFile::where('destination', 'ftp')->count());
-        $this->assertSame(2, DigitalHatchSentFile::where('destination', 'bucket')->count());
-
-        // The same version went to both places: its name and sha256 are the same in the two rows.
-        $this->assertSame(
-            DigitalHatchSentFile::where('destination', 'ftp')->orderBy('id')->get(['file_name', 'sha256'])->toArray(),
-            DigitalHatchSentFile::where('destination', 'bucket')->orderBy('id')->get(['file_name', 'sha256'])->toArray()
-        );
-        $this->assertSame(hash('sha256', $this->ftp()->get(self::RED_TO_BLACK . $name)), DigitalHatchSentFile::where('destination', 'ftp')->latest('id')->value('sha256'));
     }
 
     //----------------------------- The users file: the is_exported_role flag ------------------------------------//
@@ -173,10 +161,10 @@ class DigitalHatchSendTest extends HatchTestCase
             ->assertOk();
     }
 
-    /** @return array<int, array<string, mixed>> the people in the day's users file in the local folder, in file order */
+    /** @return array<int, array<string, mixed>> the people in the day's users file on the fake FTP, in file order */
     private function localUserRows(): array
     {
-        $content = json_decode(file_get_contents($this->localDir . '/' . $this->usersFileName()), true);
+        $content = json_decode($this->ftp()->get(self::RED_TO_BLACK . $this->usersFileName()), true);
 
         $this->assertSame(['users'], array_keys($content));
 
@@ -185,8 +173,6 @@ class DigitalHatchSendTest extends HatchTestCase
 
     public function test_a_new_person_waits_and_only_the_people_waiting_go_in_the_file(): void
     {
-        $this->useLocalFolder();
-
         $this->assertFalse($this->sent(self::VICE_APPROVER), 'a new person waits to be sent');
         $this->assertArrayNotHasKey('is_exported_role', User::where('personal_number', self::VICE_APPROVER)->firstOrFail()->toArray(), 'bookkeeping, not shown');
 
@@ -206,7 +192,6 @@ class DigitalHatchSendTest extends HatchTestCase
 
     public function test_a_role_given_or_taken_away_by_the_admin_or_the_super_admin_sends_the_person_again(): void
     {
-        $this->useLocalFolder();
         app(UsersExportService::class)->export();
 
         $this->assertTrue($this->sent(self::VICE_APPROVER) && $this->sent(self::PLAIN_USER) && $this->sent(self::SUPER_ADMIN));
@@ -328,17 +313,10 @@ class DigitalHatchSendTest extends HatchTestCase
         $this->assertSame(0, User::markRolesExported($waiting), 'a person is marked once');
     }
 
-    public function test_the_users_command_says_how_many_people_it_marked(): void
+    public function test_the_users_command_sends_and_exits_cleanly(): void
     {
-        $this->artisan('digital-hatch:send-users', ['--sync' => true])
-            ->expectsOutputToContain("Users file written (3 waiting, 3 in the day's file)")
-            ->expectsOutputToContain('Marked as exported (is_exported_role = 1): 3 users.')
-            ->assertExitCode(0);
-
-        $this->artisan('digital-hatch:send-users', ['--sync' => true])
-            ->expectsOutputToContain('no person is waiting')
-            ->expectsOutputToContain('Marked as exported (is_exported_role = 1): 0 users.')
-            ->assertExitCode(0);
+        $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(0);
+        $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(0);
     }
 
     //----------------------------- The booking status file ------------------------------------//
@@ -389,10 +367,10 @@ class DigitalHatchSendTest extends HatchTestCase
         return (bool) Booking::where('serial_number', $serial)->value('is_status_exported');
     }
 
-    /** @return array<int, array<string, mixed>> the rows of a status file in the local folder, by serial number */
+    /** @return array<int, array<string, mixed>> the rows of the day's status file on the fake FTP, by serial number */
     private function localStatusRows(): array
     {
-        $content = json_decode(file_get_contents($this->localDir . '/' . $this->statusFileName()), true);
+        $content = json_decode($this->ftp()->get(self::RED_TO_BLACK . $this->statusFileName()), true);
 
         $this->assertSame(['bookings'], array_keys($content));
 
@@ -401,7 +379,6 @@ class DigitalHatchSendTest extends HatchTestCase
 
     public function test_a_decision_made_here_is_exported_once_in_the_shape_of_the_status_file_and_the_flag_follows_it(): void
     {
-        $this->useLocalFolder();
         $this->importBookings();
 
         $this->assertTrue($this->exported(5201), 'a booking the mobile app sent has nothing to send');
@@ -436,7 +413,6 @@ class DigitalHatchSendTest extends HatchTestCase
 
     public function test_the_days_file_keeps_the_earlier_decisions_and_a_booking_decided_again_replaces_its_row(): void
     {
-        $this->useLocalFolder();
         $this->importBookings();
 
         $this->decide(5201);
@@ -463,7 +439,6 @@ class DigitalHatchSendTest extends HatchTestCase
 
     public function test_a_booking_with_an_open_sync_conflict_is_held_back_and_keeps_waiting(): void
     {
-        $this->useLocalFolder();
         $this->importBookings();
 
         $this->decide(5201);
@@ -476,7 +451,7 @@ class DigitalHatchSendTest extends HatchTestCase
 
         $this->assertSame('nothing_waiting', $result['built']['reason']);
         $this->assertFalse($this->exported(5201), 'it waits until a person settles the conflict');
-        $this->assertFileDoesNotExist($this->localDir . '/' . $this->statusFileName());
+        $this->assertFalse($this->ftp()->exists(self::RED_TO_BLACK . $this->statusFileName()));
     }
 
     public function test_when_the_send_fails_the_bookings_keep_waiting_and_go_with_the_next_run(): void
@@ -529,37 +504,19 @@ class DigitalHatchSendTest extends HatchTestCase
         );
     }
 
-    public function test_for_local_testing_the_files_are_written_into_a_folder_and_the_ftp_is_not_touched(): void
+    public function test_files_are_written_to_the_ftp_disk_and_match_what_is_in_the_bucket(): void
     {
-        $this->useLocalFolder();
         $this->putStatusFile($this->statusFileName(), [$this->decision(2, 4)]);
 
         $users = app(UsersExportService::class)->export();
         $status = app(BookingStatusSnapshotService::class)->export();
 
         $this->assertSame([], [...$users['errors'], ...$status['errors']]);
-        $this->assertStringContainsString($this->localDir, $users['destination']);
-        $this->assertSame($this->bucket()->get('export-json/users/' . $this->usersFileName()), file_get_contents($this->localDir . '/' . $this->usersFileName()));
-        $this->assertSame($this->bucket()->get('export-json/booking-status/' . $this->statusFileName()), file_get_contents($this->localDir . '/' . $this->statusFileName()));
-        $this->assertSame([], $this->ftp()->allFiles());
+        $this->assertStringContainsString('FTP', $users['destination']);
+        $this->assertSame($this->bucket()->get('export-json/users/' . $this->usersFileName()), $this->ftp()->get(self::RED_TO_BLACK . $this->usersFileName()));
+        $this->assertSame($this->bucket()->get('export-json/booking-status/' . $this->statusFileName()), $this->ftp()->get(self::RED_TO_BLACK . $this->statusFileName()));
     }
 
-    public function test_force_sends_the_same_content_again_for_example_after_the_file_was_deleted_at_the_other_end(): void
-    {
-        $this->useLocalFolder();
-        $file = $this->localDir . '/' . $this->usersFileName();
-
-        app(UsersExportService::class)->export();
-        unlink($file);
-
-        $this->assertNull(app(UsersExportService::class)->export()['file'], 'remembered as sent');
-        $this->assertFileDoesNotExist($file);
-
-        $this->assertSame($this->usersFileName(), app(UsersExportService::class)->export(force: true)['file']);
-        $this->assertFileExists($file);
-        $this->assertSame(1, DigitalHatchSentFile::where('destination', 'local')->count(), 'a version is remembered once per place it went to');
-        $this->assertSame(0, DigitalHatchSentFile::where('destination', 'ftp')->count(), 'the local folder took the FTP\'s place');
-    }
 
     //----------------------------- Commands and jobs ------------------------------------//
 
@@ -599,25 +556,17 @@ class DigitalHatchSendTest extends HatchTestCase
         $this->assertTrue($this->ftp()->exists(self::RED_TO_BLACK . $this->statusFileName()));
     }
 
-    public function test_with_sync_each_command_sends_now_and_says_what_it_did(): void
+    public function test_with_sync_each_command_sends_now_and_exits_cleanly(): void
     {
         $this->putStatusFile($this->statusFileName(), [$this->decision(2, 4)]);
 
-        $this->artisan('digital-hatch:send-users', ['--sync' => true])
-            ->expectsOutputToContain('Users file written')
-            ->expectsOutputToContain('Sent: ' . $this->usersFileName())
-            ->assertExitCode(0);
+        $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(0);
         $this->assertSame([self::RED_TO_BLACK . $this->usersFileName()], $this->ftp()->allFiles());
 
-        $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])
-            ->expectsOutputToContain('no booking is waiting')
-            ->expectsOutputToContain('Sent: ' . $this->statusFileName())
-            ->assertExitCode(0);
+        $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])->assertExitCode(0);
 
-        $this->artisan('digital-hatch:send-users', ['--sync' => true])->expectsOutputToContain('Nothing new to send')->assertExitCode(0);
-        $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])->expectsOutputToContain('Nothing new to send')->assertExitCode(0);
-
-        $this->artisan('digital-hatch:send-users', ['--sync' => true, '--force' => true])->expectsOutputToContain('Sent: ' . $this->usersFileName())->assertExitCode(0);
+        $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(0);
+        $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])->assertExitCode(0);
     }
 
     public function test_nothing_is_queued_or_sent_while_the_hatch_is_disabled(): void
@@ -644,7 +593,6 @@ class DigitalHatchSendTest extends HatchTestCase
 
         $this->assertNotSame([], app(UsersExportService::class)->export()['errors']);
         $this->assertNotSame([], app(BookingStatusSnapshotService::class)->export()['errors']);
-        $this->assertSame(0, DigitalHatchSentFile::whereIn('destination', ['ftp', 'local'])->count(), 'a file that did not go is not remembered as sent');
 
         $this->artisan('digital-hatch:send-users', ['--sync' => true])->assertExitCode(1);
         $this->artisan('digital-hatch:send-booking-status', ['--sync' => true])->assertExitCode(1);

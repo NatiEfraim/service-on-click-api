@@ -35,19 +35,4 @@ trait GuardsDigitalHatchRuns
         }
     }
 
-    /**
-     * Builds one file into the bucket; a failure is logged and added to $errors, so the file that is already there can still go out.
-     * @param callable(): array<string, mixed> $work @param array<int, string> $errors @return array<string, mixed>
-     */
-    private function building(string $what, callable $work, array &$errors): array
-    {
-        try {
-            return $work();
-        } catch (\Throwable $e) {
-            Log::error("DigitalHatch: {$what} error: {$e->getMessage()}");
-            $errors[] = "{$what}: {$e->getMessage()}";
-
-            return ['written' => false];
-        }
-    }
 }

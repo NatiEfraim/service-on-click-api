@@ -22,24 +22,37 @@ class UsersExportService
     {
     }
 
-    /** Builds today's users file and sends it to the FTP. @param bool $force re-send even if this content was already sent @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>} */
+    /** Builds today's users file and sends it to the FTP. @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>} */
     public function export(bool $force = false): array
     {
-        return $this->locked('send-users', function () use ($force): array {
-            $errors = [];
+        return $this->locked('send-users', function (): array {
             $waiting = [];
-            $ftpDir = DigitalHatchFileEnum::USERS->ftpBucketDirectory();
+            $errors = [];
 
-            $built = $this->building('users file', function () use (&$waiting, $ftpDir): array {
-                return $this->run($waiting, $ftpDir);
-            }, $errors);
-            $sent = $this->sendNewestFile(DigitalHatchFileEnum::USERS, $force, $ftpDir);
-            $errors = [...$errors, ...$sent['errors']];
+            try {
+                $built = $this->run($waiting);
+            } catch (\Throwable $e) {
+                Log::error('UsersExportService: could not build users file: ' . $e->getMessage());
 
-            // Only what really went is marked: after a failed build or send the people stay waiting for the next run.
+                return ['destination' => $this->exportDestination(), 'built' => ['written' => false, 'reason' => 'error'], 'file' => null, 'marked' => 0, 'errors' => [$e->getMessage()]];
+            }
+
+            $sentFile = null;
+
+            if (($built['written'] ?? false) || ($built['reason'] ?? '') === 'unchanged') {
+                try {
+                    $this->send($built['bucket_key']);
+                    $sentFile = $built['file'];
+                } catch (\Throwable $e) {
+                    Log::error('UsersExportService: could not send users file: ' . $e->getMessage());
+                    $errors[] = $e->getMessage();
+                }
+            }
+
+            // Only what really went is marked: after a failed send the people stay waiting for the next run.
             $marked = $errors === [] ? User::markRolesExported($waiting) : 0;
 
-            return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sent['file'], 'marked' => $marked, 'errors' => $errors];
+            return ['destination' => $this->exportDestination(), 'built' => $built, 'file' => $sentFile, 'marked' => $marked, 'errors' => $errors];
         });
     }
 
@@ -64,17 +77,19 @@ class UsersExportService
         }
 
         try {
-            $errors = [];
             $waiting = [];
 
-            $built = $this->building('users file', function () use (&$waiting): array {
-                return $this->run($waiting);
-            }, $errors);
+            try {
+                $built = $this->run($waiting);
+            } catch (\Throwable $e) {
+                Log::error('UsersExportService: could not build users file for bucket: ' . $e->getMessage());
 
-            // In the bucket now, so mark them sent.
-            $marked = $errors === [] ? User::markRolesExported($waiting) : 0;
+                return ['built' => ['written' => false, 'reason' => 'error'], 'marked' => 0, 'errors' => [$e->getMessage()]];
+            }
 
-            return ['built' => $built, 'marked' => $marked, 'errors' => $errors];
+            $marked = User::markRolesExported($waiting);
+
+            return ['built' => $built, 'marked' => $marked, 'errors' => []];
         } finally {
             $lock->release();
         }
@@ -92,6 +107,7 @@ class UsersExportService
         // The day is counted in the timezone the mobile side uses for its own "today" (as the status file does).
         $fileName = ExportFileNames::usersFile(now(config('app.export_json.timezone')), DigitalHatchFileEnum::USERS->fileNamePrefix());
         $directory ??= DigitalHatchFileEnum::USERS->bucketDirectory();
+
         $existing = $this->storageService->bucketFileContents($fileName, $directory);
 
         $inFile = [];
@@ -113,13 +129,12 @@ class UsersExportService
         $result = ['file' => $fileName, 'users' => count($rows), 'in_file' => count($users)];
 
         if ($existing === $json) {
-            return ['written' => false, ...$result, 'reason' => 'unchanged'];
+            return ['written' => false, ...$result, 'reason' => 'unchanged', 'bucket_key' => $this->storageService->buildBucketKey($directory, $fileName)];
         }
 
-        $this->storageService->putJsonToBucket($fileName, $directory, $json);
-        $this->noteWrittenToBucket($fileName, $json);
+        $bucketKey = $this->storageService->putJsonToBucket($fileName, $directory, $json);
 
-        return ['written' => true, ...$result];
+        return ['written' => true, 'bucket_key' => $bucketKey, ...$result];
     }
 
     /**

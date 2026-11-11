@@ -3,39 +3,17 @@
 namespace App\Console\Commands;
 
 use App\Jobs\SendHatchBookingStatusJob;
-use App\Traits\ExportsHatchBookingStatus;
+use App\Services\BookingStatusSnapshotService;
 
 class ExportBookingStatusJsonFtpCommand extends DigitalHatchSendCommand
 {
-    use ExportsHatchBookingStatus;
+    protected $signature = 'digital-hatch:send-booking-status {--force} {--sync}';
 
-    protected $signature = 'exportBookingStatusJson:ftp
-        {--force : Send the file again even if this exact content was sent before}
-        {--sync : Send it here and show the result, instead of queueing a job (no queue worker needed)}';
+    protected $description = 'Send the r2b booking status file to the digital hatch FTP.';
 
-    protected $description = 'Put the bookings whose status was changed here and not sent yet (bookings.is_status_exported = 0) in the day\'s file (SrvOnClick_r2b_booking_status_<date>.json), send it to the digital hatch FTP, or to DIGITAL_HATCH_EXPORT_PATH when it is set, and mark them sent (is_status_exported = 1)';
-
-    protected function sendToHatch(bool $force, bool $sync): array
+    protected function runService(bool $force): array
     {
-        return $this->exportHatchBookingStatus($force, $sync);
-    }
-
-    protected function describeBuilt(array $built): string
-    {
-        if ($built['written']) {
-            return "Booking status file written ({$built['bookings']} waiting, {$built['in_file']} in the day's file): {$built['file']}.";
-        }
-
-        return match ($built['reason'] ?? null) {
-            'nothing_waiting' => 'Booking status file: no booking is waiting (none has is_status_exported = 0).',
-            'unchanged' => "Booking status file: {$built['bookings']} waiting, already in the day's file as it is.",
-            default => 'Booking status file: nothing written.',
-        };
-    }
-
-    protected function describeMarked(int $marked): ?string
-    {
-        return "Marked as exported (is_status_exported = 1): {$marked} bookings.";
+        return app(BookingStatusSnapshotService::class)->export($force);
     }
 
     protected function jobClass(): string

@@ -16,9 +16,6 @@ abstract class HatchTestCase extends ImportJsonTestCase
     protected const BLACK_TO_RED = 'Tikshoret-B2R-Prod/';
     protected const ATTACHMENTS = 'DigitalFiles-B2R-Prod/';
 
-    /** A folder of the test's own that takes the place of the FTP (DIGITAL_HATCH_EXPORT_PATH); removed in tearDown. */
-    protected ?string $localDir = null;
-
     /** The folder of the test's own that holds the b2r folders of useLocalImportFolders; removed in tearDown. */
     protected ?string $localImportBase = null;
 
@@ -35,8 +32,7 @@ abstract class HatchTestCase extends ImportJsonTestCase
 
         config([
             'services.digital-hatch.enabled' => true,
-            // Whatever the .env says: a test reads and writes folders of its own (useLocalFolder, useLocalImportFolders) or the fake FTP, never a real folder.
-            'services.digital-hatch.local.export.path' => '',
+            // Whatever the .env says: a test uses the fake FTP disk (Storage::fake) or its own import folders, never a real server.
             'services.digital-hatch.local.import.path' => '',
             'services.digital-hatch.local.import.files_path' => '',
             'services.digital-hatch.red_to_black_ftp_path' => '/' . self::RED_TO_BLACK,
@@ -52,20 +48,11 @@ abstract class HatchTestCase extends ImportJsonTestCase
 
     protected function tearDown(): void
     {
-        foreach ([$this->localDir, $this->localImportBase] as $dir) {
-            if ($dir !== null) {
-                (new \Illuminate\Filesystem\Filesystem())->deleteDirectory($dir);
-            }
+        if ($this->localImportBase !== null) {
+            (new \Illuminate\Filesystem\Filesystem())->deleteDirectory($this->localImportBase);
         }
 
         parent::tearDown();
-    }
-
-    protected function useLocalFolder(): void
-    {
-        $this->localDir = sys_get_temp_dir() . '/hatch-r2b-' . uniqid();
-
-        config(['services.digital-hatch.local.export.path' => $this->localDir]);
     }
 
     /** Two folders that exist and take the place of the FTP's b2r folders: the json files (like tikshort-ftp/b2r) and the attachments (tikshort-ftp/b2r_files). */

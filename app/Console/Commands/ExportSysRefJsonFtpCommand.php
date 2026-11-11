@@ -3,33 +3,17 @@
 namespace App\Console\Commands;
 
 use App\Jobs\SendHatchSystemReferencesJob;
-use App\Traits\DescribesSystemReferencesFileRun;
-use App\Traits\ExportsHatchSystemReferences;
+use App\Services\SystemReferencesExportService;
 
 class ExportSysRefJsonFtpCommand extends DigitalHatchSendCommand
 {
-    use DescribesSystemReferencesFileRun;
-    use ExportsHatchSystemReferences;
+    protected $signature = 'digital-hatch:send-sys-ref {--force} {--sync}';
 
-    protected $signature = 'exportSysRefJson:ftp
-        {--force : Send the file again even if this exact content was sent before}
-        {--sync : Send it here and show the result, instead of queueing a job (no queue worker needed)}';
+    protected $description = 'Send the r2b system references file to the digital hatch FTP.';
 
-    protected $description = 'Put the system references whose values were not sent yet (system_references.is_exported = 0: new, or updated) in the day\'s file (SrvOnClick_r2b_system_references_YYYY-MM-DD.json), send it to the digital hatch FTP, or to DIGITAL_HATCH_EXPORT_PATH when it is set, and mark them sent (is_exported = 1)';
-
-    protected function sendToHatch(bool $force, bool $sync): array
+    protected function runService(bool $force): array
     {
-        return $this->exportHatchSystemReferences($force, $sync);
-    }
-
-    protected function describeBuilt(array $built): string
-    {
-        return $this->describeSystemReferencesFile($built);
-    }
-
-    protected function describeMarked(int $marked): ?string
-    {
-        return $this->describeSystemReferencesMarked($marked);
+        return app(SystemReferencesExportService::class)->export($force);
     }
 
     protected function jobClass(): string
