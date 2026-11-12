@@ -63,9 +63,7 @@ class UserSeeder extends Seeder
 
             $user->assignRole($roleEnum->value);
 
-            // Super admin manages the whole system; other roles work per booking type.
-            // Only grant permissions for booking types this role is actually linked to —
-            // infosec/ICT types have no ADMIN/APPROVER/VICE_APPROVER rows in booking_type_has_roles.
+         
             if ($roleEnum !== RoleEnum::SUPER_ADMIN) {
                 $linkedTypeIds = BookingTypeHasRole::where('role_id', $roleEnum->value)
                     ->pluck('booking_type_id');
