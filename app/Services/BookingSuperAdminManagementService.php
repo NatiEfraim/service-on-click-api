@@ -17,6 +17,7 @@ use App\Exceptions\DomainError;
 use App\Http\Resources\IndexSelectsResource;
 use App\Http\Resources\SelectOptionResource;
 use App\Http\Resources\UserWithPermissionIconResource;
+use App\Models\BookingTypeHasRole;
 use App\Models\BookingTypeHasStatement;
 use App\Models\BookingType;
 use App\Models\BookingValue;
@@ -156,19 +157,34 @@ class BookingSuperAdminManagementService
             }
 
 
-            $bookingTypes = BookingType::where('is_outsource',false)
-             ->where('id', '!=', BookingTypeEnum::EQUIPMENT_BOOKING->getBookingTypeId())
-            ->get();
- 
-            $result = $bookingTypes->map(function ($bookingType) use ($user): array {
+            $bookingTypes = BookingType::where('is_outsource', false)
+                ->where('id', '!=', BookingTypeEnum::EQUIPMENT_BOOKING->getBookingTypeId())
+                ->with('roles')
+                ->get();
 
-                $bookingTypeId = $bookingType['id'];
+            $userPermissions = $user->getAllPermissions()->pluck('name');
+
+            // Ids of types that actually have the ADMIN role (infosec/ICT types do not).
+            $typesWithAdmin = BookingTypeHasRole::query()
+                ->where('role_id', RoleEnum::ADMIN->value)
+                ->pluck('booking_type_id')
+                ->map(fn($id) => (int) $id)
+                ->all();
+
+            $result = $bookingTypes->map(function ($bookingType) use ($userPermissions, $typesWithAdmin): array {
+                $bookingTypeId = (int) $bookingType['id'];
+                $hasAdmin = in_array($bookingTypeId, $typesWithAdmin, true);
+
                 return [
                     'booking_type_id' => $bookingTypeId,
                     'name' => $bookingType['name'],
                     'display_name' => 'ניהול ' . $bookingType['display_name'],
                     'icon' => $bookingType['icon'] ?? null,
-                    'is_admin' => optional($user)->hasPermissionTo(PermissionEnum::ADMIN->value . $bookingTypeId) ?? false,
+                    // null = role does not exist for this type → frontend shows —
+                    // true/false = role exists, checkbox reflects the current grant
+                    'is_admin' => $hasAdmin
+                        ? $userPermissions->contains(PermissionEnum::ADMIN->value . $bookingTypeId)
+                        : null,
                 ];
             });
 
