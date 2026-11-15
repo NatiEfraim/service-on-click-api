@@ -10,6 +10,8 @@ use Database\Seeders\ProdSeeders\FieldTypeSeeder;
 use Database\Seeders\ProdSeeders\FormFieldSeeder;
 use Database\Seeders\ProdSeeders\InfosecIctFormFieldSeeder;
 use Database\Seeders\ProdSeeders\InfosecIctOptionFieldSeeder;
+use Database\Seeders\ProdSeeders\IctFormFieldSeeder;
+use Database\Seeders\ProdSeeders\IctOptionFieldSeeder;
 use Database\Seeders\ProdSeeders\OptionFieldSeeder;
 use Database\Seeders\ProdSeeders\RoleAndPermissionSeeder;
 use Database\Seeders\ProdSeeders\StatusSeeder;
@@ -39,6 +41,8 @@ class ProdSeeder extends Seeder
             OptionFieldSeeder::class,
             InfosecIctFormFieldSeeder::class,
             InfosecIctOptionFieldSeeder::class,
+            IctFormFieldSeeder::class,
+            IctOptionFieldSeeder::class,
             SystemReferencesSeeder::class,
             UnitHasBookingTypeSeeder::class,
             BookingTypeHasStatementSeeder::class,

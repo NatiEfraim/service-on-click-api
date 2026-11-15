@@ -43,4 +43,12 @@ enum BookingTypePositionEnum:string
     case FOLDER_PERMISSION_BOOKING = '33';
     case MANTA_PERMISSION_BOOKING = '34';
     case NETWORK_FOLDER_BOOKING = '35';
+
+    // תקשוב: installations, faults, user management
+    case SOFTWARE_INSTALL_BOOKING = '36';
+    case PRINTER_INSTALL_BOOKING = '37';
+    case EMAIL_FAULT_BOOKING = '38';
+    case USER_RENAME_BOOKING = '39';
+    case USER_OPEN_BOOKING = '40';
+    case USER_MOVE_BOOKING = '41';
 }

@@ -46,6 +46,13 @@ enum BookingTypeEnum
     case FOLDER_PERMISSION_BOOKING;
     case MANTA_PERMISSION_BOOKING;
     case NETWORK_FOLDER_BOOKING;
+    // תקשוב: installations, faults, user management
+    case SOFTWARE_INSTALL_BOOKING;
+    case PRINTER_INSTALL_BOOKING;
+    case EMAIL_FAULT_BOOKING;
+    case USER_RENAME_BOOKING;
+    case USER_OPEN_BOOKING;
+    case USER_MOVE_BOOKING;
 
     /** The booking type's DB id, memoized per request. */
     public function getBookingTypeId(): ?int
@@ -144,6 +151,12 @@ enum BookingTypeEnum
             self::FOLDER_PERMISSION_BOOKING => 'folder_permission',
             self::MANTA_PERMISSION_BOOKING => 'manta_permission',
             self::NETWORK_FOLDER_BOOKING => 'network_folder',
+            self::SOFTWARE_INSTALL_BOOKING => 'software_install',
+            self::PRINTER_INSTALL_BOOKING => 'printer_install',
+            self::EMAIL_FAULT_BOOKING => 'email_fault',
+            self::USER_RENAME_BOOKING => 'user_rename',
+            self::USER_OPEN_BOOKING => 'user_open',
+            self::USER_MOVE_BOOKING => 'user_move',
 
             default => null,
         };
@@ -193,6 +206,12 @@ enum BookingTypeEnum
             'folder_permission' => self::FOLDER_PERMISSION_BOOKING,
             'manta_permission' => self::MANTA_PERMISSION_BOOKING,
             'network_folder' => self::NETWORK_FOLDER_BOOKING,
+            'software_install' => self::SOFTWARE_INSTALL_BOOKING,
+            'printer_install' => self::PRINTER_INSTALL_BOOKING,
+            'email_fault' => self::EMAIL_FAULT_BOOKING,
+            'user_rename' => self::USER_RENAME_BOOKING,
+            'user_open' => self::USER_OPEN_BOOKING,
+            'user_move' => self::USER_MOVE_BOOKING,
 
             default => null,
         };

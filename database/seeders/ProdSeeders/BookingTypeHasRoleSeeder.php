@@ -114,6 +114,12 @@ class BookingTypeHasRoleSeeder extends Seeder
                 BookingTypeEnum::FOLDER_PERMISSION_BOOKING->getBookingTypeId(),
                 BookingTypeEnum::MANTA_PERMISSION_BOOKING->getBookingTypeId(),
                 BookingTypeEnum::NETWORK_FOLDER_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::SOFTWARE_INSTALL_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::PRINTER_INSTALL_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::EMAIL_FAULT_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::USER_RENAME_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::USER_OPEN_BOOKING->getBookingTypeId(),
+                BookingTypeEnum::USER_MOVE_BOOKING->getBookingTypeId(),
             ]);
         }
 
