@@ -52,3 +52,4 @@ storage/framework/views/*
 
 # Local-only dev command (role switcher)
 app/Console/Commands/SetUserPermissionsCommand.php
+app/Console/Commands/RunAllDevCommand.php
