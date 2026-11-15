@@ -15,8 +15,8 @@ use Illuminate\Support\Facades\Log;
  * Uses updateOrCreate so the seeder is safe to re-run. Options are in IctOptionFieldSeeder.
  *
  * Not yet: prefilled / locked fields (פתיחת משתמש) need new form_fields columns, agreed with the front end; the printer
- * IP is optional until a field can depend on an option. The software and printer-model lists are free text until the
- * product owner sends them (then SELECT + options).
+ * IP is optional until a field can depend on an option. The software and printer-model lists are a temporary five
+ * each (IctOptionFieldSeeder) until the product owner sends the real ones.
  */
 class IctFormFieldSeeder extends Seeder
 {
@@ -57,12 +57,8 @@ class IctFormFieldSeeder extends Seeder
 
         $this->create($id, 'network', self::NETWORK_LABEL, FieldTypeEnum::SELECT, true, ['required' => 'יש לבחור רשת']);
         $this->computerName($id);
-        // free text until the software list arrives (then SELECT + options)
-        $this->create($id, 'software_name', 'שם התוכנה', FieldTypeEnum::TEXT, true, [
-            'required' => 'יש להזין שם תוכנה',
-            'string' => 'פורמט אינו תקין',
-            'max:255' => 'ניתן להזין עד 255 תווים',
-        ]);
+        // a temporary list of five (IctOptionFieldSeeder) until the product owner sends the real one
+        $this->create($id, 'software_name', 'שם התוכנה', FieldTypeEnum::SELECT, true, ['required' => 'יש לבחור תוכנה']);
     }
 
     private function seedPrinterInstallFields(): void
@@ -74,12 +70,8 @@ class IctFormFieldSeeder extends Seeder
 
         $this->create($id, 'network', self::NETWORK_LABEL, FieldTypeEnum::SELECT, true, ['required' => 'יש לבחור רשת']);
         $this->computerName($id);
-        // free text until the printer-model list arrives (then SELECT + options)
-        $this->create($id, 'printer_model', 'דגם המדפסת', FieldTypeEnum::TEXT, true, [
-            'required' => 'יש להזין דגם מדפסת',
-            'string' => 'פורמט אינו תקין',
-            'max:255' => 'ניתן להזין עד 255 תווים',
-        ]);
+        // a temporary list of five (IctOptionFieldSeeder) until the product owner sends the real one
+        $this->create($id, 'printer_model', 'דגם המדפסת', FieldTypeEnum::SELECT, true, ['required' => 'יש לבחור דגם מדפסת']);
         $this->create($id, 'install_type', 'סוג ההתקנה', FieldTypeEnum::SELECT, true, ['required' => 'יש לבחור סוג התקנה']);
         // needed only for "מדפסת מחוברת": optional until a field can depend on an option
         $this->create($id, 'printer_ip', 'כתובת IP של המדפסת (למדפסת מחוברת)', FieldTypeEnum::TEXT, false, [

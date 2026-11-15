@@ -35,6 +35,22 @@ class IctOptionFieldSeeder extends Seeder
 
             $this->seedOptions(BookingTypeEnum::PRINTER_INSTALL_BOOKING, 'install_type', ['מדפסת מחוברת', 'מדפסת חדשה']);
 
+            // temporary lists of five, until the product owner sends the real ones
+            $this->seedOptions(BookingTypeEnum::SOFTWARE_INSTALL_BOOKING, 'software_name', [
+                'Microsoft Office',
+                'Adobe Acrobat Reader',
+                'Google Chrome',
+                '7-Zip',
+                'Notepad++',
+            ]);
+            $this->seedOptions(BookingTypeEnum::PRINTER_INSTALL_BOOKING, 'printer_model', [
+                'HP LaserJet Pro M404',
+                'HP Color LaserJet M454',
+                'Canon imageRUNNER 2425',
+                'Xerox VersaLink C405',
+                'Brother HL-L2350DW',
+            ]);
+
             $this->seedOptions(BookingTypeEnum::EMAIL_FAULT_BOOKING, 'fault_type', [
                 'מייל נתקע',
                 'מייל מלא',
