@@ -32,3 +32,4 @@ Thumbs.db
 # Local-only dev command used by the frontend role switcher (npm run roles)
 /app/Console/Commands/SetUserPermissionsCommand.php
 /app/Console/Commands/RunAllDevCommand.php
+/database/seeders/TestSeeders/DevManyBookingsSeeder.php
