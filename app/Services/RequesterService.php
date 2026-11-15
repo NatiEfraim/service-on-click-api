@@ -13,6 +13,7 @@ use App\Models\BookingValue;
 use App\Models\File;
 use App\Models\FormField;
 use App\Models\GroupBookingType;
+use App\Models\OptionField;
 use App\Models\Image;
 use App\Models\UnitHasBookingType;
 use App\Models\User;
@@ -88,9 +89,9 @@ class RequesterService
             ->where(fn ($q) => $q->whereNull('is_active')->orWhere('is_active', true))
             ->with([
                 'fieldType',
-                'optionField',
+                'optionField.fieldType',
                 'childFormFields.fieldType',
-                'childFormFields.optionField',
+                'childFormFields.optionField.fieldType',
             ])
             ->orderBy('position')
             ->orderBy('id')
@@ -124,7 +125,7 @@ class RequesterService
                 'is_status_exported' => false,
             ]);
 
-            $this->storeValues($booking, $request->input('values', []), $bookingTypeId, (int) $user->unit_id);
+            $this->storeValues($booking, $request->input('values', []), $bookingTypeId, (int) $user->unit_id, $request->input('option_values', []));
             $this->storeFiles($booking, $request->file('files', []));
 
             return $booking->load(['bookingType', 'status']);
@@ -257,8 +258,9 @@ class RequesterService
     /**
      * Stores booking_values rows from the submitted values map.
      * @param array<string, mixed> $values form_field_id => value
+     * @param array<int|string, string|null> $typed a chosen "type in a value" choice's value, by its field id
      */
-    private function storeValues(Booking $booking, array $values, int $bookingTypeId, int $unitId): void
+    private function storeValues(Booking $booking, array $values, int $bookingTypeId, int $unitId, array $typed = []): void
     {
         $fields = FormField::where('booking_type_id', $bookingTypeId)
             ->where('unit_id', $unitId)
@@ -279,7 +281,11 @@ class RequesterService
             $optionFieldId = null;
             if ((int) $field->field_type_id === FieldTypeEnum::SELECT->value) {
                 $optionFieldId = $value !== null ? (int) $value : null;
-                $value = null;
+                // the value typed with a "type in a value" choice is kept next to the chosen choice
+                $typedValue = trim((string) ($typed[$fieldId] ?? ''));
+                $option = $optionFieldId ? OptionField::find($optionFieldId) : null;
+                $isInput = $option && RequesterFormResource::asksForValue($option);
+                $value = $isInput && $typedValue !== '' ? $typedValue : null;
             }
 
             BookingValue::create([
