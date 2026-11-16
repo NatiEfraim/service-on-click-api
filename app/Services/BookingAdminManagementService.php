@@ -31,10 +31,9 @@ class BookingAdminManagementService
     const MIN_LEN = 1;
     const MAX_LEN = 9;
 
-    protected $authUser;
+    // The acting user is read live (Auth::user()) where needed: an instance can serve more than one request in tests or under Octane.
     public function __construct(private readonly StorageService $storageService)
     {
-        $this->authUser = Auth::user();
     }
 
 
@@ -80,12 +79,16 @@ class BookingAdminManagementService
     {
         try {
 
-            $bookingTypeIds = $this->authUser->getAllPermissions()->filter(function ($permission) {
-                return str_starts_with($permission->name, 'admin_');
-            })->map(function ($permission) {
-                $parts = explode('_', $permission->name);
-                return end($parts);
-            })->unique()->values();
+            // A super admin manages every booking type (the infosec/ICT types have no admin_{id} permission at all, so
+            // only the super admin ever sees them here); an admin only the types of their admin_{id} permissions.
+            $bookingTypeIds = $this->isSuperAdmin()
+                ? BookingTypeHasRole::query()->distinct()->pluck('booking_type_id')
+                : Auth::user()->getAllPermissions()->filter(function ($permission) {
+                    return str_starts_with($permission->name, 'admin_');
+                })->map(function ($permission) {
+                    $parts = explode('_', $permission->name);
+                    return end($parts);
+                })->unique()->values();
 
 
             $user = User::where('uuid', $userUuid)->with(['roles', 'permissions'])
@@ -306,7 +309,7 @@ class BookingAdminManagementService
             'full_name' => $validated['full_name'] ?? null,
             'personal_number' => $personalNumber,
             'phone' => $validated['phone'] ?? null,
-            'unit_id' => $this->authUser->unit_id ?? null,
+            'unit_id' => Auth::user()?->unit_id,
             'is_deleted' => false,
         ]);
 
