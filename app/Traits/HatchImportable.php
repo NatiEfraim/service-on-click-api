@@ -119,25 +119,29 @@ trait HatchImportable
                     continue;
                 }
 
-                // For extension-less files: detect MIME type from the bytes and append the extension
-                // so the rest of the pipeline (ImportFileService, AttachmentService) can find the file.
+                // For extension-less files or unrecognised extensions (e.g. .tiff from the mobile):
+                // detect the type from bytes and, if needed, convert (TIFF → PNG via Imagick).
                 $saveFileName = $fileName;
+                $saveContent = $content;
                 if (AttachmentService::servedExtension($fileName) === null) {
-                    $extension = $this->detectFileExtension($content);
+                    $detected = $this->detectOrConvert($content);
 
-                    if ($extension === null) {
+                    if ($detected === null) {
                         $result['errors'][] = "{$fileName}: could not determine file type from bytes, skipped";
                         continue;
                     }
 
-                    $saveFileName = "{$fileName}.{$extension}";
+                    // Strip any existing non-served extension (e.g. ".tiff") before appending the target one.
+                    $stem = pathinfo($fileName, PATHINFO_FILENAME);
+                    $saveFileName = "{$stem}.{$detected['extension']}";
+                    $saveContent = $detected['content'];
                 }
 
                 // The ledger first (see downloadFiles). Ledger key is the FTP name (may differ from $saveFileName).
                 static::markProcessed($fileName, DigitalHatchFetchedFile::STREAM_ATTACHMENTS, $source['kind']);
 
                 try {
-                    if (!$disk->put($this->attachmentStoragePathFor($saveFileName), $content)) {
+                    if (!$disk->put($this->attachmentStoragePathFor($saveFileName), $saveContent)) {
                         throw new \RuntimeException('could not write it to the bucket');
                     }
                 } catch (\Throwable $e) {
@@ -215,7 +219,7 @@ trait HatchImportable
             && AttachmentService::servedExtension($fileName) !== null;
     }
 
-    /** An attachment base name with no extension: the mobile may upload files without an extension; type is detected from bytes. */
+    /** An attachment name without a served extension: either a bare name (no extension) or one with a non-served extension (e.g. .tiff); type is detected and converted from bytes. */
     private function isAttachmentBaseName(string $fileName): bool
     {
         return str_starts_with($fileName, DigitalHatchFileEnum::attachmentFileNamePrefix())
@@ -223,20 +227,45 @@ trait HatchImportable
             && AttachmentService::servedExtension($fileName) === null;
     }
 
-    /** Detects the served file extension from the first bytes of a file; null when the type is not one AttachmentService serves. */
-    private function detectFileExtension(string $bytes): ?string
+    /**
+     * Detects the served file type from bytes; converts non-served image types (e.g. TIFF) to PNG via Imagick.
+     * Returns ['extension' => string, 'content' => string] or null when the type cannot be determined or converted.
+     * @return array{extension: string, content: string}|null
+     */
+    private function detectOrConvert(string $bytes): ?array
     {
         $finfo = new \finfo(FILEINFO_MIME_TYPE);
         $mime = $finfo->buffer($bytes);
 
-        return match ($mime) {
-            'image/jpeg' => 'jpg',
-            'image/png' => 'png',
-            'image/gif' => 'gif',
-            'image/webp' => 'webp',
-            'application/pdf' => 'pdf',
-            default => null,
-        };
+        $direct = [
+            'image/jpeg'                                                                  => 'jpg',
+            'image/png'                                                                   => 'png',
+            'image/gif'                                                                   => 'gif',
+            'image/webp'                                                                  => 'webp',
+            'application/pdf'                                                             => 'pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'   => 'docx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'         => 'xlsx',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
+        ];
+
+        if (isset($direct[$mime])) {
+            return ['extension' => $direct[$mime], 'content' => $bytes];
+        }
+
+        // Convert TIFF and other Imagick-readable raster formats to PNG.
+        if (class_exists(\Imagick::class)) {
+            try {
+                $imagick = new \Imagick();
+                $imagick->readImageBlob($bytes);
+                $imagick->setImageFormat('png');
+
+                return ['extension' => 'png', 'content' => $imagick->getImageBlob()];
+            } catch (\Throwable) {
+                // fall through — Imagick could not read the bytes
+            }
+        }
+
+        return null;
     }
 
     /** Which of these names were fetched before, in a query per thousand names instead of one per file. @param array<int, string> $names @return array<string, true> */

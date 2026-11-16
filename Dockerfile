@@ -3,10 +3,11 @@ FROM php:8.4.27-apache
 
 WORKDIR /var/www/html
 
-# PHP extensions not built into the base image: gd + zip (images and spreadsheet exports) and pdo_mysql.
+# PHP extensions not built into the base image: gd + zip (images and spreadsheet exports), pdo_mysql,
+# ftp (digital hatch) and imagick (converts TIFF attachments from the hatch to PNG).
 # The installer pulls only the runtime libraries and removes the build dependencies afterwards.
 COPY --from=mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /usr/local/bin/
-RUN install-php-extensions gd zip pdo_mysql ftp
+RUN install-php-extensions gd zip pdo_mysql ftp imagick
 
 # Production php.ini + app limits
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" && \
