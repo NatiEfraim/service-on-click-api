@@ -15,11 +15,16 @@ class ImportBookingJsonBucketCommand extends ImportCommand
     /** The name this command had before it was split by where the files come from. */
     protected $aliases = ['importBookingJson:mysql'];
 
-    protected $description = 'Import b2r booking json files waiting in the bucket (import-json → chunk jobs → database, file → loaded-json).';
+    protected $description = 'Import b2r booking json files waiting in the bucket (import-json → chunk jobs → database, file → loaded-json); a clean run then imports the attachment files (importFile:bucket).';
 
     protected function importFrom(bool $force, bool $sync): array
     {
         return $this->importBookingJsonFromBucket($sync);
+    }
+
+    protected function followUpCommand(): string
+    {
+        return 'importFile:bucket';
     }
 
     protected function modelType(): JsonModelTypeEnum

@@ -41,7 +41,11 @@ abstract class ImportCommand extends Command
                 $this->error($error);
             }
 
-            return $errors === [] ? self::SUCCESS : self::FAILURE;
+            if ($errors !== []) {
+                return self::FAILURE;
+            }
+
+            return $this->runFollowUp($sync);
         } catch (\Exception $e) {
             Log::error(static::class . ': ' . $e->getMessage());
             $this->error($e->getMessage());
@@ -50,6 +54,26 @@ abstract class ImportCommand extends Command
         } finally {
             app(StorageService::class)->logToS3();
         }
+    }
+
+    /** Artisan command a clean, inline (non-queued) run chains into (the booking commands name importFile); null = nothing follows. */
+    protected function followUpCommand(): ?string
+    {
+        return null;
+    }
+
+    /** Runs the follow-up command when one is declared; its exit code becomes this command's. */
+    private function runFollowUp(bool $sync): int
+    {
+        $followUp = $this->followUpCommand();
+
+        if ($followUp === null) {
+            return self::SUCCESS;
+        }
+
+        $this->info("importing the attachment files ({$followUp})...");
+
+        return $this->call($followUp, $sync ? ['--sync' => true] : []);
     }
 
     /** @return array<int, string> */
