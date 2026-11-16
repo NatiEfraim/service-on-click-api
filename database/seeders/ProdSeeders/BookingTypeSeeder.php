@@ -238,6 +238,108 @@ class BookingTypeSeeder extends Seeder
                     ],
                 ],
             ],
+
+            // תקשוב – installations (beside types 17-19, which stay until the product owner decides)
+            [
+                'group_booking_types' => [
+                    0 => [
+                        'id' => 8,
+                        'name' => 'ict_installations',
+                        'display_name' => 'התקנות',
+                        'icon' => BookingTypeIconEnum::ICT_INSTALL_GROUP->value,
+                        'position' => '33',
+                        'topic' => 'ict',
+                    ],
+                ],
+                'booking_types' => [
+                    0 => [
+                        'id' => 20,
+                        'name' => 'software_install',
+                        'display_name' => 'התקנת תוכנה',
+                        'description' => 'התקנת תוכנה על מחשב ברשת',
+                        'icon' => BookingTypeIconEnum::SOFTWARE_INSTALL_BOOKING->value,
+                        'position' => BookingTypePositionEnum::SOFTWARE_INSTALL_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                    1 => [
+                        'id' => 21,
+                        'name' => 'printer_install',
+                        'display_name' => 'התקנת מדפסת',
+                        'description' => 'חיבור מדפסת קיימת או התקנת מדפסת חדשה',
+                        'icon' => BookingTypeIconEnum::PRINTER_INSTALL_BOOKING->value,
+                        'position' => BookingTypePositionEnum::PRINTER_INSTALL_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                ],
+            ],
+
+            // תקשוב – faults
+            [
+                'group_booking_types' => [
+                    0 => [
+                        'id' => 9,
+                        'name' => 'ict_faults',
+                        'display_name' => 'תקלות',
+                        'icon' => BookingTypeIconEnum::ICT_FAULT_GROUP->value,
+                        'position' => '34',
+                        'topic' => 'ict',
+                    ],
+                ],
+                'booking_types' => [
+                    0 => [
+                        'id' => 22,
+                        'name' => 'email_fault',
+                        'display_name' => 'תקלה במייל',
+                        'description' => 'דיווח על תקלה בתיבת המייל',
+                        'icon' => BookingTypeIconEnum::EMAIL_FAULT_BOOKING->value,
+                        'position' => BookingTypePositionEnum::EMAIL_FAULT_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                ],
+            ],
+
+            // תקשוב – user management
+            [
+                'group_booking_types' => [
+                    0 => [
+                        'id' => 10,
+                        'name' => 'ict_users',
+                        'display_name' => 'ניהול משתמשים',
+                        'icon' => BookingTypeIconEnum::ICT_USERS_GROUP->value,
+                        'position' => '35',
+                        'topic' => 'ict',
+                    ],
+                ],
+                'booking_types' => [
+                    0 => [
+                        'id' => 23,
+                        'name' => 'user_rename',
+                        'display_name' => 'שינוי שם משתמש',
+                        'description' => 'שינוי שם התצוגה של משתמש קיים',
+                        'icon' => BookingTypeIconEnum::USER_RENAME_BOOKING->value,
+                        'position' => BookingTypePositionEnum::USER_RENAME_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                    1 => [
+                        'id' => 24,
+                        'name' => 'user_open',
+                        'display_name' => 'פתיחת משתמש',
+                        'description' => 'פתיחת משתמש חדש ברשת',
+                        'icon' => BookingTypeIconEnum::USER_OPEN_BOOKING->value,
+                        'position' => BookingTypePositionEnum::USER_OPEN_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                    2 => [
+                        'id' => 25,
+                        'name' => 'user_move',
+                        'display_name' => 'העברת משתמש יחידה',
+                        'description' => 'העברת משתמש קיים ליחידה אחרת',
+                        'icon' => BookingTypeIconEnum::USER_MOVE_BOOKING->value,
+                        'position' => BookingTypePositionEnum::USER_MOVE_BOOKING->value,
+                        'has_group' => true,
+                    ],
+                ],
+            ],
         ];
 
         Model::unguarded(function () use ($bookingTypeGroups) {

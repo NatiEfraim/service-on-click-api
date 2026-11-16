@@ -76,7 +76,8 @@ class ManagementInsightTest extends ManagementTestCase
 
         $vice = $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/me')->assertOk()->json('data');
         $this->assertTrue($vice['is_handler_only']);
-        $this->assertFalse($vice['capabilities']['dashboard.view']);
+        // A vice approver sees the dashboard of their own types (limited to their stage).
+        $this->assertTrue($vice['capabilities']['dashboard.view']);
         $this->assertContains('vice_approver_1', $vice['permissions']);
     }
 
@@ -126,7 +127,40 @@ class ManagementInsightTest extends ManagementTestCase
 
         $this->as(self::ADMIN)->getJson(self::BASE . '/domain-dashboard?types=1')->assertOk();
         $this->as(self::SUPER_ADMIN)->getJson(self::BASE . '/domain-dashboard?types=1')->assertOk();
-        $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/domain-dashboard')->assertForbidden();
+        $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/domain-dashboard')->assertOk();
+    }
+
+    public function test_the_camp_commander_sees_when_the_approver_and_vice_approver_last_viewed_and_acted(): void
+    {
+        $vice = User::where('personal_number', self::VICE_APPROVER)->first();
+
+        // nobody has looked yet
+        $this->as(self::ADMIN)->getJson(self::BASE . '/domain-dashboard?types=1')->assertOk()
+            ->assertJsonPath('data.last_activity.vice_approver.last_view', null);
+
+        // the vice approver opens the dashboard twice: one view is recorded (5 minute window)
+        $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/domain-dashboard?types=1')->assertOk()
+            ->assertJsonPath('data.last_activity', null);
+        $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/domain-dashboard?types=1')->assertOk();
+        $this->assertSame(1, AuditLog::where('action', 'dashboard.view')->where('actor_id', $vice->actorId())->count());
+
+        // an action of the vice approver on a booking of the type
+        app(\App\Services\AuditService::class)->record([
+            'action' => 'booking.status_change', 'entity_type' => 'booking', 'entity_id' => 800000001,
+            'booking_serial' => 800000001, 'booking_type_id' => 1, 'after' => ['status_id' => 16],
+        ], $vice);
+
+        $this->as(self::ADMIN)->getJson(self::BASE . '/domain-dashboard?types=1')->assertOk()
+            ->assertJsonPath('data.last_activity.vice_approver.last_view.name', $vice->full_name)
+            ->assertJsonPath('data.last_activity.vice_approver.last_action.serial', 800000001)
+            ->assertJsonPath('data.last_activity.vice_approver.last_action.status_id', 16);
+
+        // the admin's own visits are not recorded, and only the camp commander gets the block
+        $this->assertSame(1, AuditLog::where('action', 'dashboard.view')->count());
+        $this->as(self::SUPER_ADMIN)->getJson(self::BASE . '/domain-dashboard?types=1')->assertOk()
+            ->assertJsonPath('data.last_activity', null);
+        $this->as(self::APPROVER)->getJson(self::BASE . '/domain-dashboard?types=1')->assertOk()
+            ->assertJsonPath('data.last_activity', null);
     }
 
     public function test_the_overview_counts_what_waits_for_the_user(): void

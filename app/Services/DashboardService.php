@@ -17,6 +17,7 @@ class DashboardService
     public function __construct(
         private readonly BookingQueryService $bookings,
         private readonly StatusTimelineService $timeline,
+        private readonly DomainActivityService $activity,
     ) {
     }
 
@@ -93,6 +94,9 @@ class DashboardService
             throw new DomainError('אין לך הרשאה לדשבורד של תחום זה', 403);
         }
 
+        // An approver's or vice approver's visit, shown to the camp commander (last_activity below).
+        $this->activity->recordView($scope, $typeIds);
+
         $days = max(1, min(365, $days));
         $from = now()->subDays($days);
         $terminal = StatusBookingEnum::terminalIds();
@@ -152,6 +156,8 @@ class DashboardService
             'booking_type_ids' => $typeIds,
             'window_days' => $days,
             'target' => count($typeIds) === 1 ? ($targets[$typeIds[0]] ?? null) : null,
+            // Camp commander only (null for everyone else and for several types): the approver's and vice approver's last view and action.
+            'last_activity' => count($typeIds) === 1 ? $this->activity->lastActivity($scope, $typeIds[0]) : null,
             'totals' => [
                 'open' => $open->count(),
                 'closed' => $closedAll,

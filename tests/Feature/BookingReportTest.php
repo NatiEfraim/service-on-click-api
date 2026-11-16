@@ -423,8 +423,10 @@ class BookingReportTest extends ManagementTestCase
 
                 $this->assertCount(1 + $listed->json('meta.total'), $rows, $person . ' ' . json_encode($filters));
 
-                // Same bookings, same order (the list shows at most 100, enough here).
-                $this->assertSame($this->serials($listed), array_map('intval', array_column(array_slice($rows, 1), 0)));
+                // Same bookings, same order: the list's page (at most 100) against the export's first rows; the count
+                // above covers the rest (with more booking types, the seeded bookings pass 100).
+                $page = $this->serials($listed);
+                $this->assertSame($page, array_map('intval', array_column(array_slice($rows, 1, count($page)), 0)));
             }
         }
 

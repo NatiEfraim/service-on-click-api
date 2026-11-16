@@ -92,7 +92,8 @@ final class AccessScope
             return $this->allManageableBookingTypeIds();
         }
 
-        return $this->isAdmin() ? $this->adminOfBookingTypeIds() : $this->approverOfBookingTypeIds();
+        // Approvers and vice approvers see their own types (a vice approver's numbers are limited to their stage by applyToBookings).
+        return $this->isAdmin() ? $this->adminOfBookingTypeIds() : $this->bookingTypeIdsOf(['approver_', 'vice_approver_']);
     }
 
     /** @return array<int, int> Every booking type that has bookings (outsource types have none). */
@@ -129,7 +130,7 @@ final class AccessScope
         return match ($capability) {
             'audit.view', 'sync.view', 'sync.operate', 'sla.manage', 'config.global' => $this->isSuperAdmin(),
             'users.manage', 'reports.view', 'targets.manage' => $this->isSuperAdmin() || $this->isAdmin(),
-            'dashboard.view' => $this->isSuperAdmin() || $this->isAdmin() || $this->approverOfBookingTypeIds() !== [],
+            'dashboard.view' => $this->isSuperAdmin() || $this->isAdmin() || $this->dashboardBookingTypeIds() !== [],
             default => false,
         };
     }

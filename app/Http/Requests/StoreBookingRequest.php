@@ -31,6 +31,9 @@ class StoreBookingRequest extends FormRequest
         return [
             'values'   => ['nullable', 'array'],
             'values.*' => ['nullable'],
+            // a choice field whose chosen option asks for a typed value: field id => that value
+            'option_values'   => ['nullable', 'array'],
+            'option_values.*' => ['nullable', 'string', 'max:255'],
             'files'    => ['nullable', 'array', 'max:10'],
             'files.*'  => ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf'],
         ];
@@ -56,6 +59,7 @@ class StoreBookingRequest extends FormRequest
             $bookingTypeId = (int) $this->route('bookingTypeId');
             $unitId = (int) Auth::user()->unit_id;
             $submitted = $this->input('values', []);
+            $typed = $this->input('option_values', []);
 
             $rootFields = FormField::where('booking_type_id', $bookingTypeId)
                 ->where('unit_id', $unitId)
@@ -79,16 +83,33 @@ class StoreBookingRequest extends FormRequest
                 // For SELECT fields: value must be a valid option_field_id.
                 if (!$isEmpty && $field->field_type_id == \App\Enums\FieldTypeEnum::SELECT->value) {
                     $optionId = (int) $value;
-                    $validOption = OptionField::where('id', $optionId)
+                    $option = OptionField::where('id', $optionId)
                         ->where('form_field_id', $field->id)
                         ->where('is_active', true)
-                        ->exists();
+                        ->first();
 
-                    if (!$validOption) {
+                    if (!$option) {
                         $v->errors()->add(
                             "values.{$fieldId}",
                             "ערך לא תקין עבור שדה \"{$field->field_display_name}\""
                         );
+                        continue;
+                    }
+
+                    // a list with sub-choices: one of them must be chosen (the chosen id is the sub-choice's)
+                    if (OptionField::where('option_field_id', $option->id)->where('is_active', true)->exists()) {
+                        $v->errors()->add("values.{$fieldId}", 'יש לבחור תת-אפשרות');
+                        continue;
+                    }
+
+                    // a "type in a value" choice: its value is required, and a number when the choice is a number
+                    if (\App\Http\Resources\RequesterFormResource::asksForValue($option)) {
+                        $text = trim((string) ($typed[$fieldId] ?? ''));
+                        if ($text === '') {
+                            $v->errors()->add("option_values.{$fieldId}", "יש להזין ערך עבור \"{$option->name}\"");
+                        } elseif ((int) $option->field_type_id === \App\Enums\FieldTypeEnum::NUMBER->value && !is_numeric($text)) {
+                            $v->errors()->add("option_values.{$fieldId}", 'יש להזין מספר');
+                        }
                     }
                 }
             }

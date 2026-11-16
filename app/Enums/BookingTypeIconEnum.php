@@ -47,4 +47,15 @@ enum BookingTypeIconEnum: string
     case FOLDER_PERMISSION_BOOKING = '35';
     case MANTA_PERMISSION_BOOKING = '36';
     case NETWORK_FOLDER_BOOKING = '37';
+
+    // תקשוב: installations, faults, user management (groups, then types)
+    case ICT_INSTALL_GROUP = '38';
+    case ICT_FAULT_GROUP = '39';
+    case ICT_USERS_GROUP = '40';
+    case SOFTWARE_INSTALL_BOOKING = '41';
+    case PRINTER_INSTALL_BOOKING = '42';
+    case EMAIL_FAULT_BOOKING = '43';
+    case USER_RENAME_BOOKING = '44';
+    case USER_OPEN_BOOKING = '45';
+    case USER_MOVE_BOOKING = '46';
 }

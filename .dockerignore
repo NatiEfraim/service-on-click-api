@@ -49,3 +49,8 @@ storage/logs/*.log
 storage/framework/cache/data/*
 storage/framework/sessions/*
 storage/framework/views/*
+
+# Local-only dev command (role switcher)
+app/Console/Commands/SetUserPermissionsCommand.php
+app/Console/Commands/RunAllDevCommand.php
+database/seeders/TestSeeders/DevManyBookingsSeeder.php
