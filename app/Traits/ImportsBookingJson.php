@@ -8,39 +8,29 @@ use Illuminate\Support\Facades\Log;
 
 trait ImportsBookingJson
 {
-    /** Imports waiting booking files when enabled; $sync runs the chunk jobs inline. (What GET /api/test-import runs.) */
-    protected function importBookingJson(bool $sync = false): array
+    /** Imports booking files waiting in the bucket ($sync saves inline, else chunk jobs are queued). @return bool the import ran (false = disabled); throws when anything failed */
+    protected function importBookingJsonFromBucket(bool $sync = false): bool
     {
         if (!config('app.import_json.enabled', true)) {
             Log::info('Booking import is disabled (IMPORT_JSON_ENABLED=false).');
 
-            return ['disabled' => true, 'busy' => false, 'files' => [], 'errors' => []];
+            return false;
         }
 
-        return app(ImportBookingService::class)->importFromBucket($sync);
+        app(ImportBookingService::class)->importFromBucket($sync);
+
+        return true;
     }
 
-    /** Reads booking files from the bucket and queues chunk jobs ($sync saves inline). @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>} */
-    protected function importBookingJsonFromBucket(bool $sync = false): array
-    {
-        if (!config('app.import_json.enabled', true)) {
-            Log::info('Booking import is disabled (IMPORT_JSON_ENABLED=false).');
-
-            return ['enabled' => false, 'switch' => 'IMPORT_JSON_ENABLED=false'];
-        }
-
-        return ['enabled' => true, 'queued' => false, 'result' => ['imported' => app(ImportBookingService::class)->importFromBucket($sync)]];
-    }
-
-    /** Fetches new booking files from the digital hatch FTP into the bucket, then imports them. Off while HATCH_ENABLED=false. @param bool $force re-fetch already-taken files @return array{enabled: bool, switch?: string, queued?: bool, result?: array<string, mixed>} */
-    protected function importBookingJsonFromFtp(bool $force = false, bool $sync = false): array
+    /** Fetches new booking files from the digital hatch FTP into the bucket, then imports them. @param bool $force re-fetch already-taken files @return bool the run happened (false = HATCH_ENABLED=false or another run working); throws when anything failed */
+    protected function importBookingJsonFromFtp(bool $force = false, bool $sync = false): bool
     {
         if (!config('services.digital-hatch.enabled')) {
             Log::info('Booking import from the digital hatch is disabled (HATCH_ENABLED=false).');
 
-            return ['enabled' => false, 'switch' => 'HATCH_ENABLED=false'];
+            return false;
         }
 
-        return ['enabled' => true, 'queued' => false, 'result' => app(DigitalHatchService::class)->importBookings($force, $sync)];
+        return app(DigitalHatchService::class)->importBookings($force, $sync);
     }
 }

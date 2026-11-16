@@ -17,23 +17,19 @@ trait HatchImportable
 {
     use ResolvesAttachmentStoragePath;
 
-    /** Lands new b2r json files from the FTP into the bucket; skips invalid JSON (still uploading) and already-fetched names. @param bool $force re-fetch even if already taken @return array{source: string, files: array<int, string>, errors: array<int, string>} */
-    public function downloadFiles(DigitalHatchFileEnum $stream, bool $force = false): array
+    /** Lands new b2r json files from the FTP into the bucket; skips invalid JSON (still uploading) and already-fetched names. Every failure is logged. @param bool $force re-fetch even if already taken @return int files that could not be taken (0 = all landed) */
+    public function downloadFiles(DigitalHatchFileEnum $stream, bool $force = false): int
     {
-        $result = ['source' => '', 'files' => [], 'errors' => []];
-
         try {
             $source = $this->hatchSource('black_to_red_ftp_path', 'path');
         } catch (\Throwable $e) {
-            return $this->hatchFailed($result, 'source', $e);
+            return $this->hatchFailed('source', $e);
         }
-
-        $result['source'] = $source['label'];
 
         try {
             $names = $this->hatchFileNames($source['disk'], $source['folder']);
         } catch (\Throwable $e) {
-            return $this->hatchFailed($result, "listing {$source['label']}", $e);
+            return $this->hatchFailed("listing {$source['label']}", $e);
         }
 
         $prefix = $stream->fileNamePrefix();
@@ -44,6 +40,8 @@ trait HatchImportable
 
         $fetched = $force ? [] : $this->alreadyFetched($names);
         $storage = app(StorageService::class);
+        $landed = 0;
+        $failed = 0;
 
         foreach ($names as $fileName) {
             if (isset($fetched[$fileName])) {
@@ -54,7 +52,8 @@ trait HatchImportable
                 $content = (string) $source['disk']->get($source['folder'] . $fileName);
 
                 if (!is_array(json_decode((string) preg_replace('/^\xEF\xBB\xBF/', '', $content), true))) {
-                    $result['errors'][] = "{$fileName}: not valid json (yet), left in the source for the next run";
+                    Log::warning("HatchImportable: {$fileName} is not valid json (yet), left in the source for the next run.");
+                    $failed++;
                     continue;
                 }
 
@@ -69,42 +68,42 @@ trait HatchImportable
                     throw $e;
                 }
 
-                $result['files'][] = $fileName;
+                $landed++;
             } catch (\Throwable $e) {
-                $this->hatchFailed($result, $fileName, $e);
+                $failed += $this->hatchFailed($fileName, $e);
             }
         }
 
-        return $result;
+        Log::info("Digital hatch {$stream->value}: {$landed} files landed from {$source['label']}" . ($failed > 0 ? ", {$failed} failed" : '') . '.');
+
+        return $failed;
     }
 
-    /** Lands new SrvOnClickFiles_* attachments from the FTP into the import-files bucket folder; only types AttachmentService serves are taken. Extension-less files (the mobile sends bare names) have their type detected from the bytes. @param bool $force re-fetch even if already taken @return array{source: string, files: array<int, string>, errors: array<int, string>} */
-    public function downloadAttachments(bool $force = false): array
+    /** Lands new SrvOnClickFiles_* attachments from the FTP into the import-files bucket folder; only types AttachmentService serves are taken. Files without a served extension have their type detected (and TIFF converted to PNG) from the bytes. Every failure is logged. @param bool $force re-fetch even if already taken @return int files that could not be taken (0 = all landed) */
+    public function downloadAttachments(bool $force = false): int
     {
-        $result = ['source' => '', 'files' => [], 'errors' => []];
-
         try {
             $source = $this->hatchSource('black_to_red_ftp_attachments_path', 'files_path');
         } catch (\Throwable $e) {
-            return $this->hatchFailed($result, 'source', $e);
+            return $this->hatchFailed('source', $e);
         }
-
-        $result['source'] = $source['label'];
 
         try {
             $names = array_values(array_filter(
                 $this->hatchFileNames($source['disk'], $source['folder']),
-                // Accept names with a known extension and also bare names (no extension): the mobile
-                // exports files without an extension; we detect the type from the bytes below.
+                // Accept names with a known extension and also names without one: the mobile
+                // exports files without an extension or as .tiff; the type comes from the bytes below.
                 fn (string $fileName): bool => $this->isAttachmentName($fileName)
                     || $this->isAttachmentBaseName($fileName),
             ));
         } catch (\Throwable $e) {
-            return $this->hatchFailed($result, "listing {$source['label']}", $e);
+            return $this->hatchFailed("listing {$source['label']}", $e);
         }
 
         $fetched = $force ? [] : $this->alreadyFetched($names);
         $disk = Storage::disk(config('filesystems.storage_service'));
+        $landed = 0;
+        $failed = 0;
 
         foreach ($names as $fileName) {
             if (isset($fetched[$fileName])) {
@@ -115,7 +114,8 @@ trait HatchImportable
                 $content = $source['disk']->get($source['folder'] . $fileName);
 
                 if ($content === null || $content === '') {
-                    $result['errors'][] = "{$fileName}: empty, left in the source for the next run";
+                    Log::warning("HatchImportable: {$fileName} is empty, left in the source for the next run.");
+                    $failed++;
                     continue;
                 }
 
@@ -127,7 +127,8 @@ trait HatchImportable
                     $detected = $this->detectOrConvert($content);
 
                     if ($detected === null) {
-                        $result['errors'][] = "{$fileName}: could not determine file type from bytes, skipped";
+                        Log::error("HatchImportable: {$fileName}: could not determine the file type from the bytes, skipped.");
+                        $failed++;
                         continue;
                     }
 
@@ -150,13 +151,15 @@ trait HatchImportable
                     throw $e;
                 }
 
-                $result['files'][] = $saveFileName;
+                $landed++;
             } catch (\Throwable $e) {
-                $this->hatchFailed($result, $fileName, $e);
+                $failed += $this->hatchFailed($fileName, $e);
             }
         }
 
-        return $result;
+        Log::info("Digital hatch attachments: {$landed} files landed from {$source['label']}" . ($failed > 0 ? ", {$failed} failed" : '') . '.');
+
+        return $failed;
     }
 
     /** Records a file as fetched in the ledger so the next run skips it; replaces the row on --force. Throws when the ledger cannot be written. */
@@ -282,12 +285,11 @@ trait HatchImportable
         return $fetched;
     }
 
-    /** Logs a failure and adds it to the result the command shows. @param array{files: array, errors: array<int, string>} $result @return array{files: array, errors: array<int, string>} */
-    private function hatchFailed(array &$result, string $what, \Throwable $e): array
+    /** Logs a failure; returns 1 so callers can count it. */
+    private function hatchFailed(string $what, \Throwable $e): int
     {
         Log::error("HatchImportable error ({$what}): {$e->getMessage()}");
-        $result['errors'][] = "{$what}: {$e->getMessage()}";
 
-        return $result;
+        return 1;
     }
 }

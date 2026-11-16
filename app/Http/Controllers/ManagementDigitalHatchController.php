@@ -66,33 +66,40 @@ class ManagementDigitalHatchController extends Controller
         return response()->json(['data' => ['enabled' => true, 'queued' => false, 'result' => $result]], Response::HTTP_OK);
     }
 
-    /** Manually run importBookingJson:ftp; params: force, sync (default 1). */
+    /** Manually run importBookingJson:ftp; params: force, sync (default 1). Details are in laravel.log; ran=false means disabled or another run working. */
     public function importBookingJson(Request $request): JsonResponse
     {
-        $force = (bool) $request->input('force', false);
-        $sync = (bool) $request->input('sync', true);
-        $outcome = $this->importBookingJsonFromFtp($force, $sync);
-
-        return response()->json(['data' => $outcome], Response::HTTP_OK);
+        return $this->importOutcome(fn (): bool => $this->importBookingJsonFromFtp(
+            (bool) $request->input('force', false),
+            (bool) $request->input('sync', true),
+        ));
     }
 
-    /** Manually run importApplicationLogJson:ftp; params: force, sync (default 1). */
+    /** Manually run importApplicationLogJson:ftp; params: force, sync (default 1). Details are in laravel.log; ran=false means disabled or another run working. */
     public function importApplicationLogJson(Request $request): JsonResponse
     {
-        $force = (bool) $request->input('force', false);
-        $sync = (bool) $request->input('sync', true);
-        $outcome = $this->importApplicationLogJsonFromFtp($force, $sync);
-
-        return response()->json(['data' => $outcome], Response::HTTP_OK);
+        return $this->importOutcome(fn (): bool => $this->importApplicationLogJsonFromFtp(
+            (bool) $request->input('force', false),
+            (bool) $request->input('sync', true),
+        ));
     }
 
-    /** Manually run importFile:bucket; params: sync (default 1). */
+    /** Manually run importFile:bucket; params: sync (default 1). Details are in laravel.log; ran=false means disabled or queued. */
     public function importFiles(Request $request): JsonResponse
     {
-        $sync = (bool) $request->input('sync', true);
-        $outcome = $this->importFileFromBucket($sync);
+        return $this->importOutcome(fn (): bool => $this->importFileFromBucket(
+            (bool) $request->input('sync', true),
+        ));
+    }
 
-        return response()->json(['data' => $outcome], Response::HTTP_OK);
+    /** Runs an import and answers ok + ran, or ok=false with the error (the details are in laravel.log). @param callable(): bool $import */
+    private function importOutcome(callable $import): JsonResponse
+    {
+        try {
+            return response()->json(['data' => ['ok' => true, 'ran' => $import()]], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            return response()->json(['data' => ['ok' => false, 'error' => $e->getMessage()]], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /** Queue SendHatchBookingStatusJob without running it now. */

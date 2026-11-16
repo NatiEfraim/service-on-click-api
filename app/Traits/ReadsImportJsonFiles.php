@@ -23,42 +23,47 @@ trait ReadsImportJsonFiles
         return null;
     }
 
-    /** Imports all waiting files oldest-first; moves each to loaded-json when all chunks succeed. @param bool $sync run chunks inline @return array{busy: bool, files: array<int, array>, errors: array<int, array{file: string, message: string}>} */
-    public function importFromBucket(bool $sync = false): array
+    /** Imports all waiting files oldest-first; each failure is logged, and the run throws at the end when any file failed or still waits. @param bool $sync run chunks inline */
+    public function importFromBucket(bool $sync = false): void
     {
         $type = $this->jsonModelType();
-        $result = ['busy' => false, 'files' => [], 'errors' => []];
 
-        // The scheduler and /api/test-import may overlap; only one reads the folder at a time.
+        // The scheduler and a manual run may overlap; only one reads the folder at a time.
         $lock = Cache::lock('import-json:' . $type->name, 600);
 
         if (!$lock->get()) {
             Log::info("Import of the {$type->name} files skipped: another run is reading the folder.");
-            $result['busy'] = true;
 
-            return $result;
+            return;
         }
+
+        $total = 0;
+        $failed = 0;
 
         try {
             $directory = $type->importRemoteDirectory();
 
             foreach ($this->storageService->listJsonFilesInBucket($type->importFileNamePrefix(), $directory) as $fileName) {
+                $total++;
+
                 try {
-                    $result['files'][] = $this->importFile($type, $fileName, $directory, $sync);
+                    $this->importFile($type, $fileName, $directory, $sync);
                 } catch (\Exception $e) {
                     Log::error("Import of {$fileName} failed: " . $e->getMessage());
-                    $result['errors'][] = ['file' => $fileName, 'message' => $e->getMessage()];
+                    $failed++;
                 }
             }
         } finally {
             $lock->release();
         }
 
-        return $result;
+        if ($failed > 0) {
+            throw new \RuntimeException("{$failed} of {$total} {$type->name} files failed or still wait, see the log.");
+        }
     }
 
-    /** @return array{file: string, rows: int, chunks: int, moved_to: ?string, stats: array<string, int>, errors: array<int, string>} */
-    private function importFile(JsonModelTypeEnum $type, string $fileName, string $directory, bool $sync): array
+    /** Imports one file and moves it to loaded-json; throws when a chunk failed or rows still wait (the file then stays in place for the next run). */
+    private function importFile(JsonModelTypeEnum $type, string $fileName, string $directory, bool $sync): void
     {
         $payload = $this->storageService->readJsonFromBucket($fileName, $directory);
         $rows = $payload[$type->payloadKey()] ?? null;
@@ -70,7 +75,7 @@ trait ReadsImportJsonFiles
         // Keys are preserved so logs can name the row.
         $chunks = array_chunk($rows, $this->chunkSize(), true);
         $stats = [];
-        $errors = [];
+        $failedChunks = 0;
 
         foreach ($chunks as $chunkIndex => $chunk) {
             $job = $this->makeChunkJob($chunk, $chunkIndex);
@@ -86,34 +91,24 @@ trait ReadsImportJsonFiles
                 }
             } catch (\Exception $e) {
                 Log::error("Import of {$fileName}: chunk {$chunkIndex} failed: " . $e->getMessage());
-                $errors[] = "chunk {$chunkIndex}: " . $e->getMessage();
+                $failedChunks++;
             }
         }
 
         // Sync only: a file with pending rows stays in place.
-        if ($sync && $errors === [] && ($pending = $this->pendingReason($stats, $directory)) !== null) {
-            $errors[] = $pending;
+        $pending = $sync && $failedChunks === 0 ? $this->pendingReason($stats, $directory) : null;
+
+        if ($failedChunks > 0 || $pending !== null) {
+            Log::info("Import of {$fileName}: " . count($rows) . ' rows in ' . count($chunks) . ' chunks, the file stays in place.');
+
+            throw new \RuntimeException($failedChunks > 0 ? "{$failedChunks} of " . count($chunks) . ' chunks failed' : $pending);
         }
 
-        $movedTo = null;
+        $loadedDirectory = JsonModelTypeEnum::loadedRemoteDirectory();
+        $movedTo = $loadedDirectory . '/' . $this->storageService->moveBucketFile($fileName, $directory, $loadedDirectory);
+        $this->noteImported($type, $fileName);
 
-        if ($errors === []) {
-            $loadedDirectory = JsonModelTypeEnum::loadedRemoteDirectory();
-            $movedTo = $loadedDirectory . '/' . $this->storageService->moveBucketFile($fileName, $directory, $loadedDirectory);
-            $this->noteImported($type, $fileName);
-        }
-
-        Log::info("Import of {$fileName}: " . count($rows) . ' rows in ' . count($chunks) . ' chunks ' . ($sync ? 'saved' : 'queued')
-            . ($movedTo ? ", file moved to {$movedTo}." : ', file left in place because of errors.'));
-
-        return [
-            'file' => $fileName,
-            'rows' => count($rows),
-            'chunks' => count($chunks),
-            'moved_to' => $movedTo,
-            'stats' => $stats,
-            'errors' => $errors,
-        ];
+        Log::info("Import of {$fileName}: " . count($rows) . ' rows in ' . count($chunks) . ' chunks ' . ($sync ? 'saved' : 'queued') . ", file moved to {$movedTo}.");
     }
 
     /** Notes in the digital hatch ledger that this bucket file was imported; non-fatal (the import does not depend on it). */

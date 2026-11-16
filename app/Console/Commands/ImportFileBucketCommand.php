@@ -13,7 +13,7 @@ class ImportFileBucketCommand extends ImportCommand
 
     protected $description = 'Save b2r attachment files waiting in the bucket (import-files → database → files, file → loaded-files).';
 
-    protected function importFrom(bool $force, bool $sync): array
+    protected function importFrom(bool $force, bool $sync): bool
     {
         return $this->importFileFromBucket($sync);
     }

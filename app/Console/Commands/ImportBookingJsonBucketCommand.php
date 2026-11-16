@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\JsonModelTypeEnum;
 use App\Traits\ImportsBookingJson;
 
 class ImportBookingJsonBucketCommand extends ImportCommand
@@ -17,7 +16,7 @@ class ImportBookingJsonBucketCommand extends ImportCommand
 
     protected $description = 'Import b2r booking json files waiting in the bucket (import-json → chunk jobs → database, file → loaded-json); a clean run then imports the attachment files (importFile:bucket).';
 
-    protected function importFrom(bool $force, bool $sync): array
+    protected function importFrom(bool $force, bool $sync): bool
     {
         return $this->importBookingJsonFromBucket($sync);
     }
@@ -25,10 +24,5 @@ class ImportBookingJsonBucketCommand extends ImportCommand
     protected function followUpCommand(): string
     {
         return 'importFile:bucket';
-    }
-
-    protected function modelType(): JsonModelTypeEnum
-    {
-        return JsonModelTypeEnum::EXPORT_BOOKING;
     }
 }

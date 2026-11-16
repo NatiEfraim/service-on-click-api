@@ -13,8 +13,8 @@ class ImportFileFtpJob extends ImportJob
         parent::__construct();
     }
 
-    protected function import(): array
+    protected function import(): void
     {
-        return app(DigitalHatchService::class)->importFiles($this->force);
+        app(DigitalHatchService::class)->importFiles($this->force);
     }
 }

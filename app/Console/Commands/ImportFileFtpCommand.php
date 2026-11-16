@@ -14,7 +14,7 @@ class ImportFileFtpCommand extends ImportCommand
 
     protected $description = 'Take new b2r attachment files from the FTP into the bucket and save them like importFile:bucket.';
 
-    protected function importFrom(bool $force, bool $sync): array
+    protected function importFrom(bool $force, bool $sync): bool
     {
         return $this->importFileFromFtp($force, $sync);
     }

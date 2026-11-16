@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\JsonModelTypeEnum;
 use App\Traits\ImportsApplicationLogJson;
 
 class ImportApplicationLogJsonFtpCommand extends ImportCommand
@@ -15,13 +14,8 @@ class ImportApplicationLogJsonFtpCommand extends ImportCommand
 
     protected $description = 'Take new b2r application log json files from the FTP into the bucket and import them.';
 
-    protected function importFrom(bool $force, bool $sync): array
+    protected function importFrom(bool $force, bool $sync): bool
     {
         return $this->importApplicationLogJsonFromFtp($force, $sync);
-    }
-
-    protected function modelType(): JsonModelTypeEnum
-    {
-        return JsonModelTypeEnum::APPLICATION_LOG;
     }
 }

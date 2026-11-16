@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\JsonModelTypeEnum;
 use App\Traits\ImportsApplicationLogJson;
 
 class ImportApplicationLogJsonBucketCommand extends ImportCommand
@@ -17,13 +16,8 @@ class ImportApplicationLogJsonBucketCommand extends ImportCommand
 
     protected $description = 'Import b2r application log json files waiting in the bucket (import-json → chunk jobs → database, file → loaded-json).';
 
-    protected function importFrom(bool $force, bool $sync): array
+    protected function importFrom(bool $force, bool $sync): bool
     {
         return $this->importApplicationLogJsonFromBucket($sync);
-    }
-
-    protected function modelType(): JsonModelTypeEnum
-    {
-        return JsonModelTypeEnum::APPLICATION_LOG;
     }
 }

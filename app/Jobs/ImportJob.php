@@ -28,28 +28,17 @@ abstract class ImportJob implements ShouldQueue
         $this->timeout = (int) config('app.jobs.import_job.timeout');
     }
 
-    /** @return array<string, mixed> */
-    abstract protected function import(): array;
+    /** Does the import; logs its own details and throws on any failure. */
+    abstract protected function import(): void;
 
-    /** Runs import(); throws on any error so the queue retries after back-off. @return array<string, mixed> */
-    public function handle(): array
+    /** Runs import(); a throw is logged and rethrown so the queue retries after back-off. */
+    public function handle(): void
     {
         try {
-            $result = $this->import();
-
-            $errors = [];
-
-            foreach ([...($result['errors'] ?? []), ...($result['imported']['errors'] ?? [])] as $error) {
-                $errors[] = is_array($error) ? "{$error['file']}: {$error['message']}" : (string) $error;
-            }
-
-            if ($errors !== []) {
-                throw new \RuntimeException(implode('; ', $errors));
-            }
-
-            return $result;
+            $this->import();
         } catch (\Exception $e) {
             Log::error(static::class . ': failed, will retry: ' . $e->getMessage());
+
             throw $e;
         } finally {
             app(StorageService::class)->logToS3();

@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\JsonModelTypeEnum;
 use App\Traits\ImportsBookingJson;
 
 class ImportBookingJsonFtpCommand extends ImportCommand
@@ -15,7 +14,7 @@ class ImportBookingJsonFtpCommand extends ImportCommand
 
     protected $description = 'Take new b2r booking json files from the FTP into the bucket and import them; a clean run then takes the attachment files (importFile:ftp).';
 
-    protected function importFrom(bool $force, bool $sync): array
+    protected function importFrom(bool $force, bool $sync): bool
     {
         return $this->importBookingJsonFromFtp($force, $sync);
     }
@@ -23,10 +22,5 @@ class ImportBookingJsonFtpCommand extends ImportCommand
     protected function followUpCommand(): string
     {
         return 'importFile:ftp';
-    }
-
-    protected function modelType(): JsonModelTypeEnum
-    {
-        return JsonModelTypeEnum::EXPORT_BOOKING;
     }
 }

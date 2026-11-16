@@ -13,6 +13,30 @@ trait GuardsDigitalHatchRuns
         return (bool) config('services.digital-hatch.enabled');
     }
 
+    /** Runs $work under a named lock; false when the hatch is disabled or another run holds the lock (the work then did not run). @param callable(): void $work */
+    private function lockedRun(string $name, callable $work): bool
+    {
+        if (!$this->enabled()) {
+            return false;
+        }
+
+        $lock = Cache::lock("digital-hatch:{$name}", 600);
+
+        if (!$lock->get()) {
+            Log::info("Digital hatch {$name} skipped: another run is working.");
+
+            return false;
+        }
+
+        try {
+            $work();
+
+            return true;
+        } finally {
+            $lock->release();
+        }
+    }
+
     /** Runs $work under a named lock; returns early when the hatch is disabled or another run holds the lock. @param callable(): array<string, mixed> $work @return array<string, mixed> */
     private function locked(string $name, callable $work): array
     {
