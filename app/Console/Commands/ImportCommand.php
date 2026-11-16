@@ -18,7 +18,7 @@ abstract class ImportCommand extends Command
             $sync = (bool) $this->option('sync');
             $ran = $this->importFrom($this->hasOption('force') && (bool) $this->option('force'), $sync);
 
-            return $ran ? $this->runFollowUp($sync) : self::SUCCESS;
+            return $ran ? $this->runFollowUps($sync) : self::SUCCESS;
         } catch (\Exception $e) {
             Log::error(static::class . ': ' . $e->getMessage());
             $this->error($e->getMessage());
@@ -29,23 +29,29 @@ abstract class ImportCommand extends Command
         }
     }
 
-    /** Artisan command a clean, inline (non-queued) run chains into (the booking commands name importFile); null = nothing follows. */
-    protected function followUpCommand(): ?string
+    /**
+     * Artisan commands a clean, inline (non-queued) run chains into, in order (the booking commands name importFile and then
+     * importApplicationLogJson); the chain stops at the first failure. Empty = nothing follows.
+     * @return array<int, string>
+     */
+    protected function followUpCommands(): array
     {
-        return null;
+        return [];
     }
 
-    /** Runs the follow-up command when one is declared; its exit code becomes this command's. */
-    private function runFollowUp(bool $sync): int
+    /** Runs the follow-up commands one after the other; the first failing exit code becomes this command's, SUCCESS when all pass. */
+    private function runFollowUps(bool $sync): int
     {
-        $followUp = $this->followUpCommand();
+        foreach ($this->followUpCommands() as $followUp) {
+            $this->info("running the next import ({$followUp})...");
 
-        if ($followUp === null) {
-            return self::SUCCESS;
+            $exitCode = $this->call($followUp, $sync ? ['--sync' => true] : []);
+
+            if ($exitCode !== self::SUCCESS) {
+                return $exitCode;
+            }
         }
 
-        $this->info("importing the attachment files ({$followUp})...");
-
-        return $this->call($followUp, $sync ? ['--sync' => true] : []);
+        return self::SUCCESS;
     }
 }
