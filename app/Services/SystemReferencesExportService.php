@@ -23,7 +23,7 @@ class SystemReferencesExportService
     /** Builds today's system references file and sends it to the FTP. @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>} */
     public function export(bool $force = false): array
     {
-        return $this->locked('send-system-references', function (): array {
+        return $this->locked('send-system-references', function () use ($force): array {
             $waiting = [];
             $errors = [];
 
@@ -39,7 +39,7 @@ class SystemReferencesExportService
 
             if (($built['written'] ?? false) || ($built['reason'] ?? '') === 'unchanged') {
                 try {
-                    $this->send($built['bucket_key']);
+                    $this->send($built['bucket_key'], $force);
                     $sentFile = $built['file'];
                 } catch (\Throwable $e) {
                     Log::error('SystemReferencesExportService: could not send system references file: ' . $e->getMessage());
@@ -125,6 +125,7 @@ class SystemReferencesExportService
         }
 
         $bucketKey = $this->storageService->putJsonToBucket($fileName, $directory, $json);
+        $this->noteBucketWrite($fileName, $json);
 
         return ['written' => true, 'bucket_key' => $bucketKey, ...$result];
     }

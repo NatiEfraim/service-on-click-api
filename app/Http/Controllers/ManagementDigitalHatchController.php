@@ -2,7 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ExportBookingStatusJsonBucketJob;
+use App\Jobs\ExportSysRefJsonBucketJob;
+use App\Jobs\ExportUsersJsonBucketJob;
+use App\Jobs\SendHatchBookingStatusJob;
+use App\Jobs\SendHatchSystemReferencesJob;
+use App\Jobs\SendHatchUsersJob;
+use App\Services\BookingStatusExportService;
 use App\Services\BookingStatusSnapshotService;
+use App\Services\SystemReferencesExportService;
 use App\Services\UsersExportService;
 use App\Traits\ImportsApplicationLogJson;
 use App\Traits\ImportsBookingJson;
@@ -11,114 +19,191 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/** SUPER_ADMIN-only endpoints that manually trigger the digital-hatch commands; sync by default (sync=0 queues the work). */
+/**
+ * SUPER_ADMIN-only endpoints that manually trigger the digital-hatch commands; sync by default (sync=0 queues the work).
+ * Every endpoint takes channel=ftp|bucket, exactly like the commands' :ftp / :bucket variants. Omitted, the channel follows
+ * HATCH_ENABLED (on = ftp, off = bucket) - what the scheduler itself would run.
+ */
 class ManagementDigitalHatchController extends Controller
 {
     use ImportsBookingJson, ImportsApplicationLogJson, ImportsFile;
 
+    private const CHANNEL_FTP = 'ftp';
+
+    private const CHANNEL_BUCKET = 'bucket';
+
     public function __construct(
         private readonly BookingStatusSnapshotService $bookingStatusSnapshot,
+        private readonly BookingStatusExportService $bookingStatusBucketExport,
         private readonly UsersExportService $usersExport,
+        private readonly SystemReferencesExportService $systemReferencesExport,
     ) {
     }
 
-    /** Manually run exportBookingStatusJson:ftp; params: force, sync (default 1), booking_type_id, status_id. */
+    //----------------------------- Exports (r2b) ------------------------------------//
+
+    /** Manually run exportBookingStatusJson:ftp or :bucket; params: channel, force, sync (default 1), and on ftp booking_type_id, status_id. */
     public function exportBookingStatus(Request $request): JsonResponse
     {
-        if (!config('services.digital-hatch.enabled')) {
-            return response()->json(['data' => ['enabled' => false]], Response::HTTP_OK);
+        $channel = $this->channel($request);
+        [$force, $sync] = $this->forceAndSync($request);
+
+        if ($channel === self::CHANNEL_BUCKET) {
+            if (!$sync) {
+                return $this->queued($channel, new ExportBookingStatusJsonBucketJob());
+            }
+
+            return $this->ran($channel, $this->bookingStatusBucketExport->run());
         }
 
-        $force = (bool) $request->input('force', false);
-        $sync = (bool) $request->input('sync', true);
+        if (!$this->hatchOn()) {
+            return $this->hatchOff();
+        }
+
+        if (!$sync) {
+            return $this->queued($channel, new SendHatchBookingStatusJob($force));
+        }
+
         $bookingTypeId = $request->input('booking_type_id') !== null ? (int) $request->input('booking_type_id') : null;
         $statusId = $request->input('status_id') !== null ? (int) $request->input('status_id') : null;
 
-        if (!$sync) {
-            $outcome = $this->exportHatchBookingStatusQueued($force);
-
-            return response()->json(['data' => $outcome], Response::HTTP_ACCEPTED);
-        }
-
-        $result = $this->bookingStatusSnapshot->export($force, $bookingTypeId, $statusId);
-
-        return response()->json(['data' => ['enabled' => true, 'queued' => false, 'result' => $result]], Response::HTTP_OK);
+        return $this->ran($channel, $this->bookingStatusSnapshot->export($force, $bookingTypeId, $statusId));
     }
 
-    /** Manually run exportUsersJson:ftp (hatch on) or exportUsersJson:bucket (hatch off); params: force, sync (default 1). */
+    /** Manually run exportUsersJson:ftp or :bucket; params: channel, force, sync (default 1). */
     public function exportUsers(Request $request): JsonResponse
     {
-        $force = (bool) $request->input('force', false);
-        $sync = (bool) $request->input('sync', true);
+        $channel = $this->channel($request);
+        [$force, $sync] = $this->forceAndSync($request);
+
+        if ($channel === self::CHANNEL_BUCKET) {
+            if (!$sync) {
+                return $this->queued($channel, new ExportUsersJsonBucketJob());
+            }
+
+            return $this->ran($channel, $this->usersExport->exportToBucket(evenWhileHatchOn: true));
+        }
+
+        if (!$this->hatchOn()) {
+            return $this->hatchOff();
+        }
 
         if (!$sync) {
-            $outcome = $this->exportHatchUsersQueued($force);
-
-            return response()->json(['data' => $outcome], Response::HTTP_ACCEPTED);
+            return $this->queued($channel, new SendHatchUsersJob($force));
         }
 
-        if (config('services.digital-hatch.enabled')) {
-            $result = $this->usersExport->export($force);
-        } else {
-            $result = $this->usersExport->exportToBucket();
-        }
-
-        return response()->json(['data' => ['enabled' => true, 'queued' => false, 'result' => $result]], Response::HTTP_OK);
+        return $this->ran($channel, $this->usersExport->export($force));
     }
 
-    /** Manually run importBookingJson:ftp; params: force, sync (default 1). Details are in laravel.log; ran=false means disabled or another run working. */
+    /** Manually run exportSysRefJson:ftp or :bucket; params: channel, force, sync (default 1). */
+    public function exportSystemReferences(Request $request): JsonResponse
+    {
+        $channel = $this->channel($request);
+        [$force, $sync] = $this->forceAndSync($request);
+
+        if ($channel === self::CHANNEL_BUCKET) {
+            if (!$sync) {
+                return $this->queued($channel, new ExportSysRefJsonBucketJob());
+            }
+
+            return $this->ran($channel, $this->systemReferencesExport->exportToBucket());
+        }
+
+        if (!$this->hatchOn()) {
+            return $this->hatchOff();
+        }
+
+        if (!$sync) {
+            return $this->queued($channel, new SendHatchSystemReferencesJob($force));
+        }
+
+        return $this->ran($channel, $this->systemReferencesExport->export($force));
+    }
+
+    //----------------------------- Imports (b2r) ------------------------------------//
+
+    /** Manually run importBookingJson:ftp or :bucket; params: channel, force (ftp only), sync (default 1). ran=false means disabled, queued or another run working. */
     public function importBookingJson(Request $request): JsonResponse
     {
-        return $this->importOutcome(fn (): bool => $this->importBookingJsonFromFtp(
-            (bool) $request->input('force', false),
-            (bool) $request->input('sync', true),
-        ));
+        $channel = $this->channel($request);
+        [$force, $sync] = $this->forceAndSync($request);
+
+        return $this->importOutcome($channel, fn (): bool => $channel === self::CHANNEL_BUCKET
+            ? $this->importBookingJsonFromBucket($sync)
+            : $this->importBookingJsonFromFtp($force, $sync));
     }
 
-    /** Manually run importApplicationLogJson:ftp; params: force, sync (default 1). Details are in laravel.log; ran=false means disabled or another run working. */
+    /** Manually run importApplicationLogJson:ftp or :bucket; params: channel, force (ftp only), sync (default 1). */
     public function importApplicationLogJson(Request $request): JsonResponse
     {
-        return $this->importOutcome(fn (): bool => $this->importApplicationLogJsonFromFtp(
-            (bool) $request->input('force', false),
-            (bool) $request->input('sync', true),
-        ));
+        $channel = $this->channel($request);
+        [$force, $sync] = $this->forceAndSync($request);
+
+        return $this->importOutcome($channel, fn (): bool => $channel === self::CHANNEL_BUCKET
+            ? $this->importApplicationLogJsonFromBucket($sync)
+            : $this->importApplicationLogJsonFromFtp($force, $sync));
     }
 
-    /** Manually run importFile:bucket; params: sync (default 1). Details are in laravel.log; ran=false means disabled or queued. */
+    /** Manually run importFile:ftp or :bucket; params: channel, force (ftp only), sync (default 1). */
     public function importFiles(Request $request): JsonResponse
     {
-        return $this->importOutcome(fn (): bool => $this->importFileFromBucket(
-            (bool) $request->input('sync', true),
-        ));
+        $channel = $this->channel($request);
+        [$force, $sync] = $this->forceAndSync($request);
+
+        return $this->importOutcome($channel, fn (): bool => $channel === self::CHANNEL_BUCKET
+            ? $this->importFileFromBucket($sync)
+            : $this->importFileFromFtp($force, $sync));
     }
+
+    //----------------------------- Shared pieces ------------------------------------//
 
     /** Runs an import and answers ok + ran, or ok=false with the error (the details are in laravel.log). @param callable(): bool $import */
-    private function importOutcome(callable $import): JsonResponse
+    private function importOutcome(string $channel, callable $import): JsonResponse
     {
         try {
-            return response()->json(['data' => ['ok' => true, 'ran' => $import()]], Response::HTTP_OK);
+            return response()->json(['data' => ['ok' => true, 'ran' => $import(), 'channel' => $channel]], Response::HTTP_OK);
         } catch (\Exception $e) {
-            return response()->json(['data' => ['ok' => false, 'error' => $e->getMessage()]], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['data' => ['ok' => false, 'error' => $e->getMessage(), 'channel' => $channel]], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
-    /** Queue SendHatchBookingStatusJob without running it now. */
-    private function exportHatchBookingStatusQueued(bool $force): array
+    /** ftp | bucket (422 on anything else); omitted = what the scheduler would run: ftp while the hatch is on, bucket while it is off. */
+    private function channel(Request $request): string
     {
-        dispatch(new \App\Jobs\SendHatchBookingStatusJob($force));
+        $validated = $request->validate(['channel' => 'nullable|string|in:ftp,bucket']);
 
-        return ['enabled' => true, 'queued' => true, 'job' => 'SendHatchBookingStatusJob'];
+        return $validated['channel'] ?? ($this->hatchOn() ? self::CHANNEL_FTP : self::CHANNEL_BUCKET);
     }
 
-    /** Queue SendHatchUsersJob (hatch on) or tell the caller the hatch is off (bucket only has no queueable job). */
-    private function exportHatchUsersQueued(bool $force): array
+    /** @return array{0: bool, 1: bool} force, sync */
+    private function forceAndSync(Request $request): array
     {
-        if (config('services.digital-hatch.enabled')) {
-            dispatch(new \App\Jobs\SendHatchUsersJob($force));
+        return [(bool) $request->input('force', false), (bool) $request->input('sync', true)];
+    }
 
-            return ['enabled' => true, 'queued' => true, 'job' => 'SendHatchUsersJob'];
-        }
+    private function hatchOn(): bool
+    {
+        return (bool) config('services.digital-hatch.enabled');
+    }
 
-        return ['enabled' => true, 'queued' => false, 'message' => 'Digital hatch is off; running bucket export now.', 'result' => $this->usersExport->exportToBucket()];
+    /** The ftp channel was asked for while HATCH_ENABLED=false: nothing ran. */
+    private function hatchOff(): JsonResponse
+    {
+        return response()->json(['data' => ['enabled' => false]], Response::HTTP_OK);
+    }
+
+    private function queued(string $channel, object $job): JsonResponse
+    {
+        dispatch($job);
+
+        return response()->json(
+            ['data' => ['enabled' => true, 'queued' => true, 'channel' => $channel, 'job' => class_basename($job)]],
+            Response::HTTP_ACCEPTED,
+        );
+    }
+
+    private function ran(string $channel, array $result): JsonResponse
+    {
+        return response()->json(['data' => ['enabled' => true, 'queued' => false, 'channel' => $channel, 'result' => $result]], Response::HTTP_OK);
     }
 }

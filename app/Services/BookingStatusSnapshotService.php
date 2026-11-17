@@ -23,14 +23,14 @@ class BookingStatusSnapshotService
     }
 
     /**
-     * @param bool $force accepted for callers that still pass it; the trait always sends when new content is written
+     * @param bool $force send the file even when the ledger says this exact content already went
      * @param int|null $bookingTypeId optional filter (manual web trigger)
      * @param int|null $statusId optional filter (manual web trigger)
      * @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>}
      */
     public function export(bool $force = false, ?int $bookingTypeId = null, ?int $statusId = null): array
     {
-        return $this->locked('send-booking-status', function () use ($bookingTypeId, $statusId): array {
+        return $this->locked('send-booking-status', function () use ($force, $bookingTypeId, $statusId): array {
             $waiting = [];
             $errors = [];
 
@@ -46,7 +46,7 @@ class BookingStatusSnapshotService
 
             if (($built['written'] ?? false) || ($built['reason'] ?? '') === 'unchanged') {
                 try {
-                    $this->send($built['bucket_key']);
+                    $this->send($built['bucket_key'], $force);
                     $sentFile = $built['file'];
                 } catch (\Throwable $e) {
                     Log::error('BookingStatusSnapshotService: could not send booking status file: ' . $e->getMessage());
@@ -72,7 +72,7 @@ class BookingStatusSnapshotService
 
                     if ($bucketContent !== $ftpContent) {
                         try {
-                            $this->send($newestKey);
+                            $this->send($newestKey, $force);
                             $sentFile = $newestFileName;
                         } catch (\Throwable $e) {
                             Log::error('BookingStatusSnapshotService: could not send booking status file: ' . $e->getMessage());
@@ -126,6 +126,7 @@ class BookingStatusSnapshotService
         }
 
         $bucketKey = $this->storageService->putJsonToBucket($fileName, $directory, $json);
+        $this->noteBucketWrite($fileName, $json);
 
         return ['written' => true, 'bucket_key' => $bucketKey, ...$result];
     }

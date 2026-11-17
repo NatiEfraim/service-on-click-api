@@ -25,7 +25,7 @@ class UsersExportService
     /** Builds today's users file and sends it to the FTP. @return array{enabled: bool, busy?: bool, destination?: string, built?: array<string, mixed>, file?: ?string, marked?: int, errors?: array<int, string>} */
     public function export(bool $force = false): array
     {
-        return $this->locked('send-users', function (): array {
+        return $this->locked('send-users', function () use ($force): array {
             $waiting = [];
             $errors = [];
 
@@ -41,7 +41,7 @@ class UsersExportService
 
             if (($built['written'] ?? false) || ($built['reason'] ?? '') === 'unchanged') {
                 try {
-                    $this->send($built['bucket_key']);
+                    $this->send($built['bucket_key'], $force);
                     $sentFile = $built['file'];
                 } catch (\Throwable $e) {
                     Log::error('UsersExportService: could not send users file: ' . $e->getMessage());
@@ -56,14 +56,18 @@ class UsersExportService
         });
     }
 
-    /** Bucket-only export for when HATCH_ENABLED=false; steps aside while the hatch is on. @return array{skipped?: string, built?: array<string, mixed>, marked?: int, errors?: array<int, string>} */
-    public function exportToBucket(): array
+    /**
+     * Bucket-only export for when HATCH_ENABLED=false; steps aside while the hatch is on, unless the caller explicitly asked
+     * for the bucket channel ($evenWhileHatchOn, the manual channel=bucket trigger).
+     * @return array{skipped?: string, built?: array<string, mixed>, marked?: int, errors?: array<int, string>}
+     */
+    public function exportToBucket(bool $evenWhileHatchOn = false): array
     {
         if (!config('app.export_json.enabled', true)) {
             return ['skipped' => 'export_json_disabled'];
         }
 
-        if ($this->enabled()) {
+        if (!$evenWhileHatchOn && $this->enabled()) {
             return ['skipped' => 'digital_hatch'];
         }
 
@@ -133,6 +137,7 @@ class UsersExportService
         }
 
         $bucketKey = $this->storageService->putJsonToBucket($fileName, $directory, $json);
+        $this->noteBucketWrite($fileName, $json);
 
         return ['written' => true, 'bucket_key' => $bucketKey, ...$result];
     }

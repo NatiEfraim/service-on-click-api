@@ -190,6 +190,7 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin'])
             ->group(function () {
                 Route::match(['get', 'post'], '/export-booking-status', 'exportBookingStatus');
                 Route::match(['get', 'post'], '/export-users', 'exportUsers');
+                Route::match(['get', 'post'], '/export-system-references', 'exportSystemReferences');
                 Route::match(['get', 'post'], '/import-booking-json', 'importBookingJson');
                 Route::match(['get', 'post'], '/import-application-log-json', 'importApplicationLogJson');
                 Route::match(['get', 'post'], '/import-files', 'importFiles');
