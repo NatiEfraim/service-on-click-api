@@ -67,10 +67,16 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|
     ->group(function () {
         Route::controller(ManagementBookingController::class)->group(function () {
             Route::get('/bookings', 'index');
+            // Every booking route takes the booking's uuid; the serial variants stay for one release (the transition the frontend asked for).
+            Route::get('/bookings/{uuid}', 'show')->whereUuid('uuid');
             Route::get('/bookings/{serial}', 'show')->whereNumber('serial');
+            Route::get('/bookings/{uuid}/attachments/{kind}/{id}', 'attachment')
+                ->whereUuid('uuid')->whereIn('kind', ['file', 'image'])->whereNumber('id');
             Route::get('/bookings/{serial}/attachments/{kind}/{id}', 'attachment')
                 ->whereNumber('serial')->whereIn('kind', ['file', 'image'])->whereNumber('id');
+            Route::post('/bookings/{uuid}/status', 'changeStatus')->whereUuid('uuid');
             Route::post('/bookings/{serial}/status', 'changeStatus')->whereNumber('serial');
+            Route::put('/bookings/{uuid}/values', 'updateValues')->whereUuid('uuid');
             Route::put('/bookings/{serial}/values', 'updateValues')->whereNumber('serial');
             Route::match(['post', 'put'], '/bookings', 'createBlocked');
             Route::post('/bookings/{bookingTypeId}/create', 'createBlocked')->whereNumber('bookingTypeId');

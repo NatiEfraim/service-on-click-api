@@ -16,6 +16,7 @@ use App\Models\Status;
 use App\Models\SyncConflict;
 use App\Support\AccessScope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 /** The bookings a manager sees: the list and one booking in full, limited by AccessScope; the row shape is the contract in docs/admin-api.md. */
 class BookingQueryService
@@ -71,6 +72,10 @@ class BookingQueryService
 
         if ($serials = $this->ids($filters['ids'] ?? null)) {
             $query->whereIn('serial_number', $serials);
+        }
+
+        if ($uuids = $this->uuids($filters['uuids'] ?? null)) {
+            $query->whereIn('uuid', $uuids);
         }
 
         if (filled($filters['handler'] ?? null)) {
@@ -319,6 +324,17 @@ class BookingQueryService
         $list = is_array($value) ? $value : explode(',', (string) $value);
 
         return array_values(array_filter(array_map('intval', $list), fn (int $id): bool => $id > 0));
+    }
+
+    /** The valid uuids of a comma list or array; anything that is not a uuid is dropped. @return array<int, string> */
+    private function uuids(mixed $value): array
+    {
+        $list = is_array($value) ? $value : explode(',', (string) $value);
+
+        return array_values(array_filter(
+            array_map(fn ($uuid): string => trim((string) $uuid), $list),
+            fn (string $uuid): bool => Str::isUuid($uuid),
+        ));
     }
 
     /** @param array<int, int> $bookingIds @return array<int, true> booking id => true */

@@ -38,10 +38,11 @@ class SyncService
             'files' => SyncFile::query()->orderByDesc('id')->limit(150)
                 ->get(['id', 'kind', 'file_name', 'state', 'attempts', 'record_count', 'last_error', 'next_attempt_at', 'completed_at', 'created_at'])
                 ->map(fn (SyncFile $file): array => $this->fileRow($file))->all(),
-            'conflicts' => SyncConflict::query()->with('booking:id,serial_number,booking_type_id')->orderByDesc('id')->limit(50)->get()
+            'conflicts' => SyncConflict::query()->with('booking:id,uuid,serial_number,booking_type_id')->orderByDesc('id')->limit(50)->get()
                 ->map(fn (SyncConflict $conflict): array => [
                     'id' => $conflict->id,
                     'booking_serial' => $conflict->booking?->serial_number,
+                    'booking_uuid' => $conflict->booking?->uuid,
                     'booking_type_label' => $conflict->booking ? ($bookingTypes[$conflict->booking->booking_type_id] ?? null) : null,
                     'internal_status_id' => $conflict->internal_status_id,
                     'internal_label' => $labels[$conflict->internal_status_id] ?? null,
@@ -54,9 +55,10 @@ class SyncService
                 ])->all(),
             'pending_decisions' => Booking::query()
                 ->where('status_source', 'internal')->where('is_status_exported', false)->whereNotNull('serial_number')
-                ->orderBy('status_changed_at')->limit(200)->get(['id', 'serial_number', 'status_id', 'status_changed_at', 'updated_at'])
+                ->orderBy('status_changed_at')->limit(200)->get(['id', 'uuid', 'serial_number', 'status_id', 'status_changed_at', 'updated_at'])
                 ->map(fn (Booking $booking): array => [
                     'booking_serial' => $booking->serial_number,
+                    'booking_uuid' => $booking->uuid,
                     'status_id' => (int) $booking->status_id,
                     'status_label' => $labels[$booking->status_id] ?? null,
                     'decided_at' => $booking->statusSince()->toIso8601String(),

@@ -184,6 +184,8 @@ class DashboardService
             ],
             'oldest' => $rows->sortByDesc('total_age_hours')->take(6)->values()->all(),
             'overdue_serials' => $rows->where('overdue', true)->pluck('serial_number')->values()->all(),
+            // The same bookings in the same order, by the key the frontend opens them with.
+            'overdue_uuids' => $rows->where('overdue', true)->pluck('uuid')->values()->all(),
             'trend' => $trend,
             'definitions' => 'יעד טיפול = זמן כולל מפתיחת הקריאה ועד סגירתה, אחד לכל תחום. קריאה חורגת כשגילה עובר את היעד. בניתוח השלבים נספרות הקריאות החורגות לפי השלב שבו הן נמצאות עכשיו; זמני שלב מחושבים מיומן הפעולות.',
         ];

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Enums\HttpStatusCodeEnum;
+use App\Exceptions\DomainError;
 use App\Http\Requests\ChangeBookingStatusRequest;
 use App\Http\Requests\UpdateBookingValuesRequest;
+use App\Models\Booking;
 use App\Services\AttachmentService;
 use App\Services\AuditService;
 use App\Services\BookingQueryService;
@@ -32,10 +34,11 @@ class ManagementBookingController extends Controller
         return response()->json($this->bookingQueryService->list($this->accessScope(), $request->query()), Response::HTTP_OK);
     }
 
-    /** One booking in full: values, comments, timeline, editable fields, sync state. */
-    public function show(int $serial): JsonResponse
+    /** One booking in full: values, comments, timeline, editable fields, sync state. The key is the booking's uuid or its serial. */
+    public function show(string $key): JsonResponse
     {
-        $booking = $this->bookingQueryService->show($this->accessScope(), $serial);
+        $serial = $this->serialOf($key);
+        $booking = $serial === null ? null : $this->bookingQueryService->show($this->accessScope(), $serial);
 
         if ($booking === null) {
             return response()->json(['message' => HttpStatusCodeEnum::DENIED_MESSAGE], Response::HTTP_NOT_FOUND);
@@ -45,14 +48,18 @@ class ManagementBookingController extends Controller
     }
 
     /** One file or image of the booking (kind: file | image); images and PDFs open inline, the rest download. */
-    public function attachment(int $serial, string $kind, int $id): StreamedResponse
+    public function attachment(string $key, string $kind, int $id): StreamedResponse
     {
+        $serial = $this->serialOf($key) ?? throw new DomainError('לא נמצא', 404);
+
         return $this->attachmentService->open($this->accessScope(), $serial, $kind, $id);
     }
 
     /** Move the booking to status_id (send the version you saw; Idempotency-Key header optional). */
-    public function changeStatus(int $serial, ChangeBookingStatusRequest $request): JsonResponse
+    public function changeStatus(string $key, ChangeBookingStatusRequest $request): JsonResponse
     {
+        $serial = $this->serialOf($key) ?? throw new DomainError('לא נמצא', 404);
+
         $result = $this->bookingWorkflowService->changeStatus(
             scope: $this->accessScope(),
             serial: $serial,
@@ -66,8 +73,10 @@ class ManagementBookingController extends Controller
     }
 
     /** Correct editable date/time values (form_field_id => value). */
-    public function updateValues(int $serial, UpdateBookingValuesRequest $request): JsonResponse
+    public function updateValues(string $key, UpdateBookingValuesRequest $request): JsonResponse
     {
+        $serial = $this->serialOf($key) ?? throw new DomainError('לא נמצא', 404);
+
         $result = $this->bookingValueService->update(
             scope: $this->accessScope(),
             serial: $serial,
@@ -77,6 +86,22 @@ class ManagementBookingController extends Controller
         );
 
         return response()->json(['data' => $result, 'message' => $result['message']], Response::HTTP_OK);
+    }
+
+    /**
+     * The serial the route key names: the number itself (the serial routes), or the serial of the uuid (the uuid routes).
+     * Everything downstream - scope checks, workflow rules, audit by serial - stays exactly as it was. Null = no such uuid,
+     * answered with the same vague 404 every miss gets, so a uuid reveals nothing a serial would not.
+     */
+    private function serialOf(string $key): ?int
+    {
+        if (ctype_digit($key)) {
+            return (int) $key;
+        }
+
+        $serial = Booking::query()->where('uuid', $key)->value('serial_number');
+
+        return $serial === null ? null : (int) $serial;
     }
 
     /** This system never opens bookings: refused and audited (they are opened in the mobile app). */

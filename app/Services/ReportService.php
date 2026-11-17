@@ -104,6 +104,7 @@ class ReportService
             $departmentId = $booking->user?->department_id;
 
             return [
+                'uuid' => $row['uuid'],
                 'serial_number' => $row['serial_number'],
                 'booking_type_id' => $row['booking_type_id'],
                 'booking_type_label' => $row['booking_type_label'],

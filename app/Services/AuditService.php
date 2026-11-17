@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Domain\Audit\HashChain;
 use App\Models\AuditLog;
+use App\Models\Booking;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -92,8 +93,20 @@ class AuditService
             ->orderByDesc('id')
             ->paginate($perPage, ['*'], 'page', max(1, (int) ($filters['page'] ?? 1)));
 
+        // The audit rows keep booking_serial (people search by the number); the uuid is resolved only for the listing,
+        // so the frontend can link each row to its booking without a second call.
+        $uuidBySerial = Booking::query()
+            ->whereIn('serial_number', array_values(array_unique(array_filter(array_map(
+                fn (AuditLog $row): ?int => $row->booking_serial !== null ? (int) $row->booking_serial : null,
+                $page->items(),
+            )))))
+            ->pluck('uuid', 'serial_number');
+
         return [
-            'data' => $page->items() ? array_map(fn (AuditLog $row): array => $row->toArray(), $page->items()) : [],
+            'data' => $page->items() ? array_map(fn (AuditLog $row): array => [
+                ...$row->toArray(),
+                'booking_uuid' => $row->booking_serial !== null ? ($uuidBySerial[(int) $row->booking_serial] ?? null) : null,
+            ], $page->items()) : [],
             'meta' => ['total' => $page->total(), 'page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $perPage],
         ];
     }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\Booking;
 use App\Models\User;
 use App\Support\AccessScope;
 
@@ -96,6 +97,9 @@ class DomainActivityService
                     'at' => $action->occurred_at,
                     'action' => $action->action,
                     'serial' => $action->booking_serial,
+                    'uuid' => $action->booking_serial !== null
+                        ? Booking::query()->where('serial_number', $action->booking_serial)->value('uuid')
+                        : null,
                     'status_id' => $action->after['status_id'] ?? null,
                 ] : null,
             ];
