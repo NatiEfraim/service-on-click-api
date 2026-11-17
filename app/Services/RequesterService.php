@@ -10,6 +10,7 @@ use App\Http\Resources\RequesterFormResource;
 use App\Models\Booking;
 use App\Models\BookingType;
 use App\Models\BookingValue;
+use App\Models\Comment;
 use App\Models\File;
 use App\Models\FormField;
 use App\Models\GroupBookingType;
@@ -127,6 +128,7 @@ class RequesterService
 
             $this->storeValues($booking, $request->input('values', []), $bookingTypeId, (int) $user->unit_id, $request->input('option_values', []));
             $this->storeFiles($booking, $request->file('files', []));
+            $this->storeComment($booking, $request->input('comment'));
 
             return $booking->load(['bookingType', 'status']);
         });
@@ -292,7 +294,8 @@ class RequesterService
                 'booking_id' => $booking->id,
                 'form_field_id' => $field->id,
                 'option_field_id' => $optionFieldId,
-                'value' => $value !== null ? [$value] : null,
+                // A scalar, as every other writer stores it (the import's encodeValue shape) - never wrapped in a list.
+                'value' => $value === null ? null : (is_scalar($value) ? (string) $value : $value),
             ]);
         }
     }
@@ -354,5 +357,21 @@ class RequesterService
                 ]);
             }
         }
+    }
+
+    /** Saves the requester's comment on the new booking when the text is not empty (as the mobile side's createBookingComment does). */
+    private function storeComment(Booking $booking, mixed $comment): void
+    {
+        $comment = is_string($comment) ? trim($comment) : '';
+
+        if ($comment === '') {
+            return;
+        }
+
+        Comment::create([
+            'booking_id' => $booking->id,
+            'user_id' => Auth::id(),
+            'comment' => $comment,
+        ]);
     }
 }

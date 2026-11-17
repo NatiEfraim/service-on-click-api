@@ -367,13 +367,13 @@ enum FieldTypeEnum: int
         $value = self::decodeJsonValue($value);
 
         return match ($fieldTypeValue) {
-            self::NUMBER->value => self::normalizeNumberValue($value, $exportJson),
-            self::TEXT->value => self::normalizeTextValue($value),
+            self::NUMBER->value => self::normalizeNumberValue(self::unwrapSingleValue($value), $exportJson),
+            self::TEXT->value => self::normalizeTextValue(self::unwrapSingleValue($value)),
             self::DATE->value => self::normalizeDateValue(
-                value: $value,
+                value: self::unwrapSingleValue($value),
                 exportJson: $exportJson
             ),
-            self::TIME->value => self::normalizeTimeValue($value),
+            self::TIME->value => self::normalizeTimeValue(self::unwrapSingleValue($value)),
             default => $value,
         };
 
@@ -412,11 +412,22 @@ enum FieldTypeEnum: int
         return 0 + $value;
     }
 
+    /** A single-value field stored wrapped in a one-element list (the web portal's old shape) is its one element. */
+    private static function unwrapSingleValue(mixed $value): mixed
+    {
+        return is_array($value) && array_is_list($value) && count($value) === 1
+            ? $value[0]
+            : $value;
+    }
+
     private static function normalizeTextValue(mixed $value): string
     {
-        return is_string($value)
-            ? $value
-            : (string) $value;
+        if (is_string($value)) {
+            return $value;
+        }
+
+        // Never "(string) array": that warning used to abort the whole formatting of a booking.
+        return is_scalar($value) || $value instanceof \Stringable ? (string) $value : '';
     }
 
     /** Y-m-d for JSON export, else d/m/Y. */

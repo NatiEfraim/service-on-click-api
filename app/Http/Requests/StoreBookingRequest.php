@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Domain\Workflow\Workflow;
 use App\Models\FormField;
 use App\Models\OptionField;
 use App\Services\RequesterService;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
  *   values[{form_field_id}] = "text / date / number value"
  *   values[{form_field_id}] = {option_field_id}   // SELECT field
  *   files[]                 = <UploadedFile>       // images or PDF, optional
+ *   comment                 = "הערה"               // optional, saved as the booking's first comment
  */
 class StoreBookingRequest extends FormRequest
 {
@@ -36,6 +38,8 @@ class StoreBookingRequest extends FormRequest
             'option_values.*' => ['nullable', 'string', 'max:255'],
             'files'    => ['nullable', 'array', 'max:10'],
             'files.*'  => ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf'],
+            // the same rule every booking comment follows (the workflow's and the mobile side's)
+            'comment'  => ['nullable', 'string', 'max:' . Workflow::COMMENT_MAX_LENGTH, 'regex:' . Workflow::COMMENT_REGEX],
         ];
     }
 
@@ -45,6 +49,8 @@ class StoreBookingRequest extends FormRequest
             'files.max'    => 'ניתן לצרף עד 10 קבצים',
             'files.*.max'  => 'גודל קובץ מרבי הוא 10MB',
             'files.*.mimes' => 'סוגי קבצים מותרים: תמונות ו-PDF בלבד',
+            'comment.max'   => 'ההערה ארוכה מ-' . Workflow::COMMENT_MAX_LENGTH . ' תווים',
+            'comment.regex' => 'ההערה יכולה להכיל אותיות בעברית ורווחים בלבד',
         ];
     }
 
