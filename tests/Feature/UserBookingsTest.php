@@ -4,7 +4,12 @@ namespace Tests\Feature;
 
 use App\Enums\PaginationEnum;
 use App\Models\Booking;
+use App\Models\File;
+use App\Models\Image;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /** What a person with only the user role may do: read their own booking history and open one booking. */
 class UserBookingsTest extends ManagementTestCase
@@ -21,6 +26,36 @@ class UserBookingsTest extends ManagementTestCase
             ->where('booking_type_id', $bookingTypeId)
             ->orderBy('id')
             ->firstOrFail();
+    }
+
+    /**
+     * Links an attachment to the booking exactly as RequesterService::storeFiles saves an upload: the bytes under
+     * portal-uploads/<booking uuid> and the full key (with its extension) on the row. $bytes null = the row is linked
+     * but its bytes never reached the bucket.
+     */
+    private function uploadedAttachment(Booking $booking, string $fileName, ?string $bytes = 'bytes'): File|Image
+    {
+        $key = 'portal-uploads/' . $booking->uuid . '/' . $fileName;
+
+        if ($bytes !== null) {
+            Storage::disk('minio')->put($key, $bytes);
+        }
+
+        $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+        $isImage = in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
+        $row = ['name' => (string) Str::uuid(), 'display_name' => $fileName, 'path' => $key, 'file_name' => $fileName];
+
+        $attachment = $isImage ? Image::create($row) : File::create($row);
+
+        DB::table($isImage ? 'booking_has_images' : 'booking_has_files')->insert([
+            'booking_id' => $booking->id,
+            ($isImage ? 'image_id' : 'file_id') => $attachment->id,
+            'form_field_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $attachment;
     }
 
     public function test_my_bookings_lists_only_the_bookings_of_the_person_logged_in(): void
@@ -89,12 +124,62 @@ class UserBookingsTest extends ManagementTestCase
             ->assertJsonPath('data.serial_number', $booking->serial_number)
             ->assertJsonPath('data.booking_type.id', 13)
             ->assertJsonPath('data.user.full_name', User::where('personal_number', self::PLAIN_USER)->value('full_name'))
-            ->assertJsonStructure(['data' => ['uuid', 'serial_number', 'booking_type', 'status', 'user', 'created_at', 'booking_values']]);
+            ->assertJsonStructure(['data' => ['uuid', 'serial_number', 'booking_type', 'status', 'user', 'created_at', 'booking_values', 'attachments']]);
 
         $this->app['auth']->forgetGuards();
 
         $values = $this->actingAsPersonalNumber(self::PLAIN_USER)->getJson('/api/bookings/' . $booking->uuid)->json('data.booking_values');
         $this->assertNotEmpty($values, 'the values were formatted');
+    }
+
+    public function test_a_plain_user_sees_the_attachments_of_their_own_booking(): void
+    {
+        Storage::fake('minio');
+        Storage::disk('minio')->buildTemporaryUrlsUsing(fn (string $path) => 'https://minio.test/signed/' . $path);
+
+        $booking = $this->bookingOf(self::PLAIN_USER);
+        $photo = $this->uploadedAttachment($booking, 'photo.png');
+        $form = $this->uploadedAttachment($booking, 'form.pdf');
+        $waiting = $this->uploadedAttachment($booking, 'late.pdf', bytes: null);
+
+        $attachments = collect(
+            $this->actingAsPersonalNumber(self::PLAIN_USER)
+                ->getJson('/api/bookings/' . $booking->uuid)
+                ->assertOk()
+                ->json('data.attachments')
+        )->keyBy('name');
+
+        $this->assertCount(3, $attachments);
+
+        $photoRow = $attachments[$photo->name];
+        $this->assertSame('image', $photoRow['kind']);
+        $this->assertSame('image/png', $photoRow['mime']);
+        $this->assertTrue($photoRow['inline']);
+        $this->assertTrue($photoRow['available']);
+        $this->assertSame('https://minio.test/signed/portal-uploads/' . $booking->uuid . '/photo.png', $photoRow['url']);
+
+        $formRow = $attachments[$form->name];
+        $this->assertSame('file', $formRow['kind']);
+        $this->assertSame('application/pdf', $formRow['mime']);
+        $this->assertTrue($formRow['inline']);
+        $this->assertTrue($formRow['available']);
+        $this->assertSame('https://minio.test/signed/portal-uploads/' . $booking->uuid . '/form.pdf', $formRow['url']);
+
+        // Linked, but the bytes never reached the bucket: shown as not yet available, with no URL to a missing object.
+        $waitingRow = $attachments[$waiting->name];
+        $this->assertFalse($waitingRow['available']);
+        $this->assertNull($waitingRow['mime']);
+        $this->assertNull($waitingRow['url']);
+    }
+
+    public function test_a_booking_without_attachments_answers_with_an_empty_attachments_list(): void
+    {
+        $booking = $this->bookingOf(self::PLAIN_USER);
+
+        $this->actingAsPersonalNumber(self::PLAIN_USER)
+            ->getJson('/api/bookings/' . $booking->uuid)
+            ->assertOk()
+            ->assertJsonPath('data.attachments', []);
     }
 
     public function test_a_plain_user_cannot_open_somebody_elses_booking(): void

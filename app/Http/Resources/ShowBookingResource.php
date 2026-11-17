@@ -7,6 +7,7 @@ use App\Enums\FormFieldEnum;
 use App\Enums\StatusBookingEnum;
 use App\Enums\SystemReferenceEnum;
 use App\Models\BookingValue;
+use App\Services\AttachmentService;
 use App\Services\BookingValueFormatterService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -51,6 +52,7 @@ class ShowBookingResource extends JsonResource
             'created_at' => $this->formatDate($this->created_at),
             'updated_at' => $this->formatDate($this->updated_at),
             'booking_values' => $this->bookingValueFormatterService->format($this->resource),
+            'attachments' => app(AttachmentService::class)->describe($this->resource),
             'comments' => $this->getCommentsData(),
             'vice_approver' => $this->getViceApproverData(),
             'is_cancelable' => $cancellationData['is_cancelable'],
