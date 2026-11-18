@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Domain\Workflow\Routes\ClearanceGrantRoute;
 use App\Domain\Workflow\Workflow;
 use App\Enums\BookingStageEnum;
 use App\Enums\RoleEnum;
@@ -431,9 +432,73 @@ class WorkflowTest extends TestCase
 
     public function test_the_terminal_statuses_are_the_closed_ones(): void
     {
-        $this->assertSame([4, 5, 6, 7, 12, 13], S::terminalIds());
+        // 105 is the successful end of the clearance grant route (web only).
+        $this->assertSame([4, 5, 6, 7, 12, 13, 105], S::terminalIds());
         $this->assertTrue(S::COMPLETED->isTerminal());
+        $this->assertTrue(S::CLEARANCE_GRANTED->isTerminal());
         $this->assertFalse(S::PENDING_FILE->isTerminal());
+        $this->assertFalse(S::AWAITING_CLEARANCE->isTerminal());
+    }
+
+    //----------------------------- A route of its own: the clearance grant (type 14) -----------------//
+
+    private function withClearanceRoute(): Workflow
+    {
+        return new Workflow(controlOfficerBookingTypeIds: [8], transportationBookingTypeId: 8, barberBookingTypeId: 5, routes: [14 => new ClearanceGrantRoute()]);
+    }
+
+    public function test_a_type_with_a_route_of_its_own_follows_that_route_and_the_generic_types_are_untouched(): void
+    {
+        $workflow = $this->withClearanceRoute();
+
+        // The route's stages, not the approver chain's.
+        $this->assertSame(BookingStageEnum::INTERVIEW_ASSIGNMENT, $workflow->stageOf(S::INTERVIEW_ASSIGNMENT, 14));
+        $this->assertSame(BookingStageEnum::INTERVIEW_SCHEDULED, $workflow->stageOf(S::INTERVIEW_SCHEDULED, 14));
+        $this->assertSame(BookingStageEnum::INTERVIEWED, $workflow->stageOf(S::INTERVIEWED, 14));
+        $this->assertSame(BookingStageEnum::AWAITING_CLEARANCE, $workflow->stageOf(S::AWAITING_CLEARANCE, 14));
+        $this->assertSame(BookingStageEnum::CLOSED, $workflow->stageOf(S::CLEARANCE_GRANTED, 14));
+        $this->assertSame(BookingStageEnum::CLOSED, $workflow->stageOf(S::REJECTED, 14));
+        // Older data left in a generic status stands at the start of the route, not stranded.
+        $this->assertSame(BookingStageEnum::INTERVIEW_ASSIGNMENT, $workflow->stageOf(S::RECEIVED, 14));
+        $this->assertSame(S::INTERVIEW_ASSIGNMENT, $workflow->initialStatus(14));
+        $this->assertSame(S::RECEIVED, $workflow->initialStatus(1));
+
+        // The coordinator schedules and passes the interview on; the officer also moves back, refuses and closes; the super admin (admin_14) everything.
+        $this->assertSame([102, 4], $this->targets(S::INTERVIEW_ASSIGNMENT, ['infosec_officer_14'], 14, $workflow));
+        $this->assertSame([102], $this->targets(S::INTERVIEW_ASSIGNMENT, ['interview_coordinator_14'], 14, $workflow));
+        $this->assertSame([101, 4], $this->targets(S::INTERVIEW_SCHEDULED, ['infosec_officer_14'], 14, $workflow), 'the interview moment is the scheduler\'s, not a button');
+        $this->assertSame([], $this->targets(S::INTERVIEW_SCHEDULED, ['interview_coordinator_14'], 14, $workflow));
+        $this->assertSame([104, 101, 4], $this->targets(S::INTERVIEWED, ['infosec_officer_14'], 14, $workflow));
+        $this->assertSame([104], $this->targets(S::INTERVIEWED, ['interview_coordinator_14'], 14, $workflow));
+        $this->assertSame([105, 101, 4], $this->targets(S::AWAITING_CLEARANCE, ['infosec_officer_14'], 14, $workflow));
+        $this->assertSame([], $this->targets(S::AWAITING_CLEARANCE, ['interview_coordinator_14'], 14, $workflow));
+        $this->assertSame([102, 4], $this->targets(S::INTERVIEW_ASSIGNMENT, ['admin_14'], 14, $workflow));
+        $this->assertSame([], $this->targets(S::CLEARANCE_GRANTED, ['infosec_officer_14', 'admin_14'], 14, $workflow));
+
+        // Nothing of the approver chain opens the route, and the requester has no button.
+        $this->assertSame([], $this->targets(S::INTERVIEW_ASSIGNMENT, ['approver_14', 'vice_approver_14', 'department_security_officer_14', 'infosec_officer_15'], 14, $workflow));
+        $this->assertFalse($workflow->canChangeTo(S::INTERVIEW_ASSIGNMENT, S::APPROVED, ['admin_14'], 14));
+
+        // The transition carries what the move needs; a move back clears the interview and needs a comment.
+        $schedule = $workflow->transitionFor(14, S::INTERVIEW_ASSIGNMENT, S::INTERVIEW_SCHEDULED);
+        $this->assertTrue($schedule->requiresHandler);
+        $this->assertSame(['interview_location', 'interview_date', 'interview_time'], $schedule->requiredFields);
+        $back = $workflow->transitionFor(14, S::AWAITING_CLEARANCE, S::INTERVIEW_ASSIGNMENT);
+        $this->assertTrue($back->commentRequired);
+        $this->assertSame(['interview_location', 'interview_date', 'interview_time'], $back->clearsFields);
+        $this->assertNotNull(Workflow::validateComment(S::INTERVIEW_ASSIGNMENT, '', $back->commentRequired));
+        $this->assertNull(Workflow::validateComment(S::INTERVIEW_SCHEDULED, '', $schedule->commentRequired));
+        $this->assertNull($workflow->transitionFor(14, S::INTERVIEW_SCHEDULED, S::INTERVIEWED), 'an automatic move is not a manual transition');
+
+        // The handler fields are written while the request waits for the assignment or the interview, by the route's roles.
+        $this->assertTrue($workflow->canEditValues(S::INTERVIEW_ASSIGNMENT, ['interview_coordinator_14'], 14));
+        $this->assertTrue($workflow->canEditValues(S::INTERVIEW_SCHEDULED, ['infosec_officer_14'], 14));
+        $this->assertFalse($workflow->canEditValues(S::INTERVIEWED, ['infosec_officer_14'], 14));
+        $this->assertFalse($workflow->canEditValues(S::INTERVIEW_ASSIGNMENT, ['department_security_officer_14'], 14));
+
+        // The generic types did not move: a car is still the approver chain.
+        $this->assertSame([15, 16], $this->targets(S::RECEIVED, ['vice_approver_1'], 1, $workflow));
+        $this->assertSame([5, 105], $workflow->completedStatusIds());
     }
 
     public function test_every_status_has_an_action_type_for_the_timeline(): void

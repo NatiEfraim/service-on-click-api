@@ -15,6 +15,11 @@ enum BookingStageEnum: string
     case SUPPLIER_NUMBER = 'supplier_number';
     case REALIZATION = 'realization';
     case CLOSED = 'closed';
+    // The clearance grant route (type 14): see App\Domain\Workflow\Routes\ClearanceGrantRoute.
+    case INTERVIEW_ASSIGNMENT = 'interview_assignment';
+    case INTERVIEW_SCHEDULED = 'interview_scheduled';
+    case INTERVIEWED = 'interviewed';
+    case AWAITING_CLEARANCE = 'awaiting_clearance';
 
     public function label(): string
     {
@@ -28,6 +33,10 @@ enum BookingStageEnum: string
             self::SUPPLIER_NUMBER => 'ממתין למספר ספק',
             self::REALIZATION => 'אושרה - ממתינה למימוש וסגירה',
             self::CLOSED => 'סגורה',
+            self::INTERVIEW_ASSIGNMENT => 'ממתין להקצאה ולתיאום תחקיר',
+            self::INTERVIEW_SCHEDULED => 'תחקיר נקבע - ממתין למועד',
+            self::INTERVIEWED => 'תוחקר - ממתין להעברה להכשר',
+            self::AWAITING_CLEARANCE => 'ממתין לקבלת הכשר',
         };
     }
 
@@ -40,6 +49,8 @@ enum BookingStageEnum: string
             self::SUPPLIER_APPROVAL, self::SUPPLIER_NUMBER => 'supplier',
             self::REALIZATION => 'realization',
             self::CLOSED => null,
+            self::INTERVIEW_ASSIGNMENT, self::INTERVIEWED => 'approval',
+            self::INTERVIEW_SCHEDULED, self::AWAITING_CLEARANCE => 'realization',
         };
     }
 
@@ -51,6 +62,9 @@ enum BookingStageEnum: string
             self::VICE_APPROVER => RoleEnum::VICE_APPROVER,
             // The barber is the approver of the barber type (approver_5).
             self::APPROVER, self::REALIZATION, self::BARBER => RoleEnum::APPROVER,
+            self::INTERVIEW_ASSIGNMENT, self::INTERVIEWED => RoleEnum::INTERVIEW_COORDINATOR,
+            self::AWAITING_CLEARANCE => RoleEnum::INFOSEC_OFFICER,
+            // The interview is scheduled: the system moves the request on when its moment has passed.
             default => null,
         };
     }

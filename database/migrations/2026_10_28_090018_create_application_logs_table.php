@@ -18,7 +18,8 @@ return new class extends Migration
             $table->string('source', 10)->default('external');
             // Links the entry to its audit log row and exported decision.
             $table->uuid('correlation_id')->nullable();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
+            // Null for a move the system made on its own (a scheduled transition of a route type).
+            $table->foreignId('user_id')->nullable()->constrained('users')->onDelete('cascade');
             $table->boolean('is_exported')->default(false);
             $table->timestamps();
 

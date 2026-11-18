@@ -31,10 +31,16 @@ return new class extends Migration
             $table->boolean('is_exported')->default(false);
             $table->boolean('is_status_exported')->default(true);
             $table->boolean('is_updated_value')->default(false);
+            // Route types (e.g. the clearance grant): the assigned handler (מטפל) and when they were assigned.
+            $table->foreignId('handler_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('handler_assigned_at')->nullable();
+            // When the next AUTOMATIC transition of a route type is due (UTC), e.g. the interview moment; null = none.
+            $table->timestamp('stage_due_at')->nullable();
             $table->timestamps();
 
             $table->index(['unit_id', 'booking_type_id', 'status_id'], 'bookings_unit_type_status_index');
             $table->index('status_changed_at');
+            $table->index(['status_id', 'stage_due_at'], 'bookings_status_due_index');
         });
     }
 

@@ -16,6 +16,11 @@ enum RoleEnum: int
     case INFOSEC_OFFICER = 7;
     case ICT_HANDLER = 8;
 
+    // The clearance grant route (type 14): the departmental security officer (קב"ט) submits, the interview coordinator
+    // (במ אט"ל / שלוחת התחקיר) schedules the interview; the infosec officer (במ) owns the route.
+    case DEPARTMENT_SECURITY_OFFICER = 9;
+    case INTERVIEW_COORDINATOR = 10;
+
     /** Hebrew display name of the role. */
     public function getPermissionDisplayName(): string
     {
@@ -28,6 +33,8 @@ enum RoleEnum: int
             self::TRANSPORTATION_CONTROL_OFFICER => 'רמ"ד תו"ב',
             self::INFOSEC_OFFICER => 'קצין ביטחון מידע',
             self::ICT_HANDLER => 'מנהל תקשוב',
+            self::DEPARTMENT_SECURITY_OFFICER => 'קב"ט מחלקתי',
+            self::INTERVIEW_COORDINATOR => 'מתאם תחקיר',
         };
     }
 
@@ -43,6 +50,8 @@ enum RoleEnum: int
             'transportation_control_officer' => self::TRANSPORTATION_CONTROL_OFFICER,
             'infosec_officer' => self::INFOSEC_OFFICER,
             'ict_handler' => self::ICT_HANDLER,
+            'department_security_officer' => self::DEPARTMENT_SECURITY_OFFICER,
+            'interview_coordinator' => self::INTERVIEW_COORDINATOR,
             default => null,
         };
     }
@@ -59,6 +68,8 @@ enum RoleEnum: int
             self::TRANSPORTATION_CONTROL_OFFICER => PermissionEnum::TRANSPORTATION_CONTROL_OFFICER,
             self::INFOSEC_OFFICER => PermissionEnum::INFOSEC_OFFICER,
             self::ICT_HANDLER => PermissionEnum::ICT_HANDLER,
+            self::DEPARTMENT_SECURITY_OFFICER => PermissionEnum::DEPARTMENT_SECURITY_OFFICER,
+            self::INTERVIEW_COORDINATOR => PermissionEnum::INTERVIEW_COORDINATOR,
         };
     }
 
@@ -88,12 +99,26 @@ enum RoleEnum: int
             self::TRANSPORTATION_CONTROL_OFFICER => 'transportation_control_officer',
             self::INFOSEC_OFFICER => 'infosec_officer',
             self::ICT_HANDLER => 'ict_handler',
+            self::DEPARTMENT_SECURITY_OFFICER => 'department_security_officer',
+            self::INTERVIEW_COORDINATOR => 'interview_coordinator',
         };
     }
 
-    /** Whether this role is a domain-specific handler (acts like an approver for its own types). */
+    /** Whether this role is a domain-specific handler (acts on the bookings of its own types instead of the approver chain). */
     public function isDomainHandler(): bool
     {
-        return in_array($this, [self::INFOSEC_OFFICER, self::ICT_HANDLER], true);
+        return in_array($this, [self::INFOSEC_OFFICER, self::ICT_HANDLER, self::INTERVIEW_COORDINATOR], true);
+    }
+
+    /** A role that SUBMITS requests (the requester side of a booking type): the plain user, or the type's own requester role. */
+    public function isRequesterRole(): bool
+    {
+        return in_array($this, [self::USER, self::DEPARTMENT_SECURITY_OFFICER], true);
+    }
+
+    /** A role the mobile app does not know: it must never travel in the users file. */
+    public function isWebOnly(): bool
+    {
+        return $this->value >= self::INFOSEC_OFFICER->value;
     }
 }

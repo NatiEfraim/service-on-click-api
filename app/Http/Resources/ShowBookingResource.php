@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Resources;
+use App\Domain\Workflow\Workflow;
 use App\Enums\BookingTypeEnum;
 use App\Enums\FieldTypeEnum;
 use App\Enums\FormFieldEnum;
@@ -9,6 +10,7 @@ use App\Enums\SystemReferenceEnum;
 use App\Models\BookingValue;
 use App\Services\AttachmentService;
 use App\Services\BookingValueFormatterService;
+use App\Services\ProgressService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Carbon\Carbon;
@@ -55,10 +57,25 @@ class ShowBookingResource extends JsonResource
             'attachments' => app(AttachmentService::class)->describe($this->resource),
             'comments' => $this->getCommentsData(),
             'vice_approver' => $this->getViceApproverData(),
+            // Route types (the clearance grant): the handler's name and the progress bar; absent for every other type.
+            'handler' => $this->getHandlerData(),
+            'progress' => app(ProgressService::class)->progress($this->resource),
             'is_cancelable' => $cancellationData['is_cancelable'],
             'cancellation_advance_days' => $cancellationData['cancellation_advance_days'],
         ]);
 
+    }
+
+    /** The assigned handler of a route-type request, as the requester may see it (the name only). */
+    private function getHandlerData(): ?array
+    {
+        if (!app(Workflow::class)->hasRoute((int) $this->booking_type_id)) {
+            return null;
+        }
+
+        $handler = $this->resource->relationLoaded('handler') ? $this->resource->handler : $this->resource->handler()->first();
+
+        return $handler === null ? null : ['full_name' => $handler->full_name];
     }
 
     private function removeNullValues(array $data): array
@@ -143,6 +160,11 @@ class ShowBookingResource extends JsonResource
     /** Whether the booking can still be cancelled (as UpdateBookingRequest checks), plus cancellation_advance_days. */
     private function getCancellationData(): array
     {
+        // A request of a route type is refused or closed by its handlers; the requester does not cancel it.
+        if (app(Workflow::class)->hasRoute((int) $this->booking_type_id)) {
+            return ['is_cancelable' => false, 'cancellation_advance_days' => null];
+        }
+
         $cancelableStatusIds = [
             StatusBookingEnum::RECEIVED->value,
             StatusBookingEnum::PROCESSING->value,

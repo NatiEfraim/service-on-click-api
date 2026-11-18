@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Domain\Sync\ExportFileNames;
+use App\Enums\BookingTypeEnum;
 use App\Enums\DigitalHatchFileEnum;
 use App\Enums\PermissionEnum;
 use App\Enums\RoleEnum;
@@ -150,7 +151,10 @@ class UsersExportService
     public function payload(array &$waiting = []): array
     {
         $superAdmin = RoleEnum::SUPER_ADMIN->toSpatieRoleName();
-        $bookingTypeIds = BookingType::query()->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        // The mobile app knows neither the web-only types (infosec, ICT) nor the web-only roles: neither may travel.
+        $webOnlyTypeIds = BookingTypeEnum::webOnlyIds();
+        $bookingTypeIds = BookingType::query()->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)
+            ->reject(fn (int $id): bool => in_array($id, $webOnlyTypeIds, true))->values()->all();
 
         $users = User::query()
             ->where('is_deleted', false)
@@ -175,9 +179,17 @@ class UsersExportService
             foreach ($user->permissions as $permission) {
                 $parsed = PermissionEnum::parsePermissionName($permission->name);
 
-                if ($parsed !== null) {
-                    $idsByRole[$parsed['permission']->toRoleEnum()->value][] = $parsed['booking_type_id'];
+                if ($parsed === null) {
+                    continue;
                 }
+
+                $role = $parsed['permission']->toRoleEnum();
+
+                if ($role->isWebOnly() || in_array($parsed['booking_type_id'], $webOnlyTypeIds, true)) {
+                    continue;
+                }
+
+                $idsByRole[$role->value][] = $parsed['booking_type_id'];
             }
 
             if ($user->roles->contains('name', $superAdmin)) {

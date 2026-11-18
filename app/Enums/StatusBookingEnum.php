@@ -30,6 +30,12 @@ enum StatusBookingEnum: int
     // TRANSPORTATION_BOOKING: the control officer's decision, sent on to the vice approver.
     case CONTROL_OFFICER_APPROVED  = 17;
     case CONTROL_OFFICER_REJECTED  = 18;
+    // The clearance grant route (type 14, web only - from 101 so a future mobile status cannot collide).
+    case INTERVIEW_ASSIGNMENT = 101;
+    case INTERVIEW_SCHEDULED = 102;
+    case INTERVIEWED = 103;
+    case AWAITING_CLEARANCE = 104;
+    case CLEARANCE_GRANTED = 105;
 
     /** Resolves the enum from `statuses.name`. */
     public static function fromStatusName(string $name): ?self
@@ -53,8 +59,49 @@ enum StatusBookingEnum: int
             'vice_approver_rejected' => self::VICE_APPROVER_REJECTED,
             'control_officer_approved' => self::CONTROL_OFFICER_APPROVED,
             'control_officer_rejected' => self::CONTROL_OFFICER_REJECTED,
+            'interview_assignment' => self::INTERVIEW_ASSIGNMENT,
+            'interview_scheduled' => self::INTERVIEW_SCHEDULED,
+            'interviewed' => self::INTERVIEWED,
+            'awaiting_clearance' => self::AWAITING_CLEARANCE,
+            'clearance_granted' => self::CLEARANCE_GRANTED,
             default => null,
         };
+    }
+
+    /** `statuses.name` of the status (the inverse of fromStatusName). */
+    public function getStatusName(): string
+    {
+        return match ($this) {
+            self::RECEIVED => 'received',
+            self::PROCESSING => 'processing',
+            self::APPROVED => 'approved',
+            self::REJECTED => 'rejected',
+            self::COMPLETED => 'completed',
+            self::CANCELED_BY_USER => 'canceled_by_user',
+            self::CANCELED_BY_APPROVER => 'canceled_by_approver',
+            self::PENDING_FILE => 'pending_file',
+            self::PENDING_PROCESSING => 'pending_processing',
+            self::PENDING_APPROVED => 'pending_approved',
+            self::APPROVED_BY_BARBER => 'approved_by_barber',
+            self::CANCELED_BY_BARBER => 'canceled_by_barber',
+            self::CANCELED_BY_CHANGING_TIME => 'canceled_by_changing_time',
+            self::PROCESSING_BY_CONTROL_OFFICER => 'processing_by_control_officer',
+            self::VICE_APPROVER_APPROVED => 'vice_approver_approved',
+            self::VICE_APPROVER_REJECTED => 'vice_approver_rejected',
+            self::CONTROL_OFFICER_APPROVED => 'control_officer_approved',
+            self::CONTROL_OFFICER_REJECTED => 'control_officer_rejected',
+            self::INTERVIEW_ASSIGNMENT => 'interview_assignment',
+            self::INTERVIEW_SCHEDULED => 'interview_scheduled',
+            self::INTERVIEWED => 'interviewed',
+            self::AWAITING_CLEARANCE => 'awaiting_clearance',
+            self::CLEARANCE_GRANTED => 'clearance_granted',
+        };
+    }
+
+    /** A status of a route type (web only): the mobile app never sees it. */
+    public function isRouteStatus(): bool
+    {
+        return $this->value >= self::INTERVIEW_ASSIGNMENT->value;
     }
 
     /** Display order on the status dashboards. */
@@ -79,6 +126,11 @@ enum StatusBookingEnum: int
             self::APPROVED_BY_BARBER => 16,
             self::CANCELED_BY_BARBER => 17,
             self::CANCELED_BY_CHANGING_TIME => 18,
+            self::INTERVIEW_ASSIGNMENT => 19,
+            self::INTERVIEW_SCHEDULED => 20,
+            self::INTERVIEWED => 21,
+            self::AWAITING_CLEARANCE => 22,
+            self::CLEARANCE_GRANTED => 23,
         };
     }
 
@@ -157,6 +209,9 @@ enum StatusBookingEnum: int
             self::CANCELED_BY_APPROVER, self::CANCELED_BY_BARBER, self::CANCELED_BY_CHANGING_TIME => ActionTypeEnum::CANCEL_BOOKING_BY_APPROVER,
             self::APPROVED_BY_BARBER => ActionTypeEnum::APPROVE_BOOKING_BY_BARBER,
             self::PENDING_FILE, self::PENDING_PROCESSING, self::PENDING_APPROVED => ActionTypeEnum::MOVE_TO_PENDING_BOOKING,
+            // A route request arrives at its first status by creation (store_booking, logged by the creator) or by a move back.
+            self::INTERVIEW_ASSIGNMENT => ActionTypeEnum::RETURN_STAGE,
+            self::INTERVIEW_SCHEDULED, self::INTERVIEWED, self::AWAITING_CLEARANCE, self::CLEARANCE_GRANTED => ActionTypeEnum::ADVANCE_STAGE,
         };
     }
 
@@ -250,6 +305,11 @@ enum StatusBookingEnum: int
             self::VICE_APPROVER_REJECTED => 'הועברו לביטול סופי',
             self::CONTROL_OFFICER_APPROVED => 'אושרו ע"י רמ"ד תו"ב',
             self::CONTROL_OFFICER_REJECTED => 'נדחו ע"י רמ"ד תו"ב',
+            self::INTERVIEW_ASSIGNMENT => 'הקצאה לתחקיר',
+            self::INTERVIEW_SCHEDULED => 'נקבע מול המועמד',
+            self::INTERVIEWED => 'תוחקר',
+            self::AWAITING_CLEARANCE => 'ממתין לקבלת הכשר',
+            self::CLEARANCE_GRANTED => 'קיבל הכשר ביטחוני',
         };
     }
 
@@ -275,12 +335,23 @@ enum StatusBookingEnum: int
             self::VICE_APPROVER_REJECTED => '16',// 'הועברו לביטול סופי'
             self::CONTROL_OFFICER_APPROVED => '17',// 'אושרו ע"י רמ"ד תו"ב'
             self::CONTROL_OFFICER_REJECTED => '18',// 'נדחו ע"י רמ"ד תו"ב'
+            // The clearance route reuses the icons of received / in handling / passed on / approved / completed.
+            self::INTERVIEW_ASSIGNMENT => '1',
+            self::INTERVIEW_SCHEDULED => '2',
+            self::INTERVIEWED => '15',
+            self::AWAITING_CLEARANCE => '3',
+            self::CLEARANCE_GRANTED => '5',
         };
     }
 
     public function getStatusMessage(): string|null
     {
         return match ($this) {
+            self::INTERVIEW_ASSIGNMENT => 'הבקשה התקבלה וממתינה להקצאה לתחקיר',
+            self::INTERVIEW_SCHEDULED => 'נקבע מועד לתחקיר מול המועמד',
+            self::INTERVIEWED => 'התחקיר בוצע',
+            self::AWAITING_CLEARANCE => 'ממתין לקבלת הכשר ביטחוני',
+            self::CLEARANCE_GRANTED => 'הסיווג הביטחוני נקלט והבקשה נסגרה',
             self::RECEIVED => 'התקבלה בהצלחה',
             self::PROCESSING,
             self::VICE_APPROVER_APPROVED,
@@ -333,6 +404,11 @@ enum StatusBookingEnum: int
     public function getSubTitleStatusMessage(): ?string
     {
         return match ($this) {
+            self::INTERVIEW_ASSIGNMENT => 'הבקשה ממתינה להקצאת מטפל ולתיאום תחקיר',
+            self::INTERVIEW_SCHEDULED => 'נקבע מועד לתחקיר',
+            self::INTERVIEWED => 'התחקיר בוצע וממתין להעברה להכשר',
+            self::AWAITING_CLEARANCE => 'הבקשה ממתינה לקבלת הכשר ביטחוני',
+            self::CLEARANCE_GRANTED => 'הסיווג נקלט והבקשה נסגרה',
             self::PROCESSING,
             self::VICE_APPROVER_APPROVED => 'הבקשה ממתינה לאישור סופי',
             self::VICE_APPROVER_REJECTED => 'בקשה ממתינה לביטול סופי',
@@ -388,6 +464,12 @@ enum StatusBookingEnum: int
             self::PROCESSING_BY_CONTROL_OFFICER,
             self::CONTROL_OFFICER_APPROVED,
             self::CONTROL_OFFICER_REJECTED => 'שלב 14',
+            // The clearance route's own steps, counted along its progress bar.
+            self::INTERVIEW_ASSIGNMENT => 'שלב 1',
+            self::INTERVIEW_SCHEDULED => 'שלב 2',
+            self::INTERVIEWED => 'שלב 3',
+            self::AWAITING_CLEARANCE => 'שלב 4',
+            self::CLEARANCE_GRANTED => 'שלב 5',
             default => null,
         };
     }
@@ -402,6 +484,7 @@ enum StatusBookingEnum: int
             self::CANCELED_BY_APPROVER,
             self::CANCELED_BY_BARBER,
             self::CANCELED_BY_CHANGING_TIME,
+            self::CLEARANCE_GRANTED,
         ], true);
     }
 

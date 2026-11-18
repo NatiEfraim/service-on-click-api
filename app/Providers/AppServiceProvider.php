@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Domain\Clearance\ClearanceRegistry;
+use App\Domain\Clearance\NullClearanceRegistry;
+use App\Domain\Workflow\Routes\RouteRegistry;
 use App\Domain\Workflow\Workflow;
 use App\Enums\BookingTypeEnum;
 use App\Enums\RoleEnum;
@@ -26,7 +29,12 @@ class AppServiceProvider extends ServiceProvider
                 ->all(),
             transportationBookingTypeId: BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId(),
             barberBookingTypeId: BookingTypeEnum::BARBER_BOOKING->getBookingTypeId(),
+            // The types with a route of their own (the clearance grant), by DB id.
+            routes: RouteRegistry::byBookingTypeId(),
         ));
+
+        // No clearance registry (ותיקן) is connected yet: bind a real implementation here when there is one.
+        $this->app->bind(ClearanceRegistry::class, NullClearanceRegistry::class);
     }
 
     public function boot(): void

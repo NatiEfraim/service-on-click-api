@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Domain\Sync\ExportFileNames;
+use App\Enums\BookingTypeEnum;
 use App\Enums\DigitalHatchFileEnum;
 use App\Models\Booking;
 use App\Models\SyncConflict;
@@ -141,10 +142,14 @@ class BookingStatusSnapshotService
         $rows = [];
         $waiting = [];
 
-        // In chunks: the deciders are looked up with one query per chunk, not per booking.
+        $webOnlyTypeIds = BookingTypeEnum::webOnlyIds();
+
+        // In chunks: the deciders are looked up with one query per chunk, not per booking. The web-only types (infosec, ICT) never go: the
+        // mobile app does not know them.
         Booking::query()
             ->whereNotNull('serial_number')
             ->where('is_status_exported', false)
+            ->when($webOnlyTypeIds !== [], fn ($q) => $q->whereNotIn('booking_type_id', $webOnlyTypeIds))
             ->when($bookingTypeId !== null, fn ($q) => $q->where('booking_type_id', $bookingTypeId))
             ->when($statusId !== null, fn ($q) => $q->where('status_id', $statusId))
             ->whereDoesntHave('syncConflicts', fn ($conflicts) => $conflicts->where('state', SyncConflict::STATE_OPEN))

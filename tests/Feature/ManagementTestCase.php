@@ -19,6 +19,8 @@ use Tests\TestCase;
  *
  * Log in by personal number: 1000001 super admin, 1000002 admin, 1000003 approver, 1000004 vice approver,
  * 1000005 a person with no role, 1000006 and 1000007 plain users (only the user role).
+ * The people of the clearance grant route (קב"ט 1000020, במ 1000021, מתאם תחקיר 1000022) are made on demand by
+ * createDomainPeople(), so the counts of the older tests stay as they were.
  */
 abstract class ManagementTestCase extends TestCase
 {
@@ -31,6 +33,11 @@ abstract class ManagementTestCase extends TestCase
     protected const NO_ROLE = '1000005';
     protected const PLAIN_USER = '1000006';
     protected const OTHER_PLAIN_USER = '1000007';
+
+    // The clearance grant route (type 14).
+    protected const SECURITY_OFFICER = '1000020';
+    protected const INFOSEC_OFFICER = '1000021';
+    protected const INTERVIEW_COORDINATOR = '1000022';
 
     protected const TOKEN_NAME = 'TestAccessToken';
 
@@ -66,11 +73,6 @@ abstract class ManagementTestCase extends TestCase
      */
     private function createPeople(): void
     {
-        $bookingTypeIdsByRole = BookingTypeHasRole::query()
-            ->get(['booking_type_id', 'role_id'])
-            ->groupBy(fn (BookingTypeHasRole $link): int => (int) $link->role_id)
-            ->map(fn ($links) => $links->pluck('booking_type_id'));
-
         $people = [
             self::SUPER_ADMIN => RoleEnum::SUPER_ADMIN,
             self::ADMIN => RoleEnum::ADMIN,
@@ -81,24 +83,49 @@ abstract class ManagementTestCase extends TestCase
         ];
 
         foreach ($people as $personalNumber => $roleEnum) {
-            $user = User::factory()->create([
-                'personal_number' => $personalNumber,
-                'unit_id' => UnitEnum::H->value,
-            ]);
-
-            $user->assignRole($roleEnum->value);
-
-            if ($roleEnum !== RoleEnum::SUPER_ADMIN) {
-                $user->givePermissionTo(
-                    ($bookingTypeIdsByRole->get($roleEnum->value) ?? collect())
-                        ->map(fn($id): string => $roleEnum->toPermissionEnum()->keyForId((int) $id))
-                        ->all()
-                );
-            }
+            $this->createPerson($personalNumber, $roleEnum);
         }
 
         // A person with no role at all.
         User::factory()->create(['personal_number' => self::NO_ROLE, 'unit_id' => UnitEnum::H->value]);
+    }
+
+    /** A person of unit H with one role and that role's permission on every booking type that has the role. */
+    protected function createPerson(string $personalNumber, RoleEnum $roleEnum, array $attributes = []): User
+    {
+        $user = User::factory()->create($attributes + [
+            'personal_number' => $personalNumber,
+            'unit_id' => UnitEnum::H->value,
+        ]);
+
+        $user->assignRole($roleEnum->value);
+
+        if ($roleEnum !== RoleEnum::SUPER_ADMIN) {
+            $user->givePermissionTo(
+                BookingTypeHasRole::query()->where('role_id', $roleEnum->value)->pluck('booking_type_id')
+                    ->map(fn ($id): string => $roleEnum->toPermissionEnum()->keyForId((int) $id))
+                    ->all()
+            );
+        }
+
+        return $user;
+    }
+
+    /** The three people of the clearance grant route: the קב"ט who submits, the במ who owns the route and the coordinator who schedules. */
+    protected function createDomainPeople(): void
+    {
+        foreach ([
+            self::SECURITY_OFFICER => RoleEnum::DEPARTMENT_SECURITY_OFFICER,
+            self::INFOSEC_OFFICER => RoleEnum::INFOSEC_OFFICER,
+            self::INTERVIEW_COORDINATOR => RoleEnum::INTERVIEW_COORDINATOR,
+        ] as $personalNumber => $roleEnum) {
+            if (!User::where('personal_number', $personalNumber)->exists()) {
+                // With an ID number (300000020..22), so the users file could list them if it ever wrongly did.
+                $this->createPerson($personalNumber, $roleEnum, ['personal_id' => '300' . substr($personalNumber, 1)]);
+            }
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
     /** A bearer token for the user with this personal number. */

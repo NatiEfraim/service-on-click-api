@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\FormSectionEnum;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
@@ -24,6 +26,11 @@ class FormField extends Model
         'is_active',
         'form_field_id',
         'is_input',
+        // Route forms: who fills the field, its width, and the person lookup it triggers / is filled from.
+        'section',
+        'col_span',
+        'lookup_source',
+        'autofill_key',
     ];
 
     protected $hidden = [
@@ -40,6 +47,7 @@ class FormField extends Model
         'version' => 'integer',
         'position' => 'integer',
         'is_active' => 'boolean',
+        'col_span' => 'integer',
     ];
 
     /** field_name prefix of fields created in this system (seeded ones follow the mobile FormFieldEnum). */
@@ -48,6 +56,51 @@ class FormField extends Model
     public function isCustom(): bool
     {
         return str_starts_with((string) $this->field_name, self::CUSTOM_PREFIX);
+    }
+
+    public function sectionEnum(): FormSectionEnum
+    {
+        return FormSectionEnum::tryFrom((string) $this->section) ?? FormSectionEnum::REQUESTER;
+    }
+
+    public function isHandlerField(): bool
+    {
+        return $this->sectionEnum() === FormSectionEnum::HANDLER;
+    }
+
+    /** Fields of one section. */
+    public function scopeSection(Builder $query, FormSectionEnum $section): Builder
+    {
+        return $query->where('section', $section->value);
+    }
+
+    /**
+     * The validation rules as "rule => Hebrew message", whatever shape the column holds: the editor stores an array; the
+     * older seeders stored json_encode() output in the array-cast column, which comes back as a JSON string. Null when none.
+     * @return ?array<string, string>
+     */
+    public function normalizedValidations(): ?array
+    {
+        $raw = $this->field_validations;
+
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : null;
+        }
+
+        if (!is_array($raw) || $raw === []) {
+            return null;
+        }
+
+        $rules = [];
+
+        foreach ($raw as $rule => $message) {
+            if (is_string($rule) && trim($rule) !== '') {
+                $rules[trim($rule)] = is_scalar($message) ? (string) $message : '';
+            }
+        }
+
+        return $rules === [] ? null : $rules;
     }
 
     public function unit()

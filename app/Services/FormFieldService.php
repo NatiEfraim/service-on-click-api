@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Domain\Config\FormFieldRules;
 use App\Enums\FieldTypeEnum;
+use App\Enums\FormSectionEnum;
 use App\Enums\PayloadSectionEnum;
 use App\Exceptions\DomainError;
 use App\Models\BookingFilter;
@@ -48,6 +49,9 @@ class FormFieldService
             $type = (int) $data['field_type_id'];
             $label = trim($data['field_display_name']);
             $required = (bool) ($data['is_required'] ?? true);
+            // Route forms: a handler field is written during the handling (editable by default), a requester field on submission.
+            $section = FormSectionEnum::tryFrom((string) ($data['section'] ?? '')) ?? FormSectionEnum::REQUESTER;
+            $colSpan = in_array((int) ($data['col_span'] ?? 1), [1, 2, 4], true) ? (int) ($data['col_span'] ?? 1) : 1;
 
             $field = FormField::query()->create([
                 'unit_id' => $unitId,
@@ -58,8 +62,10 @@ class FormFieldService
                 ...FormFieldRules::defaultsFor($type),
                 'field_validations' => $required ? ['required' => 'יש לספק ' . $label] : null,
                 'is_required' => $required,
-                'editable' => (bool) ($data['editable'] ?? false),
+                'editable' => (bool) ($data['editable'] ?? ($section === FormSectionEnum::HANDLER)),
                 'position' => $last + 1,
+                'section' => $section->value,
+                'col_span' => $colSpan,
                 // Set explicitly: the model does not hold the database defaults after the insert.
                 'version' => 1,
                 'is_active' => true,
@@ -371,6 +377,8 @@ class FormFieldService
             'is_required' => (bool) $field->is_required,
             'editable' => (bool) $field->editable,
             'position' => (int) $field->position,
+            'section' => $field->sectionEnum()->value,
+            'col_span' => (int) ($field->col_span ?? 1),
             'version' => (int) $field->version,
             'is_custom' => $field->isCustom(),
             'options' => OptionField::query()->where('form_field_id', $field->id)->where('is_active', true)->orderBy('id')->pluck('name')->all(),

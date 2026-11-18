@@ -65,7 +65,9 @@ class ManagementInsightTest extends ManagementTestCase
         $this->assertTrue($super['is_super_admin']);
         $this->assertTrue($super['capabilities']['audit.view']);
         $this->assertTrue($super['capabilities']['config.global']);
-        $this->assertCount(9, $super['managed_booking_types']);
+        // Every booking type there is: the mobile app's 9 and the web-only infosec / ICT ones.
+        $this->assertCount(\App\Models\BookingType::query()->count(), $super['managed_booking_types']);
+        $this->assertSame(app(\App\Domain\Workflow\Workflow::class)->routeTypeIds(), $super['route_booking_types']);
 
         $admin = $this->as(self::ADMIN)->getJson(self::BASE . '/me')->assertOk()->json('data');
         $this->assertTrue($admin['is_admin']);
@@ -84,8 +86,11 @@ class ManagementInsightTest extends ManagementTestCase
     public function test_the_catalog_has_the_lists_of_the_dropdowns_and_each_role_sees_only_its_own_unit(): void
     {
         $super = $this->as(self::SUPER_ADMIN)->getJson(self::BASE . '/catalog')->assertOk()->json('data');
-        $this->assertCount(18, $super['statuses']);
-        $this->assertCount(9, $super['stages']);
+        // 18 statuses shared with the mobile app + the 5 of the clearance grant route; 9 stages of the approver chains + the route's 4.
+        $this->assertCount(23, $super['statuses']);
+        $this->assertCount(13, $super['stages']);
+        $this->assertSame([101, 102, 103, 104, 105], array_column($super['routes']['14']['steps'], 'status_id'));
+        $this->assertSame(['requester', 'handler'], array_column($super['sections'], 'id'));
         $this->assertCount(4, $super['units']);
         $this->assertSame(['id' => 1, 'code' => 'H', 'name' => 'H'], $super['units'][0]);
         $this->assertNotEmpty($super['booking_type_statuses'][1]);

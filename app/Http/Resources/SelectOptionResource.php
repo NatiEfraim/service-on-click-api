@@ -18,6 +18,8 @@ class SelectOptionResource extends JsonResource
         $optionData = [
             'option_id' => $option->id,
             'option_name' => $option->name,
+            // The stable code of the option (null for most; the clearance levels carry one).
+            'code' => $option->code,
             'field_type' => $option->fieldType?->name,
             'has_category' => (bool) $option->has_category,
         ];

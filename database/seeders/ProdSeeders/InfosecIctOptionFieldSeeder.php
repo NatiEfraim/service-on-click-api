@@ -2,6 +2,8 @@
 
 namespace Database\Seeders\ProdSeeders;
 
+use App\Domain\Clearance\ClearanceLevel;
+use App\Domain\Workflow\Routes\ClearanceGrantFields;
 use App\Enums\BookingTypeEnum;
 use App\Enums\FieldTypeEnum;
 use App\Enums\UnitEnum;
@@ -13,7 +15,8 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Dropdown options for the ביטחון מידע and תקשוב booking types.
- * Uses updateOrCreate so the seeder is safe to re-run.
+ * Uses updateOrCreate so the seeder is safe to re-run. An option may carry a stable `code` (option_fields.code) the code
+ * compares instead of the Hebrew name, which the option editor may rename.
  */
 class InfosecIctOptionFieldSeeder extends Seeder
 {
@@ -42,10 +45,24 @@ class InfosecIctOptionFieldSeeder extends Seeder
             return;
         }
 
-        $this->seedOptions($bookingTypeId, 'requested_level', [
-            'שמור',
-            'סודי',
-            'סודי ביותר',
+        // The codes rank the levels (ClearanceLevel) for the registry check.
+        $this->seedOptions($bookingTypeId, ClearanceGrantFields::REQUESTED_LEVEL, [
+            'שמור' => ClearanceLevel::RESTRICTED,
+            'סודי' => ClearanceLevel::SECRET,
+            'סודי ביותר' => ClearanceLevel::TOP_SECRET,
+        ]);
+
+        // Placeholders until the product owner sends the real lists; editable in the option editor without code.
+        $this->seedOptions($bookingTypeId, 'service_type', [
+            'חובה' => 'mandatory',
+            'קבע' => 'career',
+            'מילואים' => 'reserve',
+            'אע"צ' => 'civilian',
+        ]);
+        $this->seedOptions($bookingTypeId, 'preferred_interview_location', [
+            'צפון' => 'north',
+            'מרכז' => 'center',
+            'דרום' => 'south',
         ]);
     }
 
@@ -96,6 +113,7 @@ class InfosecIctOptionFieldSeeder extends Seeder
     // Helper
     // ---------------------------------------------------------------------------
 
+    /** @param array<int|string, string> $options a list of names, or name => code */
     private function seedOptions(int $bookingTypeId, string $fieldName, array $options): void
     {
         $formField = FormField::where('booking_type_id', $bookingTypeId)
@@ -108,7 +126,9 @@ class InfosecIctOptionFieldSeeder extends Seeder
             return;
         }
 
-        foreach ($options as $name) {
+        foreach ($options as $key => $value) {
+            [$name, $code] = is_string($key) ? [$key, $value] : [$value, null];
+
             OptionField::updateOrCreate(
                 [
                     'form_field_id' => $formField->id,
@@ -117,6 +137,7 @@ class InfosecIctOptionFieldSeeder extends Seeder
                 [
                     'field_type_id' => FieldTypeEnum::TEXT->getFieldTypeId(),
                     'is_active' => true,
+                    'code' => $code,
                 ]
             );
         }

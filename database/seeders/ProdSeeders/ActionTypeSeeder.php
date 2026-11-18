@@ -8,18 +8,18 @@ use Illuminate\Database\Seeder;
 
 class ActionTypeSeeder extends Seeder
 {
-    /** Rows are built from ActionTypeEnum so ids cannot drift. */
+    /** Rows are built from ActionTypeEnum so ids cannot drift (unguarded: the route action types start at 101, far from the next auto-increment). */
     public function run(): void
     {
         foreach (ActionTypeEnum::rows() as $row) {
-            ActionType::updateOrCreate(
+            ActionType::unguarded(fn () => ActionType::updateOrCreate(
                 ['id' => $row['id']],
                 [
                     'type' => $row['type'],
                     'display_type' => $row['display_type'],
                     'description' => $row['description'],
                 ]
-            );
+            ));
         }
     }
 }

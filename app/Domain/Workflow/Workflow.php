@@ -20,18 +20,117 @@ use App\Enums\StatusBookingEnum as Status;
  * from. So every method here takes that status as $current - the status that decides whose turn it is (Booking::positionStatus()) - and, where
  * buttons are built, the hold itself as $hold, which is not offered again. A hold with nowhere recorded is its own $current: the supplier stage.
  * Status ids are the mobile app's - never renumber.
+ *
+ * A booking type may have a ROUTE OF ITS OWN (TypeRoute, e.g. the clearance grant): then every public method here asks the route first and the
+ * generic rules above are not consulted for it. A route's manual transition is open to whoever holds "{role}_{type}" for one of its roles, or
+ * "admin_{type}" (the super admin's synthetic permission), so the super admin keeps every manual move.
  */
 final class Workflow
 {
     public const COMMENT_MAX_LENGTH = 100;
     public const COMMENT_REGEX = '~^[א-ת ]+$~u';
 
-    /** @param array<int, int> $controlOfficerBookingTypeIds types whose route starts at the control officer (none by default, or nobody could act) */
+    /**
+     * @param array<int, int> $controlOfficerBookingTypeIds types whose route starts at the control officer (none by default, or nobody could act)
+     * @param array<int, TypeRoute> $routes the types with a route of their own, by booking type id
+     */
     public function __construct(
         private readonly array $controlOfficerBookingTypeIds = [],
         private readonly ?int $transportationBookingTypeId = null,
         private readonly ?int $barberBookingTypeId = null,
+        private readonly array $routes = [],
     ) {
+    }
+
+    //----------------------------- Routes of their own ------------------------//
+
+    public function routeFor(int $bookingTypeId): ?TypeRoute
+    {
+        return $this->routes[$bookingTypeId] ?? null;
+    }
+
+    public function hasRoute(int $bookingTypeId): bool
+    {
+        return isset($this->routes[$bookingTypeId]);
+    }
+
+    /** @return array<int, int> */
+    public function routeTypeIds(): array
+    {
+        return array_keys($this->routes);
+    }
+
+    /** @return array<int, int> The statuses that mean "done": completed (5), and the successful end of every route of its own. */
+    public function completedStatusIds(): array
+    {
+        $ids = [Status::COMPLETED->value];
+
+        foreach ($this->routes as $route) {
+            $ids[] = $route->successStatus();
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /** The status a new booking of the type is created in. */
+    public function initialStatus(int $bookingTypeId): Status
+    {
+        $route = $this->routeFor($bookingTypeId);
+
+        return $route === null ? Status::RECEIVED : Status::from($route->initialStatus());
+    }
+
+    /** The manual move from one status to another on a route type, or null (no route, or no such move). */
+    public function transitionFor(int $bookingTypeId, Status $from, Status $to): ?Transition
+    {
+        $route = $this->routeFor($bookingTypeId);
+
+        if ($route === null) {
+            return null;
+        }
+
+        foreach ($route->transitionsFrom($from->value) as $transition) {
+            if ($transition->isManual() && $transition->to === $to->value) {
+                return $transition;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether the permission names hold one of the roles on the type: "{role}_{type}" for a role in $roles, or "admin_{type}".
+     * @param iterable<string> $permissionNames @param array<int, \App\Enums\RoleEnum> $roles
+     */
+    public function holdsRouteRole(iterable $permissionNames, array $roles, int $bookingTypeId): bool
+    {
+        $names = is_array($permissionNames) ? $permissionNames : iterator_to_array($permissionNames, false);
+
+        if (in_array(PermissionEnum::ADMIN->value . $bookingTypeId, $names, true)) {
+            return true;
+        }
+
+        foreach ($roles as $role) {
+            if (in_array($role->toPermissionEnum()->value . $bookingTypeId, $names, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** The manual moves of a route type the permissions allow from this status. @param iterable<string> $permissionNames @return array<int, array{status: Status, label: string, transition: Transition}> */
+    private function routeActions(TypeRoute $route, Status $current, iterable $permissionNames, int $bookingTypeId): array
+    {
+        $actions = [];
+
+        foreach ($route->transitionsFrom($current->value) as $transition) {
+            if ($transition->isManual() && $this->holdsRouteRole($permissionNames, $transition->roles, $bookingTypeId)) {
+                $actions[] = ['status' => Status::from($transition->to), 'label' => $transition->label, 'transition' => $transition];
+            }
+        }
+
+        return $actions;
     }
 
     /** @param iterable<string> $permissionNames the user's permission names @return array{isControlOfficer: bool, isViceApprover: bool, isApprover: bool, isAdmin: bool} */
@@ -72,6 +171,10 @@ final class Workflow
     /** Who or what a booking in this status is waiting for. */
     public function stageOf(Status $status, int $bookingTypeId): BookingStageEnum
     {
+        if (($route = $this->routeFor($bookingTypeId)) !== null) {
+            return $route->stageOf($status->value);
+        }
+
         if ($this->isBarberBooking($bookingTypeId)) {
             return $this->barberStageOf($status);
         }
@@ -250,14 +353,18 @@ final class Workflow
     }
 
     /**
-     * Single source for the UI buttons and the server check.
+     * Single source for the UI buttons and the server check. On a route type the entries also carry the Transition.
      * @param Status $current the status that decides whose turn it is (Booking::positionStatus())
      * @param ?Status $hold the hold the booking is on, if any
      * @param iterable<string> $permissionNames
-     * @return array<int, array{status: Status, label: string}>
+     * @return array<int, array{status: Status, label: string, transition?: Transition}>
      */
     public function availableActions(Status $current, iterable $permissionNames, int $bookingTypeId, ?Status $hold = null): array
     {
+        if (($route = $this->routeFor($bookingTypeId)) !== null) {
+            return $this->routeActions($route, $current, $permissionNames, $bookingTypeId);
+        }
+
         return $this->allowedTransitions($current, self::roleFlags($permissionNames, $bookingTypeId), $bookingTypeId, $hold);
     }
 
@@ -280,11 +387,28 @@ final class Workflow
      */
     public function canEditValues(Status $current, iterable $permissionNames, int $bookingTypeId): bool
     {
+        if (($route = $this->routeFor($bookingTypeId)) !== null) {
+            // The handler fields are written while the request sits in one of the route's writable statuses, by its roles.
+            $roles = $route->handlerFieldStatuses()[$this->routePosition($route, $current)] ?? null;
+
+            return $roles !== null && $this->holdsRouteRole($permissionNames, $roles, $bookingTypeId);
+        }
+
         if ($current->isTerminal() || $current === Status::APPROVED || $current === Status::APPROVED_BY_BARBER) {
             return false;
         }
 
         return $this->turnTransitions($current, self::roleFlags($permissionNames, $bookingTypeId), $bookingTypeId) !== [];
+    }
+
+    /** The status of the route a booking stands in: a status the route knows, else (older data) its initial status. */
+    public function routePosition(TypeRoute $route, Status $current): int
+    {
+        if (in_array($current->value, $route->statusIds(), true) || $current->isTerminal()) {
+            return $current->value;
+        }
+
+        return $route->initialStatus();
     }
 
     /** Statuses only the requester may set (mobile app only). */
@@ -293,11 +417,15 @@ final class Workflow
         return $target === Status::CANCELED_BY_USER;
     }
 
-    /** @return ?string Hebrew error, or null when the comment is fine */
-    public static function validateComment(Status $target, ?string $comment): ?string
+    /**
+     * @param ?bool $required whether the move needs a comment; null = the generic rule (the rejections and the cancellation do), a route
+     *                        transition passes its own flag
+     * @return ?string Hebrew error, or null when the comment is fine
+     */
+    public static function validateComment(Status $target, ?string $comment, ?bool $required = null): ?string
     {
         $comment = trim((string) $comment);
-        $required = in_array($target, [Status::CONTROL_OFFICER_REJECTED, Status::VICE_APPROVER_REJECTED, Status::REJECTED, Status::CANCELED_BY_APPROVER, Status::CANCELED_BY_BARBER], true);
+        $required ??= in_array($target, [Status::CONTROL_OFFICER_REJECTED, Status::VICE_APPROVER_REJECTED, Status::REJECTED, Status::CANCELED_BY_APPROVER, Status::CANCELED_BY_BARBER], true);
 
         if ($required && $comment === '') {
             return 'יש לצרף הערה לביצוע פעולה זו';

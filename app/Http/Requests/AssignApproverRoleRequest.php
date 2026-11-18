@@ -25,6 +25,9 @@ class AssignApproverRoleRequest extends FormRequest
         RoleEnum::VICE_APPROVER,
         RoleEnum::INFOSEC_OFFICER,
         RoleEnum::ICT_HANDLER,
+        // The clearance grant route: its requester (קב"ט) and its interview coordinator.
+        RoleEnum::DEPARTMENT_SECURITY_OFFICER,
+        RoleEnum::INTERVIEW_COORDINATOR,
     ];
 
     public function authorize(): bool

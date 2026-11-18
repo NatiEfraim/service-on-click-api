@@ -7,8 +7,11 @@ use App\Enums\FieldTypeEnum;
 /** Rules for the form of a booking type: editable fields, value checks and structure changes. */
 final class FormFieldRules
 {
-    /** Types an approver may correct while handling a booking. */
+    /** Types an approver may correct while handling a booking (requester fields flagged editable). */
     public const EDITABLE_TYPES = [3, 4];
+
+    /** Types a handler field of a route type may have (written by the handlers during the handling, see FormSectionEnum::HANDLER). */
+    public const HANDLER_EDITABLE_TYPES = [2, 3, 4, 5, 7];
 
     /** Types a new field may have (password, hidden, colour, range, month, week and asterisk number are excluded). */
     public const CREATABLE_TYPES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 20, 21, 23];

@@ -8,6 +8,7 @@ use App\Models\User;
 /**
  * The infosec and ICT booking types are handled by their own officer roles (infosec_officer, ict_handler) instead of the
  * approver chain: only the super admin grants them, through the same assign-approver-role screen (frontend-roles-permissions-guide.md).
+ * The clearance grant (14) has three roles of its own: the קב"ט who submits, the במ (infosec officer) and the interview coordinator.
  */
 class DomainRoleAssignmentTest extends ManagementTestCase
 {
@@ -25,13 +26,13 @@ class DomainRoleAssignmentTest extends ManagementTestCase
     {
         $person = User::where('personal_number', self::NO_ROLE)->firstOrFail();
 
-        // The rows carry only the flag of the role the type has, exactly as the roles screen sends them.
+        // The rows carry exactly the flags of the roles the type has, as the roles screen sends them: three on the clearance grant, one on an ICT type.
         $assign = fn (bool $granted) => $this->actingAsPersonalNumber(self::SUPER_ADMIN)
             ->postJson('/api/bookings-admin-management/assign-approver-role', [
                 'uuid' => $person->uuid,
                 'reason' => 'אחראי ביטחון מידע ותקשוב',
                 'role_assignments' => [
-                    ['booking_type_id' => $this->infosecTypeId(), 'is_infosec_officer' => $granted],
+                    ['booking_type_id' => $this->infosecTypeId(), 'is_infosec_officer' => $granted, 'is_department_security_officer' => false, 'is_interview_coordinator' => $granted],
                     ['booking_type_id' => $this->ictTypeId(), 'is_ict_handler' => $granted],
                 ],
             ])
@@ -41,9 +42,11 @@ class DomainRoleAssignmentTest extends ManagementTestCase
 
         $person = $person->fresh();
         $this->assertTrue($person->hasRole('infosec_officer'));
+        $this->assertTrue($person->hasRole('interview_coordinator'));
         $this->assertTrue($person->hasRole('ict_handler'));
+        $this->assertFalse($person->hasRole('department_security_officer'));
         $this->assertEqualsCanonicalizing(
-            ['infosec_officer_' . $this->infosecTypeId(), 'ict_handler_' . $this->ictTypeId()],
+            ['infosec_officer_' . $this->infosecTypeId(), 'interview_coordinator_' . $this->infosecTypeId(), 'ict_handler_' . $this->ictTypeId()],
             $person->getDirectPermissions()->pluck('name')->all()
         );
 
@@ -53,6 +56,7 @@ class DomainRoleAssignmentTest extends ManagementTestCase
 
         $person = $person->fresh();
         $this->assertFalse($person->hasRole('infosec_officer'), 'the last permission of the role takes the role with it');
+        $this->assertFalse($person->hasRole('interview_coordinator'));
         $this->assertFalse($person->hasRole('ict_handler'));
         $this->assertEmpty($person->getDirectPermissions());
     }
@@ -61,13 +65,24 @@ class DomainRoleAssignmentTest extends ManagementTestCase
     {
         $person = User::where('personal_number', self::NO_ROLE)->firstOrFail();
 
-        // An infosec type has no approver: its own flag is the one that has to be answered.
+        // An infosec type has no approver: its own flags are the ones that have to be answered.
         $this->actingAsPersonalNumber(self::SUPER_ADMIN)
             ->postJson('/api/bookings-admin-management/assign-approver-role', [
                 'uuid' => $person->uuid,
                 'role_assignments' => [['booking_type_id' => $this->infosecTypeId(), 'is_approver' => true]],
             ])
             ->assertUnprocessable();
+
+        $this->app['auth']->forgetGuards();
+
+        // On the clearance grant all three roles are answered: the officer's flag alone is not enough.
+        $this->actingAsPersonalNumber(self::SUPER_ADMIN)
+            ->postJson('/api/bookings-admin-management/assign-approver-role', [
+                'uuid' => $person->uuid,
+                'role_assignments' => [['booking_type_id' => $this->infosecTypeId(), 'is_infosec_officer' => true]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['role_assignments.0.is_department_security_officer', 'role_assignments.0.is_interview_coordinator']);
 
         $this->app['auth']->forgetGuards();
 
@@ -88,32 +103,41 @@ class DomainRoleAssignmentTest extends ManagementTestCase
         $this->actingAsPersonalNumber(self::ADMIN)
             ->postJson('/api/bookings-admin-management/assign-approver-role', [
                 'uuid' => $person->uuid,
-                'role_assignments' => [['booking_type_id' => $this->infosecTypeId(), 'is_infosec_officer' => true]],
+                'role_assignments' => [['booking_type_id' => $this->infosecTypeId(), 'is_infosec_officer' => true, 'is_department_security_officer' => false, 'is_interview_coordinator' => false]],
             ])
             ->assertForbidden();
 
         $this->assertFalse($person->fresh()->hasRole('infosec_officer'));
     }
 
-    public function test_the_super_admin_matrix_offers_only_the_domain_flag_for_a_domain_type(): void
+    public function test_the_super_admin_matrix_offers_only_the_domain_flags_for_a_domain_type(): void
     {
         $person = User::where('personal_number', self::NO_ROLE)->firstOrFail();
 
-        $permissions = collect(
-            $this->actingAsPersonalNumber(self::SUPER_ADMIN)
-                ->getJson('/api/bookings-admin-management/get-approver-permissions/' . $person->uuid)
-                ->assertOk()
-                ->json('data.permissions')
-        );
+        $response = $this->actingAsPersonalNumber(self::SUPER_ADMIN)
+            ->getJson('/api/bookings-admin-management/get-approver-permissions/' . $person->uuid)
+            ->assertOk();
+
+        $permissions = collect($response->json('data.permissions'));
+        $roleOptions = $response->json('data.role_options');
+
+        $this->assertSame(9, $roleOptions['department_security_officer']);
+        $this->assertSame(10, $roleOptions['interview_coordinator']);
 
         $infosec = $permissions->firstWhere('booking_type_id', $this->infosecTypeId());
+        $media = $permissions->firstWhere('booking_type_id', (int) BookingTypeEnum::REMOVABLE_MEDIA_BOOKING->getBookingTypeId());
         $ict = $permissions->firstWhere('booking_type_id', $this->ictTypeId());
         $car = $permissions->firstWhere('booking_type_id', 1);
 
         $this->assertNotNull($infosec, 'the super admin sees the infosec types');
         $this->assertArrayHasKey('is_infosec_officer', $infosec);
+        $this->assertArrayHasKey('is_department_security_officer', $infosec, 'the clearance grant has its own requester role');
+        $this->assertArrayHasKey('is_interview_coordinator', $infosec);
         $this->assertArrayNotHasKey('is_approver', $infosec, 'an infosec type has no approver');
         $this->assertArrayNotHasKey('is_vice_approver', $infosec);
+
+        $this->assertArrayHasKey('is_infosec_officer', $media);
+        $this->assertArrayNotHasKey('is_interview_coordinator', $media, 'the coordinator belongs to the clearance grant only');
 
         $this->assertNotNull($ict, 'the super admin sees the ICT types');
         $this->assertArrayHasKey('is_ict_handler', $ict);

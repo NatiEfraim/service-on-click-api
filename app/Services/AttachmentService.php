@@ -154,6 +154,10 @@ class AttachmentService
                     'kind' => $kind,
                     'id' => (int) $attachment->id,
                     'name' => (string) $attachment->name,
+                    // The name the person uploaded it under (files keep it; the images table has no such column).
+                    'display_name' => $attachment instanceof File && filled($attachment->display_name) && $attachment->display_name !== $attachment->name
+                        ? (string) $attachment->display_name
+                        : null,
                     'mime' => $available ? $type[0] : null,
                     'inline' => $available && $type[1],
                     'available' => $available,

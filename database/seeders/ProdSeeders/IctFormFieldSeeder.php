@@ -198,7 +198,8 @@ class IctFormFieldSeeder extends Seeder
                 'field_display_name' => $displayName,
                 'field_type_id' => $fieldType->getFieldTypeId(),
                 'is_required' => $required,
-                'field_validations' => empty($validations) ? null : json_encode($validations, JSON_UNESCAPED_UNICODE),
+                // An array: the model casts the column (json_encode here would double-encode it into a JSON string).
+                'field_validations' => empty($validations) ? null : $validations,
                 'editable' => false,
                 'is_input' => false,
             ]

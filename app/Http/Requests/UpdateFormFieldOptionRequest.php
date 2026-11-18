@@ -43,6 +43,8 @@ class UpdateFormFieldOptionRequest extends FormRequest
                 'option_fields.*.option_name' => ['nullable', 'string', 'min:1', 'max:50', 'regex:/^[a-zA-Z0-9א-ת\s"\',\.\-()]+$/u'],
                 'option_fields.*.has_category' => ['nullable', 'boolean'],
                 'option_fields.*.parent_option_id' => ['nullable', 'integer', 'exists:option_fields,id'],
+                // The stable code of a root option (option_fields.code): sent = set or cleared, absent = kept.
+                'option_fields.*.code' => ['nullable', 'string', 'max:50', 'regex:/^[a-zA-Z0-9_\-]+$/'],
             ];
            
             $optionFields = $this->input('option_fields');
@@ -87,6 +89,9 @@ class UpdateFormFieldOptionRequest extends FormRequest
             'option_fields.*.has_category.boolean' => 'ערך לא תקין עבור קטגוריה.',
             'option_fields.*.parent_option_id.integer' => 'שדה לא תקין.',
             'option_fields.*.parent_option_id.exists' => 'הקשר בין שדות אינו תקין.',
+            'option_fields.*.code.string' => 'קוד האפשרות יכול להכיל אותיות באנגלית, ספרות, קו תחתון ומקף בלבד (עד 50 תווים)',
+            'option_fields.*.code.max' => 'קוד האפשרות יכול להכיל אותיות באנגלית, ספרות, קו תחתון ומקף בלבד (עד 50 תווים)',
+            'option_fields.*.code.regex' => 'קוד האפשרות יכול להכיל אותיות באנגלית, ספרות, קו תחתון ומקף בלבד (עד 50 תווים)',
         ];
     }
 

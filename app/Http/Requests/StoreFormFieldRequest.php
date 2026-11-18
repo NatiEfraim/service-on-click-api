@@ -22,6 +22,9 @@ class StoreFormFieldRequest extends FormRequest
             'editable' => ['sometimes', 'boolean'],
             'options' => ['sometimes', 'nullable', 'array', 'max:100'],
             'options.*' => ['nullable', 'string', 'max:100'],
+            // Route forms: who fills the field and its width on the 4-column grid.
+            'section' => ['sometimes', 'in:requester,handler'],
+            'col_span' => ['sometimes', 'integer', 'in:1,2,4'],
         ];
     }
 
@@ -43,6 +46,9 @@ class StoreFormFieldRequest extends FormRequest
             'options.max' => $generic,
             'options.*.string' => $generic,
             'options.*.max' => $generic,
+            'section.in' => $generic,
+            'col_span.integer' => $generic,
+            'col_span.in' => $generic,
         ];
     }
 }

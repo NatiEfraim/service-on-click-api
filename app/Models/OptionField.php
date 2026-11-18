@@ -19,6 +19,8 @@ class OptionField extends Model
         'is_input',
         'gender',
         'is_active',
+        // Stable machine key (e.g. a clearance level), independent of the Hebrew name.
+        'code',
     ];
 
 

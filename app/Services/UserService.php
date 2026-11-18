@@ -256,10 +256,16 @@ class UserService
                 return null;
             }
 
+            $firstName = is_string($userFromVatican['first_name'] ?? null) ? trim($userFromVatican['first_name']) : null;
+            $surname = is_string($userFromVatican['surname'] ?? null) ? trim($userFromVatican['surname']) : null;
+
             return [
                 'personal_number' => (string) $userFromVatican['personal_number'],
                 'personal_id' => $this->normalizePersonalId($userFromVatican['personal_id'] ?? null),
-                'full_name' => $this->fullName($userFromVatican['first_name'] ?? null, $userFromVatican['surname'] ?? null),
+                'full_name' => $this->fullName($firstName, $surname),
+                // The two halves as Vatican keeps them, for forms that hold them apart (the clearance grant).
+                'first_name' => $firstName === '' ? null : $firstName,
+                'surname' => $surname === '' ? null : $surname,
             ];
         } catch (ResponseException $e) {
             if ($e->getResponse()->getStatusCode() !== 404) {

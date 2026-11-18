@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Domain\Config\FormFieldRules;
+use App\Domain\Workflow\Workflow;
 use App\Enums\BookingTypeEnum;
+use App\Enums\FormSectionEnum;
 use App\Enums\PermissionEnum;
 use App\Enums\StatusBookingEnum;
 use App\Enums\SystemReferenceEnum;
@@ -84,6 +86,11 @@ class SettingsService
                 'is_required' => $field->is_required,
                 'editable' => $field->editable,
                 'position' => (int) $field->position,
+                // Route forms: the section (requester / handler), the width and the person lookup.
+                'section' => $field->sectionEnum()->value,
+                'col_span' => (int) ($field->col_span ?? 1),
+                'lookup_source' => $field->lookup_source,
+                'autofill_key' => $field->autofill_key,
                 'version' => (int) $field->version,
                 'used_by' => (int) ($usedBy[$field->id] ?? 0),
                 // Custom fields only (not the mobile app's) can change type or be removed.
@@ -104,16 +111,18 @@ class SettingsService
                     'can_be_editable' => in_array((int) $type->id, FormFieldRules::EDITABLE_TYPES, true),
                 ])
                 ->all(),
+            'sections' => FormSectionEnum::rows(),
             'options' => OptionField::query()
                 ->whereIn('form_field_id', $fields->modelKeys())
                 ->where('is_active', true)
                 ->orderBy('id')
-                ->get(['id', 'form_field_id', 'option_field_id', 'name', 'category_name', 'has_category', 'gender'])
+                ->get(['id', 'form_field_id', 'option_field_id', 'name', 'category_name', 'has_category', 'gender', 'code'])
                 ->map(fn (OptionField $option): array => [
                     'id' => $option->id,
                     'form_field_id' => $option->form_field_id,
                     'parent_id' => $option->option_field_id,
                     'name' => $option->name,
+                    'code' => $option->code,
                     'category_name' => $option->category_name,
                     'has_category' => $option->has_category,
                     'gender' => $option->gender,
@@ -189,10 +198,15 @@ class SettingsService
         ];
     }
 
-    /** Unit members holding a managing permission on the type, with their roles on it. @return array<int, array<string, mixed>> */
+    /** Unit members holding a managing permission on the type (or a role of the type's own route), with their roles on it. @return array<int, array<string, mixed>> */
     private function managers(int $unitId, int $bookingTypeId): array
     {
         $prefixes = [PermissionEnum::ADMIN, PermissionEnum::APPROVER, PermissionEnum::VICE_APPROVER, PermissionEnum::TRANSPORTATION_CONTROL_OFFICER];
+
+        foreach (app(Workflow::class)->routeFor($bookingTypeId)?->roles() ?? [] as $role) {
+            $prefixes[] = $role->toPermissionEnum();
+        }
+
         $names = array_map(fn (PermissionEnum $permission): string => $permission->value . $bookingTypeId, $prefixes);
 
         return User::query()

@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Enums\HttpStatusCodeEnum;
 use App\Exceptions\DomainError;
 use App\Http\Requests\ChangeBookingStatusRequest;
+use App\Http\Requests\SetBookingHandlerRequest;
 use App\Http\Requests\UpdateBookingValuesRequest;
 use App\Models\Booking;
 use App\Services\AttachmentService;
 use App\Services\AuditService;
+use App\Services\BookingAssignmentService;
 use App\Services\BookingQueryService;
 use App\Services\BookingValueService;
 use App\Services\BookingWorkflowService;
@@ -23,6 +25,7 @@ class ManagementBookingController extends Controller
         private readonly BookingQueryService $bookingQueryService,
         private readonly BookingWorkflowService $bookingWorkflowService,
         private readonly BookingValueService $bookingValueService,
+        private readonly BookingAssignmentService $bookingAssignmentService,
         private readonly AuditService $auditService,
         private readonly AttachmentService $attachmentService,
     ) {
@@ -55,7 +58,7 @@ class ManagementBookingController extends Controller
         return $this->attachmentService->open($this->accessScope(), $serial, $kind, $id);
     }
 
-    /** Move the booking to status_id (send the version you saw; Idempotency-Key header optional). */
+    /** Move the booking to status_id (send the version you saw; Idempotency-Key header optional; route types may send the handler values the move fills). */
     public function changeStatus(string $key, ChangeBookingStatusRequest $request): JsonResponse
     {
         $serial = $this->serialOf($key) ?? throw new DomainError('לא נמצא', 404);
@@ -67,12 +70,13 @@ class ManagementBookingController extends Controller
             comment: $request->input('comment'),
             expectedVersion: $request->integer('version'),
             idempotencyKey: $request->input('idempotency_key'),
+            values: (array) $request->input('values', []),
         );
 
         return response()->json(['data' => $result, 'message' => $result['message']], Response::HTTP_OK);
     }
 
-    /** Correct editable date/time values (form_field_id => value). */
+    /** Correct editable date/time values (form_field_id => value); on a route type, the handler section. */
     public function updateValues(string $key, UpdateBookingValuesRequest $request): JsonResponse
     {
         $serial = $this->serialOf($key) ?? throw new DomainError('לא נמצא', 404);
@@ -86,6 +90,29 @@ class ManagementBookingController extends Controller
         );
 
         return response()->json(['data' => $result, 'message' => $result['message']], Response::HTTP_OK);
+    }
+
+    /** Route types: assign the handler (handler_uuid), clear the assignment (null), or take the request for yourself. */
+    public function setHandler(string $key, SetBookingHandlerRequest $request): JsonResponse
+    {
+        $serial = $this->serialOf($key) ?? throw new DomainError('לא נמצא', 404);
+
+        $result = $this->bookingAssignmentService->assign(
+            scope: $this->accessScope(),
+            serial: $serial,
+            handlerUuid: $request->input('handler_uuid'),
+            expectedVersion: $request->integer('version'),
+        );
+
+        return response()->json(['data' => $result, 'message' => $result['handler'] === null ? 'הקצאת המטפל בוטלה' : 'המטפל הוקצה'], Response::HTTP_OK);
+    }
+
+    /** Route types: the people who may be assigned this request. */
+    public function handlerCandidates(string $key): JsonResponse
+    {
+        $serial = $this->serialOf($key) ?? throw new DomainError('לא נמצא', 404);
+
+        return response()->json(['data' => $this->bookingAssignmentService->candidates($this->accessScope(), $serial)], Response::HTTP_OK);
     }
 
     /**

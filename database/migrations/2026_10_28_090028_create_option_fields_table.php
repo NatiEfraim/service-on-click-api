@@ -32,6 +32,8 @@ return new class extends Migration
             ->nullOnDelete();
             // false = archived; bookings that chose it keep their values.
             $table->boolean('is_active')->default(true);
+            // Stable machine key of an option (e.g. the clearance levels: restricted < secret < top_secret), independent of the Hebrew name.
+            $table->string('code', 50)->nullable();
             $table->timestamps();
 
         });

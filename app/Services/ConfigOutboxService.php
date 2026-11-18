@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Domain\Sync\ExportFileNames;
 use App\Domain\Sync\PayloadGuard;
+use App\Enums\BookingTypeEnum;
 use App\Exceptions\DomainError;
 use App\Models\Department;
 use App\Models\SyncFile;
@@ -14,21 +15,30 @@ use Illuminate\Support\Str;
 class ConfigOutboxService
 {
     /**
-     * Queues one change.
+     * Queues one change; null when it concerns a web-only booking type (the mobile app does not know it, nothing is sent).
      * @param array<string, mixed> $payload everything except entity, op, correlation_id and changed_at
      * @throws DomainError 422 when the change names a unit or a department
      */
-    public function queue(string $entity, string $op, array $payload, ?string $correlationId = null): SyncFile
+    public function queue(string $entity, string $op, array $payload, ?string $correlationId = null): ?SyncFile
     {
         return $this->queueMany([['entity' => $entity, 'op' => $op, ...$payload]], $correlationId);
     }
 
     /**
-     * Queues several changes of one request as one file, in order.
+     * Queues several changes of one request as one file, in order; changes of web-only booking types are dropped, and null is returned when
+     * nothing is left to send.
      * @param array<int, array<string, mixed>> $changes each with entity and op
      */
-    public function queueMany(array $changes, ?string $correlationId = null): SyncFile
+    public function queueMany(array $changes, ?string $correlationId = null): ?SyncFile
     {
+        $changes = array_values(array_filter($changes, fn (array $change): bool => !BookingTypeEnum::isWebOnlyId(
+            isset($change['booking_type_id']) && is_numeric($change['booking_type_id']) ? (int) $change['booking_type_id'] : null
+        )));
+
+        if ($changes === []) {
+            return null;
+        }
+
         $correlationId ??= (string) Str::uuid();
         $stamped = array_map(fn (array $change): array => [...$change, 'correlation_id' => $correlationId, 'changed_at' => now()->getTimestamp()], $changes);
 

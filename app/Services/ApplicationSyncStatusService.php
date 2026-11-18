@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\BookingTypeEnum;
 use App\Models\Booking;
 use App\Models\Unit;
 use App\Models\User;
@@ -89,6 +90,13 @@ class ApplicationSyncStatusService
     private function bookingQuery(array $filters): Builder
     {
         $query = Booking::query();
+
+        // The web-only types (infosec, ICT) are never sent to the mobile app: they have no sync state to show.
+        $webOnlyTypeIds = BookingTypeEnum::webOnlyIds();
+
+        if ($webOnlyTypeIds !== []) {
+            $query->whereNotIn('booking_type_id', $webOnlyTypeIds);
+        }
 
         if (filled($filters['booking_type_id'] ?? null)) {
             $query->where('booking_type_id', (int) $filters['booking_type_id']);

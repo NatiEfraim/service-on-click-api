@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Enums\RoleEnum;
 use App\Enums\StatusBookingEnum;
+use App\Support\AccessScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
@@ -27,6 +27,9 @@ class Booking extends Model
         'is_exported',
         'is_status_exported',
         'is_updated_value',
+        'handler_user_id',
+        'handler_assigned_at',
+        'stage_due_at',
     ];
 
 
@@ -34,23 +37,42 @@ class Booking extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'status_changed_at' => 'datetime',
+        'handler_assigned_at' => 'datetime',
+        'stage_due_at' => 'datetime',
         'version' => 'integer',
         'parked_status_id' => 'integer',
+        'handler_user_id' => 'integer',
         'is_exported' => 'boolean',
         'is_status_exported' => 'boolean',
         'is_updated_value' => 'boolean',
     ];
 
-    /** Own bookings for plain users (no role counts as plain), the whole unit otherwise. */
+    /**
+     * What a person may read by uuid: always their own bookings; otherwise only the bookings they manage (their unit, a type
+     * they hold a managing or route permission on - see AccessScope::managesBooking); the super admin everything. A request
+     * of a route type holds personal data, so "anyone with a role sees the whole unit" (the old rule) is gone.
+     */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        $isPlainUser = $user->roles->every(
-            fn($role): bool => (int) $role->id === RoleEnum::USER->value
-        );
+        $scope = new AccessScope($user);
 
-        return $isPlainUser
-            ? $query->where('user_id', $user->id)
-            : $query->where('unit_id', $user->unit_id);
+        if ($scope->isSuperAdmin()) {
+            return $query;
+        }
+
+        $managed = $scope->managedBookingTypeIds();
+
+        return $query->where(fn (Builder $where) => $where
+            ->where('user_id', $user->id)
+            ->orWhere(fn (Builder $managedBookings) => $managedBookings
+                ->where('unit_id', $user->unit_id)
+                ->whereIn('booking_type_id', $managed ?: [-1])));
+    }
+
+    /** The assigned handler (מטפל) of a route-type request. */
+    public function handler()
+    {
+        return $this->belongsTo(User::class, 'handler_user_id');
     }
 
     /** Open bookings plus those whose status changed since the given time (legacy rows count from updated_at). */

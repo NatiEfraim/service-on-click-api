@@ -319,6 +319,7 @@ class BookingSuperAdminManagementService
                         return [
                             'option_id' => $option->id,
                             'option_name' => $option->name,
+                            'code' => $option->code,
                             'field_type' => [
                                 'id' =>$option->fieldType?->id,
                                 'name' =>$option->fieldType?->name,
@@ -522,6 +523,9 @@ class BookingSuperAdminManagementService
             $fieldTypeId = $fieldOptions['field_type_id'] ?? null;
             $parentOptionId = $fieldOptions['parent_option_id'] ?? null;
             $hasCategory = (int) ($fieldOptions['has_category'] ?? 0);
+            // The stable code of the option (e.g. a clearance level), when the screen sends one; an existing code is kept otherwise.
+            $codeProvided = array_key_exists('code', $fieldOptions);
+            $code = $codeProvided ? (trim((string) $fieldOptions['code']) === '' ? null : trim((string) $fieldOptions['code'])) : null;
 
 
             DB::beginTransaction();
@@ -610,8 +614,18 @@ class BookingSuperAdminManagementService
                     'form_field_id' => $formFieldId,
                     'payload_section_id' => $payloadSectionId,
                     'is_input' => $isInput,
+                    ...($codeProvided ? ['code' => $code] : []),
                 ]);
             } else {
+                // A field whose choices all carry codes (the clearance levels) compares codes, not names: a new choice needs one too.
+                $coded = OptionField::query()->where('form_field_id', $formFieldId)->where('is_active', true)->whereNull('option_field_id');
+
+                if ($code === null && $coded->exists() && !$coded->clone()->whereNull('code')->exists()) {
+                    DB::rollBack();
+
+                    throw new DomainError('יש להגדיר קוד לאפשרות בשדה זה', 422);
+                }
+
                 $option = OptionField::create([
                     'uuid' => Str::uuid(),
                     'name' => trim($optionName),
@@ -621,6 +635,7 @@ class BookingSuperAdminManagementService
                     'form_field_id' => $formFieldId,
                     'payload_section_id' => $payloadSectionId,
                     'is_input' => $isInput,
+                    'code' => $code,
                 ]);
             }
 
@@ -640,6 +655,7 @@ class BookingSuperAdminManagementService
                 'option_id' => $option->id,
                 'uuid' => $option->uuid,
                 'option_name' => $option->name,
+                'code' => $option->code,
                 'field_type_id' => $option->field_type_id,
                 'has_category' => (bool) $option->has_category,
                 'form_field_id' => $option->form_field_id,
@@ -1130,6 +1146,9 @@ class BookingSuperAdminManagementService
                 $option = OptionField::where('id', $optionId)->first(); 
             }
             
+            // The stable code of the option, when the node carries one (an existing code is kept otherwise).
+            $code = array_key_exists('code', $options) ? (trim((string) $options['code']) === '' ? null : trim((string) $options['code'])) : null;
+
             if ($option) {
                 $option->update([
                     'name' => $optionName ?? $option->name,
@@ -1137,6 +1156,7 @@ class BookingSuperAdminManagementService
                     'has_category' => $hasCategory,
                     'form_field_id' => $formFieldId,
                     'option_field_id' => $parentId,
+                    ...(array_key_exists('code', $options) ? ['code' => $code] : []),
                 ]);
             } else {
                 $option = OptionField::create([
@@ -1146,6 +1166,7 @@ class BookingSuperAdminManagementService
                     'has_category' => $hasCategory,
                     'form_field_id' => $formFieldId,
                     'option_field_id' => $parentId,
+                    'code' => $code,
                 ]);
             }
 

@@ -28,19 +28,21 @@ Route::controller(AuthController::class)->group(function () {
 
 Route::controller(BookingController::class)
     ->prefix('bookings')
-    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler'])
+    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler|department_security_officer|interview_coordinator'])
     ->group(function () {
         Route::get('/my-bookings', 'myBookings');
         Route::get('/{bookingUuid}', 'show')->whereUuid('bookingUuid');
     });
 
-// Requester portal (web submission): catalog, form, counters, create booking.
+// Requester portal (web submission): catalog, form, person lookup, counters, create booking.
 Route::controller(RequesterController::class)
-    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler'])
+    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler|department_security_officer|interview_coordinator'])
     ->group(function () {
         Route::prefix('requester')->group(function () {
             Route::get('/catalog', 'catalog');
             Route::get('/form/{bookingTypeId}', 'form')->whereNumber('bookingTypeId');
+            // A personal-data oracle: its own, tighter limit.
+            Route::get('/person-lookup', 'personLookup')->middleware('throttle:20,1');
             Route::get('/counters', 'counters');
         });
         Route::post('/bookings/{bookingTypeId}', 'store')->whereNumber('bookingTypeId');
@@ -62,7 +64,7 @@ Route::controller(BookingApproverManagementController::class)
     });
 
 
-Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|infosec_officer|ict_handler'])
+Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|infosec_officer|ict_handler|interview_coordinator'])
     ->prefix('bookings-approver-management')
     ->group(function () {
         Route::controller(ManagementBookingController::class)->group(function () {
@@ -78,6 +80,11 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|
             Route::post('/bookings/{serial}/status', 'changeStatus')->whereNumber('serial');
             Route::put('/bookings/{uuid}/values', 'updateValues')->whereUuid('uuid');
             Route::put('/bookings/{serial}/values', 'updateValues')->whereNumber('serial');
+            // Route types (the clearance grant): the assigned handler (מטפל) and who may be assigned.
+            Route::put('/bookings/{uuid}/handler', 'setHandler')->whereUuid('uuid');
+            Route::put('/bookings/{serial}/handler', 'setHandler')->whereNumber('serial');
+            Route::get('/bookings/{uuid}/handler-candidates', 'handlerCandidates')->whereUuid('uuid');
+            Route::get('/bookings/{serial}/handler-candidates', 'handlerCandidates')->whereNumber('serial');
             Route::match(['post', 'put'], '/bookings', 'createBlocked');
             Route::post('/bookings/{bookingTypeId}/create', 'createBlocked')->whereNumber('bookingTypeId');
         });

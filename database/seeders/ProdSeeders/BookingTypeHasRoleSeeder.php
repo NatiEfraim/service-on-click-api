@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\ProdSeeders;
 
+use App\Domain\Workflow\Routes\RouteRegistry;
 use App\Enums\BookingTypeEnum;
 use App\Enums\RoleEnum;
 use App\Models\BookingType;
@@ -74,6 +75,14 @@ class BookingTypeHasRoleSeeder extends Seeder
     /** @return array<int> Every role the booking type has. */
     private function roleIdsByBookingType(int $bookingTypeId): array
     {
+        // A type with a route of its own (the clearance grant) has the route's requester, owner and handler roles - nothing of the approver chain.
+        if (($route = RouteRegistry::byBookingTypeId()[$bookingTypeId] ?? null) !== null) {
+            return array_values(array_unique(array_map(
+                fn (RoleEnum $role): int => $role->value,
+                [$route->requesterRole(), $route->ownerRole(), ...$route->roles()],
+            )));
+        }
+
         if ($bookingTypeId === BookingTypeEnum::BARBER_BOOKING->getBookingTypeId()) {
             return $this->barberRoleIds;
         }

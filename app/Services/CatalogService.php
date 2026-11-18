@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Domain\Workflow\TypeRoute;
 use App\Enums\BookingStageEnum;
+use App\Enums\FormSectionEnum;
 use App\Enums\RoleEnum;
 use App\Models\ActionType;
 use App\Models\BookingType;
@@ -44,6 +46,9 @@ class CatalogService
             'is_handler_only' => $scope->isHandlerOnly(),
             'managed_booking_types' => $scope->isSuperAdmin() ? $scope->allManageableBookingTypeIds() : $scope->managedBookingTypeIds(),
             'dashboard_booking_types' => $scope->dashboardBookingTypeIds(),
+            // The types with a route of their own the user acts on, and the ones they own (dashboard, settings).
+            'route_booking_types' => $scope->isSuperAdmin() ? $scope->workflow()->routeTypeIds() : $scope->routeBookingTypeIds(),
+            'route_owner_booking_types' => $scope->isSuperAdmin() ? $scope->workflow()->routeTypeIds() : $scope->routeOwnerBookingTypeIds(),
         ];
     }
 
@@ -69,6 +74,51 @@ class CatalogService
             'units' => $unitsQuery->get()->map(fn (Unit $unit): array => ['id' => $unit->id, 'code' => $unit->name, 'name' => $unit->displayName()])->all(),
             'departments' => $departmentsQuery->get(['id', 'unit_id', 'name'])->all(),
             'action_types' => ActionType::query()->orderBy('id')->get(['id', 'type', 'display_type'])->all(),
+            // The sections a form may have, and the booking types with a route of their own (steps of the progress bar, roles, assignment).
+            'sections' => FormSectionEnum::rows(),
+            'routes' => $this->routes($scope),
         ];
+    }
+
+    /** @return array<int, array<string, mixed>> booking type id => the route as the screens need it */
+    private function routes(AccessScope $scope): array
+    {
+        $workflow = $scope->workflow();
+        $routes = [];
+
+        if ($workflow->routeTypeIds() === []) {
+            return $routes;
+        }
+
+        $labels = Status::query()->pluck('display_name', 'id');
+        $roleRow = fn (RoleEnum $role): array => ['id' => $role->value, 'name' => $role->toSpatieRoleName(), 'label' => $role->getPermissionDisplayName()];
+        $roleNames = fn (array $roles): array => array_map(fn (RoleEnum $role): string => $role->toSpatieRoleName(), $roles);
+
+        foreach ($workflow->routeTypeIds() as $bookingTypeId) {
+            /** @var TypeRoute $route */
+            $route = $workflow->routeFor($bookingTypeId);
+            $assignment = $route->assignment();
+
+            $routes[$bookingTypeId] = [
+                'key' => $route->key(),
+                'initial_status_id' => $route->initialStatus(),
+                'success_status_id' => $route->successStatus(),
+                'status_ids' => $route->statusIds(),
+                'steps' => array_map(fn (int $statusId): array => ['status_id' => $statusId, 'label' => $labels[$statusId] ?? (string) $statusId], $route->steps()),
+                'sections' => FormSectionEnum::rows(),
+                'requester_role' => $roleRow($route->requesterRole()),
+                'owner_role' => $roleRow($route->ownerRole()),
+                'roles' => array_map($roleRow, $route->roles()),
+                'assignment' => [
+                    'statuses' => $assignment['statuses'],
+                    'assigners' => $roleNames($assignment['assigners']),
+                    'candidates' => $roleNames($assignment['candidates']),
+                    'self' => $roleNames($assignment['self']),
+                ],
+                'handler_field_statuses' => array_map($roleNames, $route->handlerFieldStatuses()),
+            ];
+        }
+
+        return $routes;
     }
 }

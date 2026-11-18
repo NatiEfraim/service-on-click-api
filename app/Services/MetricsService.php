@@ -186,7 +186,8 @@ class MetricsService
             'pools' => $pools,
             'rates' => [
                 'closed' => $closed->count(),
-                'completed_pct' => $rate([StatusBookingEnum::COMPLETED->value]),
+                // Completed, or the successful end of a type's own route.
+                'completed_pct' => $rate($scope->workflow()->completedStatusIds()),
                 'rejected_pct' => $rate([StatusBookingEnum::REJECTED->value]),
                 'canceled_by_user_pct' => $rate([StatusBookingEnum::CANCELED_BY_USER->value]),
                 'canceled_by_approver_pct' => $rate([StatusBookingEnum::CANCELED_BY_APPROVER->value, StatusBookingEnum::CANCELED_BY_BARBER->value, StatusBookingEnum::CANCELED_BY_CHANGING_TIME->value]),

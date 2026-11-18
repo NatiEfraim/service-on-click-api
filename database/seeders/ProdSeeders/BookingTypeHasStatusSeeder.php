@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\ProdSeeders;
 
+use App\Domain\Workflow\Routes\RouteRegistry;
 use App\Enums\BookingTypeEnum;
 use App\Enums\StatusBookingEnum;
 use App\Models\BookingType;
@@ -60,6 +61,11 @@ class BookingTypeHasStatusSeeder extends Seeder
     /** @return array<int> Every status the booking type can reach. */
     private function statusIdsByBookingType(int $bookingTypeId): array
     {
+        // A type with a route of its own (the clearance grant) reaches the route's statuses only.
+        if (($route = RouteRegistry::byBookingTypeId()[$bookingTypeId] ?? null) !== null) {
+            return $route->statusIds();
+        }
+
         if ($bookingTypeId === BookingTypeEnum::BARBER_BOOKING->getBookingTypeId()) {
             return $this->barberStatusIds;
         }

@@ -2,9 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Workflow\Workflow;
 use App\Enums\FieldTypeEnum;
 use App\Enums\StatusBookingEnum;
-
+use App\Models\Status;
 use App\Services\BookingValueFormatterService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -66,7 +67,7 @@ class BookingResource extends JsonResource
         ];
     }
 
-    /** The status_id values the auth user can move this booking to now. */
+    /** The status_id values the auth user can move this booking to now (the generic route by role flags, a route of its own by its roles). */
     private function getNextStatuses(): array
     {
         $user = Auth::user();
@@ -77,17 +78,33 @@ class BookingResource extends JsonResource
 
         $bookingTypeId = (int) $this->booking_type_id;
 
-        $roleFlags = StatusBookingEnum::resolveRoleFlags(
-            permissionNames: $user->workflowPermissionNames(),
-            bookingTypeId: $bookingTypeId,
-        );
-
         if (StatusBookingEnum::tryFrom((int) $this->status_id) === null) {
             return [];
         }
 
         // Whose turn it is follows the position: a booking on hold stays with the stage it was put on hold from.
-        return $this->resource->positionStatus()->getNextStatuses($roleFlags, $bookingTypeId, $this->resource->holdStatus());
+        $actions = app(Workflow::class)->availableActions(
+            $this->resource->positionStatus(),
+            $user->workflowPermissionNames(),
+            $bookingTypeId,
+            $this->resource->holdStatus(),
+        );
+
+        if ($actions === []) {
+            return [];
+        }
+
+        $records = Status::query()
+            ->whereIn('id', array_map(fn (array $action): int => $action['status']->value, $actions))
+            ->get(['id', 'name', 'display_name'])
+            ->keyBy('id');
+
+        return array_map(fn (array $action): array => [
+            'id' => $action['status']->value,
+            'name' => $records->get($action['status']->value)?->name,
+            'display_name' => $records->get($action['status']->value)?->display_name,
+            'label' => $action['label'],
+        ], $actions);
     }
 
     private function formatDate(mixed $date): ?string

@@ -4,10 +4,14 @@ namespace App\Services;
 
 use App\Domain\Config\FormFieldRules;
 use App\Domain\Sync\ExportFileNames;
+use App\Domain\Workflow\TypeRoute;
+use App\Enums\ActionTypeEnum;
 use App\Enums\BookingTypeEnum;
 use App\Enums\FieldTypeEnum;
+use App\Enums\FormSectionEnum;
 use App\Enums\StatusBookingEnum;
 use App\Exceptions\DomainError;
+use App\Models\ApplicationLog;
 use App\Models\BarberBooking;
 use App\Models\Booking;
 use App\Models\BookingRestrictionDate;
@@ -16,10 +20,13 @@ use App\Models\FormField;
 use App\Models\SyncConflict;
 use App\Models\SyncFile;
 use App\Support\AccessScope;
+use App\Support\DueMoment;
+use App\Support\FieldValueValidator;
 use App\Traits\ResolvesBarberSchedule;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /** Corrects editable date/time values while a booking is handled; queues the change for mobile, moves the barber slot to a free time. */
 class BookingValueService
@@ -51,6 +58,11 @@ class BookingValueService
 
             if (SyncConflict::query()->where('booking_id', $booking->id)->where('state', SyncConflict::STATE_OPEN)->exists()) {
                 throw new DomainError('נדרשת הכרעה בקריאה זו לפני עדכון נוסף', 409);
+            }
+
+            // A type with a route of its own: the handlers write their own section (place, date, time of the interview), nothing goes to the mobile app.
+            if (($route = $scope->workflow()->routeFor((int) $booking->booking_type_id)) !== null) {
+                return $this->updateHandlerValues($scope, $booking, $route, $changes, $reason, $serial);
             }
 
             $fields = FormField::query()
@@ -127,6 +139,135 @@ class BookingValueService
 
             return ['version' => (int) $booking->version, 'changed' => array_values($labels), 'message' => 'פרטי הקריאה עודכנו'];
         });
+    }
+
+    /**
+     * The handler section of a route type: upserts the values (the rows may not exist yet), validates each against its field, keeps the interview
+     * complete and ahead while the request waits for it (and recomputes the moment the scheduler waits for), logs the edit on the timeline.
+     * @param array<int|string, mixed> $changes form field id => new value
+     * @return array{version: int, changed: array<int, string>, message: string}
+     */
+    private function updateHandlerValues(AccessScope $scope, Booking $booking, TypeRoute $route, array $changes, ?string $reason, int $serial): array
+    {
+        $user = $scope->user;
+
+        $fields = FormField::query()
+            ->where('booking_type_id', $booking->booking_type_id)
+            ->where('unit_id', $booking->unit_id)
+            ->section(FormSectionEnum::HANDLER)
+            ->where('is_active', true)
+            ->whereIn('field_type_id', FormFieldRules::HANDLER_EDITABLE_TYPES)
+            ->get()
+            ->keyBy('id');
+
+        $rows = BookingValue::query()
+            ->where('booking_id', $booking->id)
+            ->whereIn('form_field_id', $fields->keys()->all())
+            ->whereNull('option_field_id')
+            ->get()
+            ->keyBy('form_field_id');
+
+        $scalar = static function (mixed $value): ?string {
+            if (is_array($value) && array_is_list($value) && count($value) === 1) {
+                $value = $value[0];
+            }
+
+            return is_scalar($value) ? (string) $value : null;
+        };
+
+        $errors = [];
+        $edits = [];
+
+        foreach ($changes as $fieldId => $new) {
+            $field = $fields->get((int) $fieldId) ?? throw new DomainError('השדה אינו ניתן לעדכון במהלך הטיפול', 422);
+            $new = is_string($new) ? trim($new) : $new;
+
+            foreach (FieldValueValidator::errorsFor($field, $new) as $error) {
+                $errors["values.{$field->id}"][] = $error;
+            }
+
+            $row = $rows->get($field->id);
+
+            if ($row !== null && $scalar($row->value) === (string) $new) {
+                continue;
+            }
+
+            $edits[$field->id] = ['field' => $field, 'row' => $row, 'before' => $row === null ? null : $scalar($row->value), 'after' => (string) $new];
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        if ($edits === []) {
+            throw new DomainError('לא בוצע שינוי', 422);
+        }
+
+        // The values as they will be, by field name: the stored ones overlaid with the edits.
+        $byName = [];
+
+        foreach ($fields as $field) {
+            $value = isset($edits[$field->id]) ? $edits[$field->id]['after'] : $scalar($rows->get($field->id)?->value);
+
+            if ($value !== null && $value !== '') {
+                $byName[$field->field_name] = $value;
+            }
+        }
+
+        $statusId = (int) $booking->status_id;
+        $dueAt = DueMoment::for($route, $statusId, $byName);
+
+        // While the request waits for the interview the three fields must stay complete and the moment ahead.
+        if (DueMoment::statusHasDueTransition($route, $statusId)) {
+            if ($dueAt === null) {
+                throw new DomainError('יש להזין את מקום, תאריך ושעת התחקיר', 422);
+            }
+
+            if ($dueAt->lessThanOrEqualTo(now())) {
+                throw new DomainError('מועד התחקיר חייב להיות עתידי', 422);
+            }
+        }
+
+        foreach ($edits as $edit) {
+            BookingValue::query()->updateOrCreate(
+                ['booking_id' => $booking->id, 'form_field_id' => $edit['field']->id],
+                ['option_field_id' => null, 'value' => $edit['after']],
+            );
+        }
+
+        $correlationId = (string) Str::uuid();
+
+        $booking->forceFill([
+            'version' => (int) $booking->version + 1,
+            ...(DueMoment::statusHasDueTransition($route, $statusId) ? ['stage_due_at' => $dueAt] : []),
+        ])->save();
+
+        ApplicationLog::query()->create([
+            'booking_id' => $booking->id,
+            'action_type_id' => ActionTypeEnum::UPDATE_HANDLER_VALUES->value,
+            'status_id' => $statusId,
+            'source' => 'internal',
+            'correlation_id' => $correlationId,
+            'user_id' => $user->id,
+            'is_exported' => false,
+        ]);
+
+        $labels = array_map(fn (array $edit): string => $edit['field']->field_display_name, $edits);
+
+        $this->audit->record([
+            'action' => 'booking.values.update',
+            'entity_type' => 'booking',
+            'entity_id' => $serial,
+            'booking_serial' => $serial,
+            'unit_id' => $booking->unit_id,
+            'booking_type_id' => $booking->booking_type_id,
+            'before' => array_combine($labels, array_map(fn (array $edit) => $edit['before'], $edits)),
+            'after' => array_combine($labels, array_map(fn (array $edit): string => $edit['after'], $edits)),
+            'reason' => $reason !== null && trim($reason) !== '' ? trim($reason) : null,
+            'correlation_id' => $correlationId,
+        ], $user);
+
+        return ['version' => (int) $booking->version, 'changed' => array_values($labels), 'message' => 'פרטי הטיפול עודכנו'];
     }
 
     /** Checks ownership, version (a stale one answers "changed", 409, before "not your turn"), visibility at its stage and the user's turn. */

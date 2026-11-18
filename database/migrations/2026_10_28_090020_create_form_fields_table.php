@@ -37,7 +37,18 @@ return new class extends Migration
             $table->unsignedInteger('position')->default(0);
             // false = archived; a field that bookings hold values for is never deleted.
             $table->boolean('is_active')->default(true);
+            // FormSectionEnum: requester = filled on submission, handler = filled during the handling (route types).
+            $table->string('section', 20)->default('requester');
+            // Width on the form's 4-column grid (1, 2 or 4).
+            $table->unsignedTinyInteger('col_span')->default(1);
+            // Set on the field whose value triggers a lookup (only "person" today); autofill_key names the key of the
+            // lookup result that fills this field, which is then locked when the person was found.
+            $table->string('lookup_source', 30)->nullable();
+            $table->string('autofill_key', 50)->nullable();
             $table->timestamps();
+
+            // The seeders' updateOrCreate key, and how the workflow addresses a field.
+            $table->unique(['booking_type_id', 'unit_id', 'field_name'], 'form_fields_type_unit_name_unique');
         });
     }
 

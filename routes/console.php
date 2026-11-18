@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\AdvanceWorkflowCommand;
 use App\Console\Commands\ExportBookingStatusJsonFtpCommand;
 use App\Console\Commands\ExportSysRefJsonFtpCommand;
 use App\Console\Commands\ExportUsersJsonFtpCommand;
@@ -19,6 +20,14 @@ use Illuminate\Support\Facades\Schedule;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// Route types (the clearance grant): a request whose interview moment has passed moves on, and - when CLEARANCE_AUTO_CLOSE is on - a request
+// the clearance registry confirms is closed. Runs in the process itself (no queue worker needed).
+Schedule::command(AdvanceWorkflowCommand::class)
+    ->everyFiveMinutes()
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping(10);
 
 
 // These commands only queue jobs, so a queue worker must be running.

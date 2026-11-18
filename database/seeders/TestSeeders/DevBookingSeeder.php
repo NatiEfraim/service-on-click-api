@@ -3,6 +3,7 @@
 namespace Database\Seeders\TestSeeders;
 
 use App\Enums\FieldTypeEnum;
+use App\Enums\FormSectionEnum;
 use App\Enums\RoleEnum;
 use App\Enums\UnitEnum;
 use App\Models\BarberBooking;
@@ -100,13 +101,14 @@ class DevBookingSeeder extends Seeder
             ->first();
     }
 
-    /** A sample value for every top-level form field; the first option for lists. */
+    /** A sample value for every top-level requester field (the handler fields of a route type stay empty); the first option for lists. */
     private function createValues(Booking $booking): void
     {
         $formFields = FormField::query()
             ->where('booking_type_id', $booking->booking_type_id)
             ->where('unit_id', $booking->unit_id)
             ->whereNull('form_field_id')
+            ->section(FormSectionEnum::REQUESTER)
             ->get();
 
         foreach ($formFields as $formField) {

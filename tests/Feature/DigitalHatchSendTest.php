@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\BookingTypeEnum;
 use App\Jobs\SendHatchBookingStatusJob;
 use App\Jobs\SendHatchUsersJob;
 use App\Models\Booking;
@@ -60,11 +61,15 @@ class DigitalHatchSendTest extends HatchTestCase
 
         $this->assertSame(['000000001', '123456789', '223456789', '323456789'], array_column($payload, 'personal_id'), 'ordered by ID number');
 
-        // The super admin holds the role, not permissions: every booking type. The others hold a permission per type that has their role - the
-        // barber type (5) has no vice approver, so the vice approver is listed for every type but that one.
-        $this->assertSame([['role_id' => 1, 'booking_type_ids' => $ids]], $this->row($payload, '000000001')['booking_type_roles']);
-        $this->assertSame([['role_id' => 4, 'booking_type_ids' => array_values(array_diff($ids, [5]))]], $this->row($payload, '123456789')['booking_type_roles']);
-        $this->assertSame([['role_id' => 5, 'booking_type_ids' => $ids]], $this->row($payload, '223456789')['booking_type_roles']);
+        // The mobile app knows the booking types 1-13 only: the web-only types (infosec 14-16, ICT 17-25) never travel, whoever holds them.
+        $mobileIds = array_values(array_diff($ids, BookingTypeEnum::webOnlyIds()));
+        $this->assertSame([1, 2, 3, 4, 5, 8, 10, 11, 13], $mobileIds, 'the shared types are the nine below 14');
+
+        // The super admin holds the role, not permissions: every booking type the app knows. The others hold a permission per type that has
+        // their role - the barber type (5) has no vice approver, so the vice approver is listed for every type but that one.
+        $this->assertSame([['role_id' => 1, 'booking_type_ids' => $mobileIds]], $this->row($payload, '000000001')['booking_type_roles']);
+        $this->assertSame([['role_id' => 4, 'booking_type_ids' => array_values(array_diff($mobileIds, [5]))]], $this->row($payload, '123456789')['booking_type_roles']);
+        $this->assertSame([['role_id' => 5, 'booking_type_ids' => $mobileIds]], $this->row($payload, '223456789')['booking_type_roles']);
         $this->assertSame(
             [['role_id' => 4, 'booking_type_ids' => [$first, $second]], ['role_id' => 5, 'booking_type_ids' => [$second]]],
             $this->row($payload, '323456789')['booking_type_roles']

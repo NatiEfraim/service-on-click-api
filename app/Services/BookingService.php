@@ -36,6 +36,9 @@ class BookingService
                 'images',
                 'comments.user',
                 'viceApprovers.user',
+                // Route types: the handler's name and the timeline the progress bar is built from.
+                'handler:id,uuid,full_name',
+                'applicationLog' => fn ($logs) => $logs->orderBy('created_at')->orderBy('id'),
                 'bookingValue.formField.fieldType',
                 'bookingValue.formField.parentFormField.fieldType',
                 'bookingValue.formField.parentFormField.parentFormField.fieldType',

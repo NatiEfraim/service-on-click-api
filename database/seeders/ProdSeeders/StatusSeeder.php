@@ -8,7 +8,10 @@ use Illuminate\Database\Seeder;
 
 class StatusSeeder extends Seeder
 {
-    /** `position` is resolved from StatusBookingEnum::getPosition(), the single source of truth. */
+    /**
+     * Ids are pinned to StatusBookingEnum (1-18 are the mobile app's; 101+ belong to the web-only routes), `position` comes from
+     * StatusBookingEnum::getPosition(), the single source of truth.
+     */
     public function run(): void
     {
         $statusTypes = [
@@ -35,16 +38,26 @@ class StatusSeeder extends Seeder
             // TRANSPORTATION_BOOKING: control officer's answer, sent on to the vice approver
             'control_officer_approved' => 'אושרה ע"י רמ"ד תו"ב',
             'control_officer_rejected' => 'נדחתה ע"י רמ"ד תו"ב',
+            // CLEARANCE_GRANT_BOOKING (type 14), web only: its own route, see App\Domain\Workflow\Routes\ClearanceGrantRoute
+            'interview_assignment' => 'הקצאה לתחקיר',
+            'interview_scheduled' => 'נקבע מול המועמד',
+            'interviewed' => 'תוחקר',
+            'awaiting_clearance' => 'ממתין לקבלת הכשר',
+            'clearance_granted' => 'קיבל הכשר ביטחוני',
         ];
 
         foreach ($statusTypes as $statusType => $statusTypeDisplayName) {
-            Status::updateOrCreate(
-                ['name' => $statusType],
+            $status = StatusBookingEnum::fromStatusName($statusType);
+
+            // Pinned by id, so a route status lands at its enum value and never at the next auto-increment.
+            Status::unguarded(fn () => Status::updateOrCreate(
+                ['id' => $status->value],
                 [
+                    'name' => $statusType,
                     'display_name' => $statusTypeDisplayName,
-                    'position' => StatusBookingEnum::fromStatusName($statusType)?->getPosition(),
+                    'position' => $status->getPosition(),
                 ]
-            );
+            ));
         }
     }
 }

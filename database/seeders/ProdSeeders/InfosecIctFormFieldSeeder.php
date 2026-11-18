@@ -2,20 +2,28 @@
 
 namespace Database\Seeders\ProdSeeders;
 
+use App\Domain\Workflow\Routes\ClearanceGrantFields;
 use App\Enums\BookingTypeEnum;
 use App\Enums\FieldTypeEnum;
+use App\Enums\FormSectionEnum;
 use App\Enums\UnitEnum;
 use App\Models\FormField;
+use App\Models\OptionField;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Form fields for the six new ביטחון מידע and תקשוב booking types (ids 14-19).
- * Uses updateOrCreate so the seeder is safe to re-run.
+ * Form fields of the ביטחון מידע types (14-16) and the first תקשוב types (17-19). Uses updateOrCreate so the seeder is safe to re-run.
+ *
+ * The clearance grant (14) is the legacy screen's form: a requester section (פרטים נוספים) with the candidate's details - the ID number
+ * looks the person up and fills personal number, names and rank - and a handler section (למילוי על ידי גורמים רלוונטיים) that the
+ * coordinators fill during the route (place, date and time of the interview). Field names the workflow addresses are in ClearanceGrantFields.
  */
 class InfosecIctFormFieldSeeder extends Seeder
 {
+    private const MOBILE_PHONE = 'regex:/^05[012458]\d{7}$/';
+
     public function run(): void
     {
         try {
@@ -47,19 +55,71 @@ class InfosecIctFormFieldSeeder extends Seeder
             return;
         }
 
-        $this->create($id, 'candidate_role', 'תפקיד', FieldTypeEnum::TEXT, true, [
+        $text = fn (string $required): array => ['required' => $required, 'string' => 'פורמט אינו תקין', 'max:255' => 'ניתן להזין עד 255 תווים'];
+
+        // --- Requester section: פרטים נוספים (positions 10..160) ---
+        $this->create($id, ClearanceGrantFields::PERSONAL_ID, 'תעודת זהות', FieldTypeEnum::TEXT, true, [
+            'required' => 'יש להזין מספר תעודת זהות',
+            'regex:/^\d{9}$/' => 'תעודת זהות חייבת להכיל 9 ספרות בדיוק',
+        ], position: 10, lookupSource: 'person');
+        $this->create($id, ClearanceGrantFields::PERSONAL_NUMBER, 'מספר אישי', FieldTypeEnum::TEXT, true, [
+            'required' => 'יש להזין מספר אישי',
+            'regex:/^\d{5,9}$/' => 'מספר אישי חייב להכיל 5 עד 9 ספרות',
+        ], position: 20, autofillKey: 'personal_number');
+        $this->create($id, ClearanceGrantFields::FIRST_NAME, 'שם פרטי', FieldTypeEnum::TEXT, true, $text('יש להזין שם פרטי'), position: 30, autofillKey: 'first_name');
+        $this->create($id, ClearanceGrantFields::LAST_NAME, 'שם משפחה', FieldTypeEnum::TEXT, true, $text('יש להזין שם משפחה'), position: 40, autofillKey: 'last_name');
+        $this->create($id, 'phone', 'מספר טלפון', FieldTypeEnum::TEL, true, [
+            'required' => 'יש לספק מספר טלפון',
+            self::MOBILE_PHONE => 'מספר טלפון נייד לא תקין (חייב להתחיל ב-05)',
+        ], position: 50);
+        $this->create($id, 'department', 'מחלקה', FieldTypeEnum::TEXT, true, $text('יש להזין מחלקה'), position: 60);
+        $this->create($id, 'branch', 'ענף', FieldTypeEnum::TEXT, false, ['string' => 'פורמט אינו תקין', 'max:255' => 'ניתן להזין עד 255 תווים'], position: 70);
+        $this->create($id, ClearanceGrantFields::RANK, 'דרגה', FieldTypeEnum::TEXT, true, $text('יש להזין דרגה'), position: 80, autofillKey: 'rank');
+        $this->create($id, 'service_type', 'סוג שירות', FieldTypeEnum::SELECT, true, ['required' => 'יש לבחור סוג שירות'], position: 90);
+        $this->create($id, 'commander_name', 'שם מפקד', FieldTypeEnum::TEXT, true, $text('יש להזין שם מפקד'), position: 100);
+        $this->create($id, 'commander_phone', 'נייד מפקד', FieldTypeEnum::TEL, true, [
+            'required' => 'יש לספק נייד מפקד',
+            self::MOBILE_PHONE => 'מספר טלפון נייד לא תקין (חייב להתחיל ב-05)',
+        ], position: 110);
+        $this->create($id, ClearanceGrantFields::REQUESTED_LEVEL, 'רמת סיווג', FieldTypeEnum::SELECT, true, ['required' => 'יש לבחור רמת סיווג'], position: 120);
+        $this->create($id, 'preferred_interview_location', 'מיקום מועדף לתחקיר', FieldTypeEnum::SELECT, false, [], position: 130, colSpan: 2);
+        $this->create($id, 'candidate_role', 'תפקיד נדרש', FieldTypeEnum::TEXT_AREA, true, [
             'required' => 'יש להזין תפקיד',
             'string' => 'פורמט אינו תקין',
-            'max:255' => 'ניתן להזין עד 255 תווים',
-        ]);
-        $this->create($id, 'requested_level', 'רמת סיווג מבוקשת', FieldTypeEnum::SELECT, true);
-        $this->create($id, 'reason', 'נימוק הבקשה', FieldTypeEnum::TEXT_AREA, true, [
-            'required' => 'יש להזין נימוק',
+            'max:1000' => 'ניתן להזין עד 1000 תווים',
+        ], position: 140, colSpan: 2);
+        $this->create($id, 'role_characteristics', 'מאפייני תפקיד', FieldTypeEnum::TEXT_AREA, true, [
+            'required' => 'יש להזין מאפייני תפקיד',
             'string' => 'פורמט אינו תקין',
-        ]);
-        $this->create($id, 'phone', 'טלפון לתיאום', FieldTypeEnum::TEL, true, [
-            'required' => 'יש לספק מספר טלפון',
-            'regex:/^05[012458]\d{7}$/' => 'מספר טלפון נייד לא תקין (חייב להתחיל ב-05)',
+            'max:1000' => 'ניתן להזין עד 1000 תווים',
+        ], position: 150, colSpan: 2);
+        $this->create($id, 'notes', 'הערות', FieldTypeEnum::TEXT_AREA, false, [
+            'string' => 'פורמט אינו תקין',
+            'max:2000' => 'ניתן להזין עד 2000 תווים',
+        ], position: 160, colSpan: 4);
+
+        // --- Handler section: למילוי על ידי גורמים רלוונטיים (positions 200..220). "Required" = by the scheduling move, never on submission. ---
+        $this->create($id, ClearanceGrantFields::INTERVIEW_LOCATION, 'מקום התחקיר', FieldTypeEnum::TEXT, true, [
+            'required' => 'יש להזין את מקום התחקיר',
+            'string' => 'פורמט אינו תקין',
+            'max:255' => 'ניתן להזין עד 255 תווים',
+        ], position: 200, colSpan: 2, section: FormSectionEnum::HANDLER);
+        $this->create($id, ClearanceGrantFields::INTERVIEW_DATE, 'מועד התחקיר - תאריך', FieldTypeEnum::DATE, true, [
+            'required' => 'יש לבחור תאריך לתחקיר',
+            'date' => 'פורמט תאריך אינו תקין',
+        ], position: 210, section: FormSectionEnum::HANDLER);
+        $this->create($id, ClearanceGrantFields::INTERVIEW_TIME, 'מועד התחקיר - שעה', FieldTypeEnum::TIME, true, [
+            'required' => 'יש לבחור שעה לתחקיר',
+            'date_format:H:i' => 'שעה אינה תקינה (HH:MM)',
+        ], position: 220, section: FormSectionEnum::HANDLER);
+
+        // The form before this route had other fields (reason...): on a database that is not rebuilt they leave the form - archived when a
+        // request holds a value for them, deleted otherwise.
+        $this->retireOtherFields($id, [
+            ClearanceGrantFields::PERSONAL_ID, ClearanceGrantFields::PERSONAL_NUMBER, ClearanceGrantFields::FIRST_NAME, ClearanceGrantFields::LAST_NAME,
+            'phone', 'department', 'branch', ClearanceGrantFields::RANK, 'service_type', 'commander_name', 'commander_phone',
+            ClearanceGrantFields::REQUESTED_LEVEL, 'preferred_interview_location', 'candidate_role', 'role_characteristics', 'notes',
+            ClearanceGrantFields::INTERVIEW_LOCATION, ClearanceGrantFields::INTERVIEW_DATE, ClearanceGrantFields::INTERVIEW_TIME,
         ]);
     }
 
@@ -182,9 +242,12 @@ class InfosecIctFormFieldSeeder extends Seeder
     }
 
     // ---------------------------------------------------------------------------
-    // Helper
+    // Helpers
     // ---------------------------------------------------------------------------
 
+    /**
+     * @param array<string, string> $validations Laravel rule => Hebrew message, stored as an array (the model casts the column; never json_encode here)
+     */
     private function create(
         int $bookingTypeId,
         string $fieldName,
@@ -192,6 +255,11 @@ class InfosecIctFormFieldSeeder extends Seeder
         FieldTypeEnum $fieldType,
         bool $required,
         array $validations = [],
+        int $position = 0,
+        int $colSpan = 1,
+        FormSectionEnum $section = FormSectionEnum::REQUESTER,
+        ?string $lookupSource = null,
+        ?string $autofillKey = null,
     ): void {
         FormField::updateOrCreate(
             [
@@ -203,10 +271,36 @@ class InfosecIctFormFieldSeeder extends Seeder
                 'field_display_name' => $displayName,
                 'field_type_id' => $fieldType->getFieldTypeId(),
                 'is_required' => $required,
-                'field_validations' => empty($validations) ? null : json_encode($validations, JSON_UNESCAPED_UNICODE),
-                'editable' => false,
+                'field_validations' => $validations === [] ? null : $validations,
+                // Requester fields are not corrected after submission; handler fields are written during the route.
+                'editable' => $section === FormSectionEnum::HANDLER,
                 'is_input' => false,
+                'is_active' => true,
+                'position' => $position,
+                'col_span' => $colSpan,
+                'section' => $section->value,
+                'lookup_source' => $lookupSource,
+                'autofill_key' => $autofillKey,
             ]
         );
+    }
+
+    /** Fields of the type/unit that are not in the list any more: archived when a request holds a value for them, deleted otherwise. @param array<int, string> $keep */
+    private function retireOtherFields(int $bookingTypeId, array $keep): void
+    {
+        $others = FormField::query()
+            ->where('booking_type_id', $bookingTypeId)
+            ->where('unit_id', UnitEnum::H->getUnitId())
+            ->whereNotIn('field_name', $keep)
+            ->get();
+
+        foreach ($others as $field) {
+            if ($field->bookingValue()->exists()) {
+                $field->forceFill(['is_active' => false])->save();
+            } else {
+                OptionField::query()->where('form_field_id', $field->id)->delete();
+                $field->delete();
+            }
+        }
     }
 }

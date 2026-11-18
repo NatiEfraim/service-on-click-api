@@ -415,4 +415,46 @@ enum BookingTypeEnum
                 StatusBookingEnum::CANCELED_BY_APPROVER,
         };
     }
+
+    /** @return array<int, self> The booking types the mobile app does not know (infosec and ICT): web only. */
+    public static function webOnlyCases(): array
+    {
+        return [
+            self::CLEARANCE_GRANT_BOOKING,
+            self::REMOVABLE_MEDIA_BOOKING,
+            self::SECURITY_INCIDENT_BOOKING,
+            self::FOLDER_PERMISSION_BOOKING,
+            self::MANTA_PERMISSION_BOOKING,
+            self::NETWORK_FOLDER_BOOKING,
+            self::SOFTWARE_INSTALL_BOOKING,
+            self::PRINTER_INSTALL_BOOKING,
+            self::EMAIL_FAULT_BOOKING,
+            self::USER_RENAME_BOOKING,
+            self::USER_OPEN_BOOKING,
+            self::USER_MOVE_BOOKING,
+        ];
+    }
+
+    /** Web only: nothing of this type (bookings, statuses, fields) may reach the mobile side. */
+    public function isWebOnly(): bool
+    {
+        return in_array($this, self::webOnlyCases(), true);
+    }
+
+    /** @return array<int, int> The DB ids of the web-only types (memoized per request; a type missing from the DB is skipped). */
+    public static function webOnlyIds(): array
+    {
+        static $cache = null;
+
+        if ($cache === null) {
+            $cache = array_values(array_filter(array_map(fn (self $type): ?int => $type->getBookingTypeId(), self::webOnlyCases())));
+        }
+
+        return $cache;
+    }
+
+    public static function isWebOnlyId(?int $bookingTypeId): bool
+    {
+        return $bookingTypeId !== null && in_array($bookingTypeId, self::webOnlyIds(), true);
+    }
 }

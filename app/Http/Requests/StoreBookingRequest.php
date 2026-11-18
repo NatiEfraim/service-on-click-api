@@ -3,9 +3,12 @@
 namespace App\Http\Requests;
 
 use App\Domain\Workflow\Workflow;
+use App\Enums\FieldTypeEnum;
+use App\Http\Resources\RequesterFormResource;
 use App\Models\FormField;
 use App\Models\OptionField;
 use App\Services\RequesterService;
+use App\Support\FieldValueValidator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 
@@ -56,8 +59,10 @@ class StoreBookingRequest extends FormRequest
 
     /**
      * After basic validation, verify that:
-     * - Every required root-level form field for this type/unit has a value.
+     * - No value is sent for a field of the handler section (those are filled during the handling, never on submission).
+     * - Every required root-level requester field for this type/unit has a value.
      * - SELECT field values are valid option_field_ids for the given field.
+     * - A typed value obeys the field's own rules (form_fields.field_validations) and its type.
      */
     public function withValidator(\Illuminate\Contracts\Validation\Validator $validator): void
     {
@@ -73,21 +78,28 @@ class StoreBookingRequest extends FormRequest
                 ->where('is_active', '!=', false)
                 ->get();
 
-            foreach ($rootFields as $field) {
+            foreach ($rootFields->filter(fn (FormField $field): bool => $field->isHandlerField()) as $handlerField) {
+                if (array_key_exists((string) $handlerField->id, $submitted) || array_key_exists($handlerField->id, $submitted)) {
+                    $v->errors()->add("values.{$handlerField->id}", 'שדה זה אינו ניתן למילוי בשלב ההגשה');
+                }
+            }
+
+            foreach ($rootFields->reject(fn (FormField $field): bool => $field->isHandlerField()) as $field) {
                 $fieldId = (string) $field->id;
                 $value = $submitted[$fieldId] ?? null;
                 $isEmpty = $value === null || $value === '' || $value === [];
 
                 if ($field->is_required && $isEmpty) {
-                    $v->errors()->add(
-                        "values.{$fieldId}",
-                        "שדה \"{$field->field_display_name}\" הוא חובה"
-                    );
+                    $v->errors()->add("values.{$fieldId}", FieldValueValidator::requiredMessage($field));
+                    continue;
+                }
+
+                if ($isEmpty) {
                     continue;
                 }
 
                 // For SELECT fields: value must be a valid option_field_id.
-                if (!$isEmpty && $field->field_type_id == \App\Enums\FieldTypeEnum::SELECT->value) {
+                if ($field->field_type_id == FieldTypeEnum::SELECT->value) {
                     $optionId = (int) $value;
                     $option = OptionField::where('id', $optionId)
                         ->where('form_field_id', $field->id)
@@ -109,14 +121,21 @@ class StoreBookingRequest extends FormRequest
                     }
 
                     // a "type in a value" choice: its value is required, and a number when the choice is a number
-                    if (\App\Http\Resources\RequesterFormResource::asksForValue($option)) {
+                    if (RequesterFormResource::asksForValue($option)) {
                         $text = trim((string) ($typed[$fieldId] ?? ''));
                         if ($text === '') {
                             $v->errors()->add("option_values.{$fieldId}", "יש להזין ערך עבור \"{$option->name}\"");
-                        } elseif ((int) $option->field_type_id === \App\Enums\FieldTypeEnum::NUMBER->value && !is_numeric($text)) {
+                        } elseif ((int) $option->field_type_id === FieldTypeEnum::NUMBER->value && !is_numeric($text)) {
                             $v->errors()->add("option_values.{$fieldId}", 'יש להזין מספר');
                         }
                     }
+
+                    continue;
+                }
+
+                // A typed value: the field's own rules (regex, max...) and its type.
+                foreach (FieldValueValidator::errorsFor($field, $value) as $error) {
+                    $v->errors()->add("values.{$fieldId}", $error);
                 }
             }
         });

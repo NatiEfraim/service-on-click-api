@@ -16,9 +16,9 @@ class UpdateBookingValuesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // form_field_id => the new value, e.g. {"2": "2026-11-20", "3": "09:30"}
+            // form_field_id => the new value, e.g. {"2": "2026-11-20", "3": "09:30"}; a route type's handler fields may hold text (the interview place).
             'values' => ['required', 'array', 'min:1', 'max:20'],
-            'values.*' => ['required', 'string', 'max:20'],
+            'values.*' => ['required', 'string', 'max:1000'],
             'version' => ['required', 'integer', 'min:1'],
             'reason' => ['nullable', 'string', 'max:500'],
         ];

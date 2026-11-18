@@ -42,6 +42,11 @@ class UserSeeder extends Seeder
             ['full_name' => 'אלי חיים קארו', 'personal_id' => '053005641', 'phone' => '0542020112', 'personal_number' => '9809269', 'role' => RoleEnum::USER],
             ['full_name' => 'הילה דרעי', 'personal_id' => '216287003', 'phone' => '0522797391', 'personal_number' => '9531058', 'role' => RoleEnum::USER],
             ['full_name' => 'טובה קלנר', 'personal_id' => '303009245', 'phone' => '0525607795', 'personal_number' => '99805335', 'role' => RoleEnum::USER],
+            ['full_name' => 'נועה גולדברג ראובן', 'personal_id' => '206912214', 'phone' => '0545465999', 'personal_number' => '998126531', 'role' => RoleEnum::USER],
+
+            ['full_name' => 'דנה לוי', 'personal_id' => '300000101', 'phone' => '0501110001', 'personal_number' => '7000101', 'role' => RoleEnum::DEPARTMENT_SECURITY_OFFICER],
+            ['full_name' => 'יוסי כהן', 'personal_id' => '300000102', 'phone' => '0501110002', 'personal_number' => '7000102', 'role' => RoleEnum::INFOSEC_OFFICER],
+            ['full_name' => 'מיכל ברק', 'personal_id' => '300000103', 'phone' => '0501110003', 'personal_number' => '7000103', 'role' => RoleEnum::INTERVIEW_COORDINATOR],
         ];
 
         foreach ($managers as $manager) {

@@ -17,6 +17,10 @@ enum PermissionEnum: string
     case INFOSEC_OFFICER = 'infosec_officer_';
     case ICT_HANDLER = 'ict_handler_';
 
+    // The clearance grant route (type 14): its requester role and its interview coordinator.
+    case DEPARTMENT_SECURITY_OFFICER = 'department_security_officer_';
+    case INTERVIEW_COORDINATOR = 'interview_coordinator_';
+
     public function trimSuffix(): string
     {
         return rtrim(string: $this->value, characters: '_');
@@ -84,6 +88,8 @@ enum PermissionEnum: string
             self::TRANSPORTATION_CONTROL_OFFICER => RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
             self::INFOSEC_OFFICER => RoleEnum::INFOSEC_OFFICER,
             self::ICT_HANDLER => RoleEnum::ICT_HANDLER,
+            self::DEPARTMENT_SECURITY_OFFICER => RoleEnum::DEPARTMENT_SECURITY_OFFICER,
+            self::INTERVIEW_COORDINATOR => RoleEnum::INTERVIEW_COORDINATOR,
         };
     }
 

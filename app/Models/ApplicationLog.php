@@ -18,6 +18,8 @@ class ApplicationLog extends Model
 
     protected $casts = [
         'is_exported' => 'boolean',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     protected $hidden = [

@@ -44,6 +44,8 @@ class UpdateOptionFieldRequest extends FormRequest
             'has_category' => ['nullable', 'boolean'],
             'field_type_id' => ['nullable', 'integer', 'exists:field_types,id'],
             'is_input' => ['nullable', 'boolean'],
+            // The stable code of the option (option_fields.code, e.g. a clearance level): sent = set or cleared (null / ""), absent = kept.
+            'code' => ['sometimes', 'nullable', 'string', 'max:50', 'regex:/^[a-zA-Z0-9_\-]+$/'],
         ];
 
     }
@@ -76,6 +78,10 @@ class UpdateOptionFieldRequest extends FormRequest
             'field_type_id.exists' => 'אחד או יותר מהנתונים שנשלחו אינם תקינים',
 
             'is_input.boolean' => 'אחד או יותר מהנתונים שנשלחו אינם תקינים',
+
+            'code.string' => 'קוד האפשרות יכול להכיל אותיות באנגלית, ספרות, קו תחתון ומקף בלבד (עד 50 תווים)',
+            'code.max' => 'קוד האפשרות יכול להכיל אותיות באנגלית, ספרות, קו תחתון ומקף בלבד (עד 50 תווים)',
+            'code.regex' => 'קוד האפשרות יכול להכיל אותיות באנגלית, ספרות, קו תחתון ומקף בלבד (עד 50 תווים)',
         ];
 
     }
