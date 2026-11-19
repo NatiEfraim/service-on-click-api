@@ -137,7 +137,7 @@ class ManagementHardeningTest extends ManagementTestCase
         $this->assertSame([$date], $row->after['dates']);
     }
 
-    public function test_the_impact_counts_the_bookings_of_every_unit_but_names_only_the_users_own(): void
+    public function test_the_impact_counts_the_bookings_of_every_unit_and_names_none(): void
     {
         $date = $this->workingDay(12);
         $this->carBookingOn(800000001, 1, $date);
@@ -145,16 +145,14 @@ class ManagementHardeningTest extends ManagementTestCase
         $referenceId = $this->carRestrictionDatesReferenceId();
         $url = self::BASE . "/settings/references/{$referenceId}/impact";
 
-        // The list of blocked dates belongs to the booking type: the booking of the other unit is canceled too.
-        $own = $this->as(self::APPROVER)->postJson($url, ['dates' => [$date]])->assertOk()->json('data');
-        $this->assertSame(2, $own['affected_count']);
-        $this->assertSame([800000001], $own['affected_serials']);
-        $this->assertSame(1, $own['affected_in_other_units']);
+        // The list of blocked dates belongs to the booking type: the booking of the other unit is canceled too, so it is counted for everyone;
+        // no serial number is sent (a booking of another unit is not the approver's to see, and the screen shows only the count).
+        foreach ([self::APPROVER, self::SUPER_ADMIN] as $personalNumber) {
+            $impact = $this->as($personalNumber)->postJson($url, ['dates' => [$date]])->assertOk()->json('data');
 
-        $all = $this->as(self::SUPER_ADMIN)->postJson($url, ['dates' => [$date]])->assertOk()->json('data');
-        $this->assertSame(2, $all['affected_count']);
-        $this->assertSame([800000001, 800000002], $all['affected_serials']);
-        $this->assertSame(0, $all['affected_in_other_units']);
+            $this->assertSame(['new_dates', 'affected_count'], array_keys($impact), $personalNumber);
+            $this->assertSame(2, $impact['affected_count'], $personalNumber);
+        }
     }
 
     //----------------------------- Handler per booking type ------------------------//

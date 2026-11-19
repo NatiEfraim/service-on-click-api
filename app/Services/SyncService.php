@@ -36,7 +36,7 @@ class SyncService
             'health' => $this->health(),
             // Without the payload: it can be large and the screen shows a file's content only when opened.
             'files' => SyncFile::query()->orderByDesc('id')->limit(150)
-                ->get(['id', 'kind', 'file_name', 'state', 'attempts', 'record_count', 'last_error', 'next_attempt_at', 'completed_at', 'created_at'])
+                ->get(['id', 'kind', 'file_name', 'state', 'attempts', 'record_count', 'last_error', 'completed_at', 'created_at'])
                 ->map(fn (SyncFile $file): array => $this->fileRow($file))->all(),
             'conflicts' => SyncConflict::query()->with('booking:id,uuid,serial_number,booking_type_id')->orderByDesc('id')->limit(50)->get()
                 ->map(fn (SyncConflict $conflict): array => [
@@ -51,7 +51,6 @@ class SyncService
                     'state' => $conflict->state,
                     'resolution' => $conflict->resolution,
                     'detected_at' => $conflict->created_at?->toIso8601String(),
-                    'resolved_at' => $conflict->resolved_at?->toIso8601String(),
                 ])->all(),
             'pending_decisions' => Booking::query()
                 ->where('status_source', 'internal')->where('is_status_exported', false)->whereNotNull('serial_number')
@@ -184,9 +183,6 @@ class SyncService
             'export_enabled' => (bool) config('app.export_json.enabled', true),
             'last_sent_at' => SyncFile::query()->where('state', SyncFile::STATE_SENT)->max('completed_at'),
             'pending_decisions' => Booking::query()->where('status_source', 'internal')->where('is_status_exported', false)->count(),
-            'queued_value_files' => SyncFile::query()->where('kind', SyncFile::KIND_BOOKING_VALUES)->where('state', SyncFile::STATE_QUEUED)->count(),
-            'config_channel_enabled' => (bool) config('app.export_json.config_channel_enabled', true),
-            'queued_config_files' => SyncFile::query()->where('kind', SyncFile::KIND_SYSTEM_CONFIG)->whereIn('state', [SyncFile::STATE_QUEUED, SyncFile::STATE_AWAITING_SUPPORT])->count(),
             'blocked_files' => SyncFile::query()->where('state', SyncFile::STATE_BLOCKED)->count(),
             'failed_files' => SyncFile::query()->where('state', SyncFile::STATE_FAILED)->count(),
             'open_conflicts' => SyncConflict::query()->where('state', SyncConflict::STATE_OPEN)->count(),
@@ -204,7 +200,6 @@ class SyncService
             'attempts' => $file->attempts,
             'record_count' => $file->record_count,
             'last_error' => $file->last_error,
-            'next_attempt_at' => $file->next_attempt_at?->toIso8601String(),
             'completed_at' => $file->completed_at?->toIso8601String(),
             'created_at' => $file->created_at?->toIso8601String(),
         ];

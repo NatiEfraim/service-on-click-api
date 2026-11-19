@@ -6,11 +6,9 @@ use App\Domain\Workflow\TypeRoute;
 use App\Enums\BookingStageEnum;
 use App\Enums\FormSectionEnum;
 use App\Enums\RoleEnum;
-use App\Models\ActionType;
 use App\Models\BookingType;
 use App\Models\BookingTypeHasStatus;
 use App\Models\Department;
-use App\Models\GroupBookingType;
 use App\Models\Status;
 use App\Models\Unit;
 use App\Support\AccessScope;
@@ -66,15 +64,12 @@ class CatalogService
         return [
             'statuses' => Status::query()->orderBy('position')->get(['id', 'name', 'display_name', 'position'])->all(),
             'stages' => array_map(fn (BookingStageEnum $stage): array => ['id' => $stage->value, 'label' => $stage->label()], BookingStageEnum::cases()),
-            'roles' => array_map(fn (RoleEnum $role): array => ['id' => $role->value, 'name' => $role->toSpatieRoleName(), 'label' => $role->getPermissionDisplayName()], RoleEnum::cases()),
-            'booking_types' => BookingType::query()->orderBy('id')->get(['id', 'name', 'display_name', 'icon', 'is_outsource', 'position', 'has_group'])->all(),
+            'booking_types' => BookingType::query()->orderBy('id')->get(['id', 'name', 'display_name', 'icon', 'position'])->all(),
             'booking_type_statuses' => BookingTypeHasStatus::query()->orderBy('status_id')->get(['booking_type_id', 'status_id'])
                 ->groupBy('booking_type_id')->map(fn ($rows) => $rows->pluck('status_id')->map(fn ($id): int => (int) $id)->values()->all())->all(),
-            'groups' => GroupBookingType::query()->orderBy('position')->get(['id', 'name', 'display_name'])->all(),
             'units' => $unitsQuery->get()->map(fn (Unit $unit): array => ['id' => $unit->id, 'code' => $unit->name, 'name' => $unit->displayName()])->all(),
             'departments' => $departmentsQuery->get(['id', 'unit_id', 'name'])->all(),
-            'action_types' => ActionType::query()->orderBy('id')->get(['id', 'type', 'display_type'])->all(),
-            // The sections a form may have, and the booking types with a route of their own (steps of the progress bar, roles, assignment).
+            // The sections a form may have, and the booking types with a route of their own (steps of the progress bar, roles).
             'sections' => FormSectionEnum::rows(),
             'routes' => $this->routes($scope),
         ];
@@ -92,12 +87,10 @@ class CatalogService
 
         $labels = Status::query()->pluck('display_name', 'id');
         $roleRow = fn (RoleEnum $role): array => ['id' => $role->value, 'name' => $role->toSpatieRoleName(), 'label' => $role->getPermissionDisplayName()];
-        $roleNames = fn (array $roles): array => array_map(fn (RoleEnum $role): string => $role->toSpatieRoleName(), $roles);
 
         foreach ($workflow->routeTypeIds() as $bookingTypeId) {
             /** @var TypeRoute $route */
             $route = $workflow->routeFor($bookingTypeId);
-            $assignment = $route->assignment();
 
             $routes[$bookingTypeId] = [
                 'key' => $route->key(),
@@ -109,13 +102,6 @@ class CatalogService
                 'requester_role' => $roleRow($route->requesterRole()),
                 'owner_role' => $roleRow($route->ownerRole()),
                 'roles' => array_map($roleRow, $route->roles()),
-                'assignment' => [
-                    'statuses' => $assignment['statuses'],
-                    'assigners' => $roleNames($assignment['assigners']),
-                    'candidates' => $roleNames($assignment['candidates']),
-                    'self' => $roleNames($assignment['self']),
-                ],
-                'handler_field_statuses' => array_map($roleNames, $route->handlerFieldStatuses()),
             ];
         }
 

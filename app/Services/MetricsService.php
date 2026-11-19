@@ -5,11 +5,9 @@ namespace App\Services;
 use App\Domain\Metrics\BottleneckAnalyzer;
 use App\Enums\BookingStageEnum;
 use App\Enums\StatusBookingEnum;
-use App\Models\ApplicationLog;
 use App\Models\Booking;
 use App\Models\BookingType;
 use App\Models\SlaTarget;
-use App\Models\SyncConflict;
 use App\Models\User;
 use App\Support\AccessScope;
 use Carbon\Carbon;
@@ -19,60 +17,46 @@ use Spatie\Permission\Models\Permission;
 /** Every figure is computed from stored data and limited to what the caller may see; the definitions travel with the numbers. */
 class MetricsService
 {
-    /** A booking that has not moved for this many days is "stale". */
-    private const STALE_DAYS = 7;
-
     public function __construct(
-        private readonly BookingQueryService $bookings,
         private readonly StatusTimelineService $timeline,
     ) {
     }
 
-    /** The logged-in user's own dashboard: what is open, what waits for them, what is overdue. @return array<string, mixed> */
+    /**
+     * What the screens open with: how many open bookings wait for the user, and the open ones per booking type and per type and stage.
+     * Counted in the database, one row per (type, status, parked status) - not a full booking row each - and the rules run once per such group.
+     * @return array{awaiting_me: array{count: int}, by_type: array<int, int>, by_type_stage: array<int, array<string, int>>}
+     */
     public function overview(AccessScope $scope): array
     {
-        $base = $scope->applyToBookings(Booking::query());
+        $workflow = $scope->workflow();
 
-        $open = (clone $base)
+        $groups = $scope->applyToBookings(Booking::query())
             ->whereNotIn('status_id', StatusBookingEnum::terminalIds())
-            ->with(['user:id,uuid,full_name,personal_id,personal_number', 'bookingType:id,display_name', 'status:id,display_name'])
+            ->select('booking_type_id', 'status_id', 'parked_status_id', DB::raw('COUNT(*) AS total'))
+            ->groupBy('booking_type_id', 'status_id', 'parked_status_id')
             ->get();
 
-        // A subquery, not an id list: a long list does not fit in one statement.
-        $conflicts = SyncConflict::query()
-            ->whereIn('booking_id', (clone $base)->whereNotIn('status_id', StatusBookingEnum::terminalIds())->select('id'))
-            ->where('state', SyncConflict::STATE_OPEN)
-            ->pluck('booking_id')
-            ->mapWithKeys(fn ($id): array => [(int) $id => true])
-            ->all();
+        $awaitingMe = 0;
+        $byType = [];
+        $byTypeStage = [];
 
-        $rows = $open->map(fn (Booking $booking): array => $this->bookings->row($booking, $scope, $conflicts));
-        $pick = fn ($collection): array => ['count' => $collection->count(), 'serials' => $collection->pluck('serial_number')->take(500)->values()->all()];
+        foreach ($groups as $group) {
+            $bookingTypeId = (int) $group->booking_type_id;
+            $total = (int) $group->total;
+            // Whose turn it is and whether a hold is on follow Booking, as in the list rows.
+            $position = $group->positionStatus();
+            $stage = $workflow->stageOf($position, $bookingTypeId);
 
-        return [
-            'open_total' => $open->count(),
-            'total' => (clone $base)->count(),
-            'awaiting_me' => $pick($rows->filter(fn (array $row): bool => $row['actions'] !== [])),
-            'overdue' => $pick($rows->filter(fn (array $row): bool => $row['overdue'])),
-            // The mobile app changed the status in parallel: a person must decide.
-            'needs_decision' => $pick($rows->filter(fn (array $row): bool => $row['has_conflict'])),
-            'stale' => $pick($rows->filter(fn (array $row): bool => $row['stage_age_hours'] > 24 * self::STALE_DAYS)),
-            'by_stage' => $rows->countBy('stage')->all(),
-            'by_type' => $rows->countBy('booking_type_id')->all(),
-            'by_type_stage' => $rows->groupBy('booking_type_id')->map(fn ($group) => $group->countBy('stage'))->all(),
-            'by_status' => (clone $base)->select('status_id', DB::raw('COUNT(*) AS total'))->groupBy('status_id')->pluck('total', 'status_id')->all(),
-            'my_top' => $rows->filter(fn (array $row): bool => $row['actions'] !== [])->sortByDesc('stage_age_hours')->take(6)->values()->all(),
-            // For view-only roles (the camp commander).
-            'oldest_top' => $rows->sortByDesc('stage_age_hours')->take(6)->values()->all(),
-            'bottlenecks' => array_slice($this->bottlenecks($scope, [])['stages'], 0, 4),
-            'trend' => $this->trend($scope, 30),
-            'definitions' => [
-                'open_total' => 'הזמנות שאינן בסטטוס סופי (נדחו, הסתיימו, בוטלו), בתחומים וביחידה שבאחריותך',
-                'awaiting_me' => 'הזמנות פתוחות שיש לך לגביהן לפחות פעולה אחת לפי חוקי התהליך',
-                'overdue' => 'הזמנות שגילן מפתיחתן עובר את יעד הטיפול של התחום',
-                'stale' => 'הזמנות פתוחות שלא זזו יותר מ-' . self::STALE_DAYS . ' ימים',
-            ],
-        ];
+            $byType[$bookingTypeId] = ($byType[$bookingTypeId] ?? 0) + $total;
+            $byTypeStage[$bookingTypeId][$stage->value] = ($byTypeStage[$bookingTypeId][$stage->value] ?? 0) + $total;
+
+            if ($stage !== BookingStageEnum::CLOSED && $workflow->availableActions($position, $scope->actingPermissions, $bookingTypeId, $group->holdStatus()) !== []) {
+                $awaitingMe += $total;
+            }
+        }
+
+        return ['awaiting_me' => ['count' => $awaitingMe], 'by_type' => $byType, 'by_type_stage' => $byTypeStage];
     }
 
     /**
@@ -194,35 +178,6 @@ class MetricsService
             ],
             'definitions' => 'זמן בשלב = מהכניסה לסטטוס ועד המעבר הבא ביומן הפעולות. חציון ו-P90 על מעברים שהושלמו בחלון. חומרה רק לשלבים שהוגדר להם יעד. גורם מטפל = מי שביצע בפועל את המעבר הבא.',
         ];
-    }
-
-    /** Bookings opened and closed per day over the last $days days. @return array<int, array{day: string, opened: int, closed: int}> */
-    public function trend(AccessScope $scope, int $days): array
-    {
-        $since = now()->subDays($days - 1)->startOfDay();
-
-        $opened = $scope->applyToBookings(Booking::query())
-            ->where('created_at', '>=', $since)
-            ->select(DB::raw('DATE(created_at) AS day'), DB::raw('COUNT(*) AS total'))
-            ->groupBy('day')
-            ->pluck('total', 'day');
-
-        $closed = ApplicationLog::query()
-            ->whereIn('booking_id', $scope->applyToBookings(Booking::query())->select('id'))
-            ->whereIn('status_id', StatusBookingEnum::terminalIds())
-            ->where('created_at', '>=', $since)
-            ->select(DB::raw('DATE(created_at) AS day'), DB::raw('COUNT(*) AS total'))
-            ->groupBy('day')
-            ->pluck('total', 'day');
-
-        $trend = [];
-
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $day = now()->subDays($i)->toDateString();
-            $trend[] = ['day' => $day, 'opened' => (int) ($opened[$day] ?? 0), 'closed' => (int) ($closed[$day] ?? 0)];
-        }
-
-        return $trend;
     }
 
     /** @return array<int, array{target_hours: float, warn_ratio: float}> by booking type id */

@@ -17,7 +17,6 @@ use App\Models\BookingValue;
 use App\Models\FieldType;
 use App\Models\FormField;
 use App\Models\OptionField;
-use App\Models\Status;
 use App\Models\SystemReference;
 use App\Models\User;
 use App\Support\AccessScope;
@@ -144,9 +143,9 @@ class SettingsService
     }
 
     /**
-     * The bookings that blocking these dates would cancel, shown before the list is saved; already blocked dates cancel nothing.
+     * How many bookings blocking these dates would cancel, shown before the list is saved; already blocked dates cancel nothing.
      * @param array<int, string> $dates the full list of Y-m-d dates the reference would hold
-     * @return array{new_dates: array<int, string>, removed_dates: array<int, string>, affected_count: int, affected_serials: array<int, int>, affected_in_other_units: int, cancel_status_id: int, cancel_status_label: ?string}
+     * @return array{new_dates: array<int, string>, affected_count: int}
      */
     public function restrictionImpact(AccessScope $scope, int $systemReferenceId, array $dates): array
     {
@@ -174,27 +173,13 @@ class SettingsService
             ->all();
 
         $newDates = array_values(array_diff($dates, $existing));
-        $bookingTypeId = (int) $reference->booking_type_id;
-        $cancelStatus = BookingTypeEnum::getCancelStatusForRestrictionDates($bookingTypeId);
 
-        // Blocked dates belong to the booking type, not a unit: a new date cancels EVERY unit's bookings on it.
-        // Serial numbers of other units' bookings are shown only to the super admin.
-        $affected = Booking::query()
-            ->whereIn('id', $this->findBookingIdsOnRestrictedDates($bookingTypeId, $newDates))
-            ->orderBy('serial_number')
-            ->get(['serial_number', 'unit_id']);
-
-        $listed = $scope->isSuperAdmin() ? $affected : $affected->where('unit_id', $reference->unit_id);
-        $serials = $listed->map(fn (Booking $booking): int => (int) $booking->serial_number)->values()->all();
-
+        // Blocked dates belong to the booking type, not a unit: a new date cancels EVERY unit's bookings on it, so the count is over all units.
         return [
             'new_dates' => $newDates,
-            'removed_dates' => array_values(array_diff($existing, $dates)),
-            'affected_count' => $affected->count(),
-            'affected_serials' => $serials,
-            'affected_in_other_units' => $affected->count() - count($serials),
-            'cancel_status_id' => $cancelStatus->value,
-            'cancel_status_label' => Status::query()->whereKey($cancelStatus->value)->value('display_name'),
+            'affected_count' => Booking::query()
+                ->whereIn('id', $this->findBookingIdsOnRestrictedDates((int) $reference->booking_type_id, $newDates))
+                ->count(),
         ];
     }
 

@@ -278,8 +278,10 @@ class ConfigChannelTest extends ImportJsonTestCase
         $this->assertSame(0, $this->exportNow()['config']['sent']);
         $this->assertSame([], Storage::disk('minio')->allFiles(self::FOLDER));
 
+        // The sync screen reads the file list, not a count per kind: the held file is listed as waiting for support.
         $overview = $this->as(self::SUPER_ADMIN)->getJson(self::SUPER . '/sync')->assertOk();
-        $overview->assertJsonPath('data.health.config_channel_enabled', false)->assertJsonPath('data.health.queued_config_files', 1);
+        $overview->assertJsonMissingPath('data.health.config_channel_enabled')->assertJsonMissingPath('data.health.queued_config_files');
+        $this->assertSame(SyncFile::STATE_AWAITING_SUPPORT, collect($overview->json('data.files'))->firstWhere('kind', 'system_config')['state']);
 
         config(['app.export_json.config_channel_enabled' => true]);
         $this->assertSame(1, $this->exportNow()['config']['sent']);
@@ -291,7 +293,7 @@ class ConfigChannelTest extends ImportJsonTestCase
         $this->statement('הצהרה לתצוגה');
 
         $overview = $this->as(self::SUPER_ADMIN)->getJson(self::SUPER . '/sync')->assertOk();
-        $overview->assertJsonPath('data.health.queued_config_files', 1)->assertJsonPath('data.health.blocked_files', 0);
+        $overview->assertJsonPath('data.health.blocked_files', 0);
 
         $row = collect($overview->json('data.files'))->firstWhere('kind', 'system_config');
         $this->assertNotNull($row);

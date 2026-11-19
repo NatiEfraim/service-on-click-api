@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 
 use App\Enums\HttpStatusCodeEnum;
+use App\Exceptions\DomainError;
 use App\Http\Requests\AssignApproverRoleRequest;
 use App\Services\BookingAdminManagementService;
 use Symfony\Component\HttpFoundation\Response;
@@ -30,6 +31,26 @@ class BookingAdminManagementController extends Controller
                 HttpStatusCodeEnum::INTERNAL_SERVER_ERROR => response()->json(['message' => HttpStatusCodeEnum::INTERNAL_SERVER_ERROR->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR),
                 default => response()->json(['message' => HttpStatusCodeEnum::NO_CONTENT->getMessage()], Response::HTTP_NO_CONTENT)
             };
+        }
+
+        return response()->json(['data' => $result], Response::HTTP_OK);
+    }
+
+    /**
+     * The people to pick as a booking's handler, for a dropdown: [{uuid, full_name}], not paged; ?types=1,2 keeps those holding a role on one of
+     * the types. Admin and super admin only, like get-approvers (the full, paged list for the users and permissions screen).
+     */
+    public function getHandlers(Request $request): JsonResponse
+    {
+        if (!$this->accessScope()->can('users.manage')) {
+            throw new DomainError('אין לך הרשאה לראות את רשימת הגורמים המטפלים', 403);
+        }
+
+        $types = array_values(array_filter(array_map('intval', explode(',', (string) $request->query('types'))), fn (int $id): bool => $id > 0));
+        $result = $this->bookingAdminManagementService->getHandlers($types);
+
+        if ($result instanceof HttpStatusCodeEnum) {
+            return response()->json(['message' => HttpStatusCodeEnum::INTERNAL_SERVER_ERROR->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         return response()->json(['data' => $result], Response::HTTP_OK);

@@ -161,7 +161,6 @@ class DashboardService
             'totals' => [
                 'open' => $open->count(),
                 'closed' => $closedAll,
-                'closed_in_window' => $closedInWindow->count(),
                 'total' => $totalAll,
                 'overdue' => $rows->where('overdue', true)->count(),
                 'needs_decision' => $rows->where('has_conflict', true)->count(),
@@ -171,7 +170,6 @@ class DashboardService
                 'median_hours' => BottleneckAnalyzer::percentile($handlingHours, 50),
                 'p90_hours' => BottleneckAnalyzer::percentile($handlingHours, 90),
                 'avg_hours' => $handlingHours ? round(array_sum($handlingHours) / count($handlingHours), 1) : null,
-                'sample' => count($handlingHours),
             ],
             'by_stage' => $rows->countBy('stage')->all(),
             'stages' => $stages,
@@ -184,9 +182,6 @@ class DashboardService
                 'canceled_by_approver_pct' => $rate([StatusBookingEnum::CANCELED_BY_APPROVER->value, StatusBookingEnum::CANCELED_BY_BARBER->value, StatusBookingEnum::CANCELED_BY_CHANGING_TIME->value]),
             ],
             'oldest' => $rows->sortByDesc('total_age_hours')->take(6)->values()->all(),
-            'overdue_serials' => $rows->where('overdue', true)->pluck('serial_number')->values()->all(),
-            // The same bookings in the same order, by the key the frontend opens them with.
-            'overdue_uuids' => $rows->where('overdue', true)->pluck('uuid')->values()->all(),
             'trend' => $trend,
             'definitions' => 'יעד טיפול = זמן כולל מפתיחת הקריאה ועד סגירתה, אחד לכל תחום. קריאה חורגת כשגילה עובר את היעד. בניתוח השלבים נספרות הקריאות החורגות לפי השלב שבו הן נמצאות עכשיו; זמני שלב מחושבים מיומן הפעולות.',
         ];

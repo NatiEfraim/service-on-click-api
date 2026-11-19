@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\RoleEnum;
 use App\Models\User;
 
 class AuthTest extends ManagementTestCase
@@ -57,7 +58,17 @@ class AuthTest extends ManagementTestCase
             ->getJson('/api/user')
             ->assertOk()
             ->assertJsonPath('data.personal_number', self::ADMIN)
-            ->assertJsonPath('data.roles.0.name', 'admin');
+            ->assertJsonPath('data.roles.0.display_name', RoleEnum::ADMIN->getPermissionDisplayName());
+    }
+
+    public function test_the_user_endpoint_sends_only_the_name_and_the_role_label(): void
+    {
+        $response = $this->actingAsPersonalNumber(self::ADMIN)->getJson('/api/user')->assertOk();
+
+        // What the requester home reads; no ID number, phone, unit, department or permission list.
+        $this->assertSame(['name', 'personal_number', 'roles'], array_keys($response->json('data')));
+        $this->assertSame([['display_name' => RoleEnum::ADMIN->getPermissionDisplayName()]], $response->json('data.roles'));
+        $this->assertSame(User::where('personal_number', self::ADMIN)->value('full_name'), $response->json('data.name'));
     }
 
     public function test_logout_revokes_the_token_and_forgets_the_cookie(): void
@@ -108,7 +119,7 @@ class AuthTest extends ManagementTestCase
         $this->actingAsPersonalNumber(self::NO_ROLE)
             ->getJson('/api/user')
             ->assertOk()
-            ->assertJsonPath('data.roles.0.name', 'user');
+            ->assertJsonPath('data.roles.0.display_name', RoleEnum::USER->getPermissionDisplayName());
     }
 
     public function test_a_manager_whose_role_was_taken_away_logs_in_as_a_plain_user(): void

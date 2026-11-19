@@ -6,6 +6,7 @@ use App\Enums\AdfsColumnsEnum;
 use App\Enums\HttpStatusCodeEnum;
 use App\Enums\PaginationEnum;
 use App\Enums\RoleEnum;
+use App\Http\Resources\CurrentUserResource;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use GuzzleHttp\Client;
@@ -22,17 +23,17 @@ class UserService
 
     public function __construct(private readonly StorageService $storageService) {}
 
-    /** The authenticated user with roles, permissions and unit. */
+    /** The authenticated user: name, personal number and role labels (CurrentUserResource). */
     public function user(): mixed
     {
         try {
-            $user = User::where('id', Auth::id())->where('is_deleted', false)->with('roles', 'permissions', 'unit', 'department')->first();
+            $user = User::where('id', Auth::id())->where('is_deleted', false)->with('roles')->first();
 
             if (is_null($user)) {
                 return HttpStatusCodeEnum::NOT_FOUND;
             }
 
-            return new UserResource($user);
+            return new CurrentUserResource($user);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
             $this->storageService->logToS3();

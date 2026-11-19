@@ -14,7 +14,6 @@ class DashboardStatusResource extends JsonResource
         return [
             'status_id' => $this->id,
             'status_display_name' => StatusBookingEnum::tryFrom($this->id)?->getDashboardDisplayName(),
-            'status_icon' => StatusBookingEnum::tryFrom($this->id)?->getStatusIconDashBoard(),
             'count' => (int) $this->count,
         ];
     }

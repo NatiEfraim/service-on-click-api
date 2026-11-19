@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Enums\RoleEnum;
 use App\Enums\UnitEnum;
+use App\Models\Booking;
 use App\Models\BookingTypeHasRole;
 use App\Models\User;
+use App\Support\AccessScope;
 use Database\Seeders\ProdSeeder;
 use Database\Seeders\TestSeeders\DevBookingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -145,5 +147,14 @@ abstract class ManagementTestCase extends TestCase
     protected function actingAsPersonalNumber(string $personalNumber): static
     {
         return $this->withToken($this->tokenFor($personalNumber));
+    }
+
+    /** Whether the person may correct the date / time values of the booking now: the workflow's rule, which the booking detail no longer sends. */
+    protected function mayEditValues(string $personalNumber, int $serial): bool
+    {
+        $scope = new AccessScope(User::where('personal_number', $personalNumber)->firstOrFail());
+        $booking = Booking::where('serial_number', $serial)->firstOrFail();
+
+        return $scope->workflow()->canEditValues($booking->positionStatus(), $scope->actingPermissions, (int) $booking->booking_type_id);
     }
 }

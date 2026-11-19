@@ -10,6 +10,8 @@ use App\Models\BookingRestrictionDate;
 use App\Models\BookingValue;
 use App\Models\SystemReference;
 use App\Models\User;
+use App\Services\BookingQueryService;
+use App\Support\AccessScope;
 use Illuminate\Support\Facades\DB;
 
 /** What a screen opens with, the figures, the settings view, and what blocking a date does - by role. */
@@ -94,7 +96,16 @@ class ManagementInsightTest extends ManagementTestCase
         $this->assertCount(4, $super['units']);
         $this->assertSame(['id' => 1, 'code' => 'H', 'name' => 'H'], $super['units'][0]);
         $this->assertNotEmpty($super['booking_type_statuses'][1]);
-        $this->assertNotEmpty($super['action_types']);
+
+        // What no screen reads is not sent: the role, group and action type lists, a route's assignment rules and the two type columns.
+        foreach (['roles', 'groups', 'action_types'] as $unread) {
+            $this->assertArrayNotHasKey($unread, $super);
+        }
+
+        $this->assertSame(['id', 'name', 'display_name', 'icon', 'position'], array_keys($super['booking_types'][0]));
+        $this->assertArrayNotHasKey('assignment', $super['routes']['14']);
+        $this->assertArrayNotHasKey('handler_field_statuses', $super['routes']['14']);
+        $this->assertNotEmpty($super['routes']['14']['roles'], 'the route keeps what the progress bar and the role labels read');
 
         $admin = $this->as(self::ADMIN)->getJson(self::BASE . '/catalog')->assertOk()->json('data');
         $this->assertCount(1, $admin['units'], 'the unit of the admin only');
@@ -110,8 +121,11 @@ class ManagementInsightTest extends ManagementTestCase
         $this->assertCount(9, $home['domains']);
         $this->assertSame(1, $home['domains'][0]['booking_type_id']);
 
-        $this->as(self::ADMIN)->getJson(self::ADMIN_BASE . '/reports?types=1')->assertOk()
-            ->assertJsonPath('data.truncated', false);
+        $report = $this->as(self::ADMIN)->getJson(self::ADMIN_BASE . '/reports?types=1')->assertOk()->json('data');
+        $this->assertSame(['rows', 'total'], array_keys($report));
+        $this->assertNotEmpty($report['rows']);
+        $this->assertArrayNotHasKey('group_id', $report['rows'][0]);
+        $this->assertArrayHasKey('group_label', $report['rows'][0]);
 
         // The approver (domain commander) and the vice approver (handler) get neither - the route stops them or the service does.
         $this->as(self::APPROVER)->getJson(self::ADMIN_BASE . '/home')->assertForbidden();
@@ -168,21 +182,72 @@ class ManagementInsightTest extends ManagementTestCase
             ->assertJsonPath('data.last_activity', null);
     }
 
+    /** The overview as the list rows give it: every open booking built into a full row, then counted (what the endpoint did before it counted in the database). @return array<string, mixed> */
+    private function overviewFromRows(string $personalNumber): array
+    {
+        $scope = new AccessScope(User::where('personal_number', $personalNumber)->firstOrFail());
+        $rows = $scope->applyToBookings(Booking::query())
+            ->whereNotIn('status_id', StatusBookingEnum::terminalIds())
+            ->with(['user:id,uuid,full_name,personal_id,personal_number', 'bookingType:id,display_name', 'status:id,display_name', 'handler:id,uuid,full_name'])
+            ->get()
+            ->map(fn (Booking $booking): array => app(BookingQueryService::class)->row($booking, $scope));
+
+        return json_decode(json_encode([
+            'awaiting_me' => ['count' => $rows->filter(fn (array $row): bool => $row['actions'] !== [])->count()],
+            'by_type' => $rows->countBy('booking_type_id')->all(),
+            'by_type_stage' => $rows->groupBy('booking_type_id')->map(fn ($group) => $group->countBy('stage'))->all(),
+        ]), true);
+    }
+
     public function test_the_overview_counts_what_waits_for_the_user(): void
     {
+        $approverBefore = $this->as(self::APPROVER)->getJson(self::BASE . '/overview')->assertOk()->json('data');
+        $viceBefore = $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/overview')->assertOk()->json('data');
+
         $this->booking(['serial_number' => 800000001, 'status_id' => 15]);
         $this->booking(['serial_number' => 800000002, 'status_id' => 1]);
 
         $approver = $this->as(self::APPROVER)->getJson(self::BASE . '/overview')->assertOk()->json('data');
-
-        $this->assertGreaterThanOrEqual(2, $approver['open_total']);
-        $this->assertContains(800000001, $approver['awaiting_me']['serials'], 'at the approver stage');
-        $this->assertContains(800000002, $approver['awaiting_me']['serials'], 'still with the vice approver: the approver may approve it finally');
-        $this->assertCount(30, $approver['trend']);
-
         $vice = $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/overview')->assertOk()->json('data');
-        $this->assertContains(800000002, $vice['awaiting_me']['serials']);
-        $this->assertNotContains(800000001, $vice['awaiting_me']['serials']);
+
+        // Only the three figures the screens read.
+        $this->assertSame(['awaiting_me', 'by_type', 'by_type_stage'], array_keys($approver));
+        $this->assertSame(['count'], array_keys($approver['awaiting_me']));
+
+        // The approver acts on the booking at their stage and, finally, on the one still with the vice approver ...
+        $this->assertSame($approverBefore['awaiting_me']['count'] + 2, $approver['awaiting_me']['count']);
+        $this->assertSame(($approverBefore['by_type']['1'] ?? 0) + 2, $approver['by_type']['1']);
+        $this->assertSame(($approverBefore['by_type_stage']['1']['approver'] ?? 0) + 1, $approver['by_type_stage']['1']['approver']);
+        $this->assertSame(($approverBefore['by_type_stage']['1']['vice_approver'] ?? 0) + 1, $approver['by_type_stage']['1']['vice_approver']);
+
+        // ... the vice approver only on the one at their own stage.
+        $this->assertSame($viceBefore['awaiting_me']['count'] + 1, $vice['awaiting_me']['count']);
+    }
+
+    public function test_the_overview_counted_in_the_database_equals_the_one_built_from_the_rows_for_every_role(): void
+    {
+        $this->createDomainPeople();
+
+        // Open bookings of several types, stages and holds (a hold keeps the stage it was put on hold from), and a closed one.
+        foreach ([
+            [1, 1, null], [1, 15, null], [1, 2, null], [1, 8, 15], [1, 9, 1], [1, 10, 15], [1, 5, null],
+            [2, 1, null], [2, 15, null], [2, 8, null], [3, 1, null], [3, 14, null],
+            [14, 101, null], [14, 102, null], [14, 105, null],
+        ] as $index => [$typeId, $statusId, $parked]) {
+            $this->booking(['serial_number' => 800000100 + $index, 'booking_type_id' => $typeId, 'status_id' => $statusId, 'parked_status_id' => $parked]);
+        }
+
+        foreach ([self::SUPER_ADMIN, self::ADMIN, self::APPROVER, self::VICE_APPROVER, self::INFOSEC_OFFICER, self::INTERVIEW_COORDINATOR] as $personalNumber) {
+            // The order of the keys of a map means nothing: only what is counted does.
+            $this->assertEquals(
+                $this->overviewFromRows($personalNumber),
+                $this->as($personalNumber)->getJson(self::BASE . '/overview')->assertOk()->json('data'),
+                "overview of {$personalNumber}",
+            );
+        }
+
+        // No management role: the route stops the request.
+        $this->as(self::NO_ROLE)->getJson(self::BASE . '/overview')->assertForbidden();
     }
 
     public function test_the_bottlenecks_show_where_bookings_wait_and_how_long_they_took(): void
@@ -303,9 +368,10 @@ class ManagementInsightTest extends ManagementTestCase
             ->assertOk()
             ->json('data');
 
+        // Only the two figures the screen shows: the new dates and how many bookings they would cancel.
+        $this->assertSame(['new_dates', 'affected_count'], array_keys($impact));
         $this->assertSame([$date], $impact['new_dates']);
-        $this->assertSame([800000001], $impact['affected_serials']);
-        $this->assertSame(7, $impact['cancel_status_id']);
+        $this->assertSame(1, $impact['affected_count']);
 
         // Nothing was saved or canceled by looking.
         $this->assertSame(0, BookingRestrictionDate::count());

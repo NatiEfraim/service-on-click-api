@@ -19,18 +19,6 @@ class BarberOrderBookingResource extends JsonResource
         $bookingModel = $this->booking;
         $status = $bookingModel?->status;
 
-        $viceApprovers = $bookingModel?->viceApprovers
-                ?->where('is_deleted', false)
-            ->map(function ($viceApprover): array {
-                return [
-                    'name' => $viceApprover->user?->full_name,
-                    'personal_id' => $viceApprover->user?->personal_id,
-                ];
-            })
-            ->values()
-            ->toArray();
-
-
         return [
             'id' => $this->id,
             'date' => $this->date,
@@ -55,8 +43,6 @@ class BarberOrderBookingResource extends JsonResource
                     'name' => $status->name,
                     'display_name' => $status->display_name,
                 ] : null,
-
-                'vice_approvers' => !empty($viceApprovers) ? $viceApprovers : null,
             ],
         ];
     }

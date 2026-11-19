@@ -19,7 +19,7 @@ class ReportService
     {
     }
 
-    /** @param array<string, mixed> $filters serial, types, groups, statuses, units, departments, requester, personal_id, opened/updated from/to, stage, overdue, min_age_days @return array{rows: array<int, array<string, mixed>>, total: int, truncated: bool} */
+    /** @param array<string, mixed> $filters serial, types, groups, statuses, units, departments, requester, personal_id, opened/updated from/to, stage, overdue, min_age_days @return array{rows: array<int, array<string, mixed>>, total: int} total is every match; the rows are cut at MAX_ROWS */
     public function rows(AccessScope $scope, array $filters): array
     {
         if (!$scope->can('reports.view')) {
@@ -108,7 +108,6 @@ class ReportService
                 'serial_number' => $row['serial_number'],
                 'booking_type_id' => $row['booking_type_id'],
                 'booking_type_label' => $row['booking_type_label'],
-                'group_id' => $group?->id,
                 'group_label' => $group?->display_name ?? $type?->display_name ?? '',
                 'status_id' => $row['status_id'],
                 'status_label' => $row['status_label'],
@@ -129,6 +128,6 @@ class ReportService
             ];
         });
 
-        return ['rows' => $rows->values()->all(), 'total' => $total, 'truncated' => $total > self::MAX_ROWS];
+        return ['rows' => $rows->values()->all(), 'total' => $total];
     }
 }

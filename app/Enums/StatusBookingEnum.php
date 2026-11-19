@@ -314,36 +314,6 @@ enum StatusBookingEnum: int
     }
 
 
-    public function getStatusIconDashBoard(): string
-    {
-        return match ($this) {
-            self::RECEIVED => '1',//'הזמנות חדשות',
-            self::PROCESSING => '2',//'הזמנות בטיפול'
-            self::APPROVED => '3',//'הזמנות שאושרו'
-            self::REJECTED => '4',//'נדחו ע"י גורם טכני'
-            self::COMPLETED => '5',//'הזמנות שהסתיימו'
-            self::CANCELED_BY_USER => '6',//'בוטלו ע"י משתמש'
-            self::CANCELED_BY_APPROVER => '7',//'בוטלו ע"י גורם טכני',
-            self::PENDING_FILE => '8',//'ממתינים לקבצים נוספים מהלקוח'
-            self::PENDING_PROCESSING => '9',//'ממתין לאישור מהספק'
-            self::PENDING_APPROVED => '10',// 'ממתינים לאישור סופי מהספק (כלומר למספר ספק)'
-            self::APPROVED_BY_BARBER => '11',// 'בקשה שנסגרה ע"י הספר'
-            self::CANCELED_BY_BARBER => '12',// 'בקשה שבוטלה ע"י הספר'
-            self::CANCELED_BY_CHANGING_TIME => '13',// 'בקשה שנסגרה ע"י שינויים בזמנים'
-            self::PROCESSING_BY_CONTROL_OFFICER => '14',// 'בטיפול רמ"ד תו"ב'
-            self::VICE_APPROVER_APPROVED => '15',// 'הועברו לאישור סופי'
-            self::VICE_APPROVER_REJECTED => '16',// 'הועברו לביטול סופי'
-            self::CONTROL_OFFICER_APPROVED => '17',// 'אושרו ע"י רמ"ד תו"ב'
-            self::CONTROL_OFFICER_REJECTED => '18',// 'נדחו ע"י רמ"ד תו"ב'
-            // The clearance route reuses the icons of received / in handling / passed on / approved / completed.
-            self::INTERVIEW_ASSIGNMENT => '1',
-            self::INTERVIEW_SCHEDULED => '2',
-            self::INTERVIEWED => '15',
-            self::AWAITING_CLEARANCE => '3',
-            self::CLEARANCE_GRANTED => '5',
-        };
-    }
-
     public function getStatusMessage(): string|null
     {
         return match ($this) {

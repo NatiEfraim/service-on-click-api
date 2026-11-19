@@ -318,14 +318,15 @@ class BarberBookingRouteTest extends ManagementTestCase
         $dashboard = $this->as(self::ADMIN)
             ->getJson('/api/bookings-approver-management/dashboard/barber-booking')
             ->assertOk()
-            ->assertJsonPath('data.auth_user_permission', 'admin_5')
+            ->assertJsonMissingPath('data.auth_user_permission')
             ->assertJsonPath('data.booking_type.id', self::BARBER_TYPE)
             ->json('data.dashboard');
 
         $rows = array_values(array_filter($dashboard, 'is_array'));
 
         $this->assertSame([1, 6, 11, 12, 13], array_column($rows, 'status_id'));
-        $this->assertSame(['1', '6', '11', '12', '13'], array_column($rows, 'status_icon'));
+        // A row is the status, its label and its count: the icon is the website's own.
+        $this->assertSame(['status_id', 'status_display_name', 'count'], array_keys($rows[0]));
         $this->assertSame(array_sum(array_column($rows, 'count')), $dashboard['total_bookings']);
 
         // Another type keeps its own set.
@@ -342,7 +343,6 @@ class BarberBookingRouteTest extends ManagementTestCase
         $dashboard = $this->as(self::APPROVER)
             ->getJson('/api/bookings-approver-management/dashboard/barber-booking')
             ->assertOk()
-            ->assertJsonPath('data.auth_user_permission', 'approver_5')
             ->json('data.dashboard');
 
         $this->assertSame([1, 6, 11, 12, 13], array_column(array_values(array_filter($dashboard, 'is_array')), 'status_id'));

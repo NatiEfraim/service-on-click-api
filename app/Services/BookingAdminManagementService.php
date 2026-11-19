@@ -41,21 +41,9 @@ class BookingAdminManagementService
     {
         try {
             $roles = $this->getApproverManagementRoles();
-            $roleIds = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->value)->all();
             $permissionPrefixes = $roles->map(fn(RoleEnum $roleEnum) => $roleEnum->toPermissionEnum()->value)->all();
 
-            // An admin manages their own unit only; neither side deals with super admins, and an admin not with other admins.
-            $users = User::whereHas('roles', function ($query) use ($roleIds) {
-                $query->whereIn('id', $roleIds);
-            })
-                ->manageableBy(Auth::user())
-                ->when(!$this->isSuperAdmin(), fn ($query) => $query->where('unit_id', Auth::user()->unit_id))
-                ->when($identifier, function ($query, $identifier) {
-                    $query->where(function ($q) use ($identifier) {
-                        $q->where('personal_number', 'like', $identifier . '%')
-                            ->orWhere('full_name', 'like', $identifier . '%');
-                    });
-                })
+            $users = $this->approversQuery($identifier)
                 ->with([
                     'roles',
                     'permissions' => function ($query) use ($permissionPrefixes) {
@@ -72,6 +60,56 @@ class BookingAdminManagementService
             $this->storageService->logToS3();
             return HttpStatusCodeEnum::INTERNAL_SERVER_ERROR;
         }
+    }
+
+    /**
+     * The same people as getApprovers(), for a dropdown: all of them (not paged), only uuid and full_name, by name; with booking types,
+     * only those holding a managing role on one of them.
+     * @param array<int, int> $bookingTypeIds
+     * @return array<int, array{uuid: string, full_name: ?string}>|HttpStatusCodeEnum
+     */
+    public function getHandlers(array $bookingTypeIds = []): array|HttpStatusCodeEnum
+    {
+        try {
+            $query = $this->approversQuery(null);
+
+            if ($bookingTypeIds !== []) {
+                $permissionNames = $this->getApproverManagementRoles()
+                    ->flatMap(fn (RoleEnum $role): array => array_map(fn (int $bookingTypeId): ?string => $role->toPermissionEnum()->keyForId($bookingTypeId), $bookingTypeIds))
+                    ->all();
+
+                $query->whereHas('permissions', fn ($permissions) => $permissions->whereIn('name', $permissionNames));
+            }
+
+            return $query->orderBy('full_name')->orderBy('id')->get(['id', 'uuid', 'full_name'])
+                ->map(fn (User $user): array => ['uuid' => $user->uuid, 'full_name' => $user->full_name])
+                ->all();
+        } catch (\Exception $e) {
+            Log::error($e->getMessage());
+            $this->storageService->logToS3();
+            return HttpStatusCodeEnum::INTERNAL_SERVER_ERROR;
+        }
+    }
+
+    /**
+     * The people with an approver management role the auth user may deal with: an admin manages their own unit only; neither side deals with
+     * super admins, and an admin not with other admins. Optionally by a personal number or full name prefix.
+     */
+    private function approversQuery(?string $identifier): \Illuminate\Database\Eloquent\Builder
+    {
+        $roleIds = $this->getApproverManagementRoles()->map(fn(RoleEnum $roleEnum) => $roleEnum->value)->all();
+
+        return User::whereHas('roles', function ($query) use ($roleIds) {
+            $query->whereIn('id', $roleIds);
+        })
+            ->manageableBy(Auth::user())
+            ->when(!$this->isSuperAdmin(), fn ($query) => $query->where('unit_id', Auth::user()->unit_id))
+            ->when($identifier, function ($query, $identifier) {
+                $query->where(function ($q) use ($identifier) {
+                    $q->where('personal_number', 'like', $identifier . '%')
+                        ->orWhere('full_name', 'like', $identifier . '%');
+                });
+            });
     }
 
     /** Booking types the auth user manages, with the user's approver role flags. @return array|HttpStatusCodeEnum */

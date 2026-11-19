@@ -250,7 +250,7 @@ class SyncExportTest extends ImportJsonTestCase
 
     public function test_while_a_conflict_is_open_the_booking_cannot_be_changed_and_says_so(): void
     {
-        $this->conflict();
+        $conflict = $this->conflict();
 
         $this->as(self::APPROVER)
             ->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 2])
@@ -260,7 +260,8 @@ class SyncExportTest extends ImportJsonTestCase
         $row = $this->as(self::APPROVER)->getJson('/api/bookings-approver-management/bookings/5001')->assertOk()->json('data');
         $this->assertTrue($row['has_conflict']);
         $this->assertSame('conflict', $row['sync_state']);
-        $this->assertSame(4, $row['sync']['open_conflict']['external_status_id']);
+        // The detail names the conflict to settle; its statuses are on the sync screen's list.
+        $this->assertSame(['id' => $conflict->id], $row['sync']['open_conflict']);
     }
 
     public function test_the_super_admin_accepts_the_status_of_the_mobile_app(): void

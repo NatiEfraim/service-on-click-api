@@ -183,8 +183,9 @@ class BookingWorkflowTest extends ManagementTestCase
         $this->as(self::APPROVER)
             ->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)
             ->assertOk()
-            ->assertJsonPath('data.actions.0.status_id', 3)
-            ->assertJsonPath('data.can_edit_values', false);
+            ->assertJsonPath('data.actions.0.status_id', 3);
+
+        $this->assertFalse($this->mayEditValues(self::APPROVER, self::SERIAL));
     }
 
     public function test_the_admin_takes_every_turn_and_may_skip_ahead(): void
@@ -267,7 +268,8 @@ class BookingWorkflowTest extends ManagementTestCase
 
         // The super admin holds no per-type permission, yet the buttons are there and the "mine" tab lists the booking.
         $this->as(self::SUPER_ADMIN)->getJson($url)->assertOk()->assertJsonPath('data.0.actions.0.status_id', 15);
-        $this->as(self::SUPER_ADMIN)->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)->assertOk()->assertJsonPath('data.can_edit_values', true);
+        $this->as(self::SUPER_ADMIN)->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)->assertOk();
+        $this->assertTrue($this->mayEditValues(self::SUPER_ADMIN, self::SERIAL));
 
         // As the admin of the type, the super admin may also skip the vice approver with the final approval.
         $this->as(self::SUPER_ADMIN)->postJson(self::STATUS_URL, ['status_id' => 3, 'version' => 1])->assertOk();
@@ -356,7 +358,8 @@ class BookingWorkflowTest extends ManagementTestCase
         $this->assertSame([false, true, false, false, false], array_column($row['actions'], 'comment_required'));
 
         // The values stay with the control officer, whose turn it is.
-        $this->as(self::VICE_APPROVER)->getJson($url)->assertOk()->assertJsonPath('data.stage', 'control_officer')->assertJsonPath('data.can_edit_values', false);
+        $this->as(self::VICE_APPROVER)->getJson($url)->assertOk()->assertJsonPath('data.stage', 'control_officer');
+        $this->assertFalse($this->mayEditValues(self::VICE_APPROVER, self::SERIAL));
 
         // The control officer's own answer and the final decision are not theirs, and passing it on needs no comment but a rejection does.
         foreach ([17, 18, 3, 4] as $notTheirs) {

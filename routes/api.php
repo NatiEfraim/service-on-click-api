@@ -101,6 +101,9 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|
             Route::get('/bottlenecks', 'bottlenecks');
             Route::get('/domain-dashboard', 'domainDashboard');
         });
+
+        // The handler dropdown of the request list: [{uuid, full_name}] (admin and super admin; the paged get-approvers stays for the users screen).
+        Route::get('/handlers', [BookingAdminManagementController::class, 'getHandlers']);
     });
 
 Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin'])

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\PaginationEnum;
+use App\Enums\RoleEnum;
 use App\Models\Booking;
 use App\Models\File;
 use App\Models\Image;
@@ -241,7 +242,7 @@ class UserBookingsTest extends ManagementTestCase
         $this->actingAsPersonalNumber(self::PLAIN_USER)
             ->getJson('/api/user')
             ->assertOk()
-            ->assertJsonPath('data.roles.0.name', 'user');
+            ->assertJsonPath('data.roles.0.display_name', RoleEnum::USER->getPermissionDisplayName());
 
         $this->app['auth']->forgetGuards();
 

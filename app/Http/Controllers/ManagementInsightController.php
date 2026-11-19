@@ -32,7 +32,7 @@ class ManagementInsightController extends Controller
         return response()->json(['data' => $this->catalogService->catalog($this->accessScope())], Response::HTTP_OK);
     }
 
-    /** The user's own dashboard: open, awaiting me, overdue, stale, by stage, trend. */
+    /** What waits for the user (awaiting_me.count) and the open bookings per type (by_type) and per type and stage (by_type_stage). */
     public function overview(): JsonResponse
     {
         return response()->json(['data' => $this->metricsService->overview($this->accessScope())], Response::HTTP_OK);

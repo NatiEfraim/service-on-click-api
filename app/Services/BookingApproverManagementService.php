@@ -102,17 +102,9 @@ class BookingApproverManagementService
             $formattedDashboard = DashboardStatusResource::collection($allStatuses)->resolve();
             $formattedDashboard['total_bookings'] = $totalBookings;
 
-            $user = User::where('id', $this->authUser->id)->first();
-            $authUserPermission = $user->getAllPermissions()
-                ->filter(function ($permission) use ($bookingType) {
-                    return str_ends_with($permission->name, '_' . $bookingType->id);
-                })
-                ->value('name');
-
             return [
                 'dashboard' => $formattedDashboard,
                 'booking_type' => $bookingType,
-                'auth_user_permission' => $authUserPermission,
             ];
         } catch (\Exception $e) {
             Log::error($e->getMessage());
@@ -162,17 +154,10 @@ class BookingApproverManagementService
 
             $formatted = DashboardStatusResource::collection($allStatuses)->resolve();
             $formatted['total_bookings'] = $total;
-            $user = User::where('id', $this->authUser->id)->first();
-            $authUserPermission = $user->getAllPermissions()
-                ->filter(function ($permission) use ($bookingType) {
-                    return str_ends_with($permission->name, '_' . $bookingType->id);
-                })
-                ->value('name');
 
             return [
                 'dashboard' => $formatted,
                 'booking_type' => $bookingType,
-                'auth_user_permission' => $authUserPermission,
             ];
 
         } catch (\Exception $e) {
@@ -419,7 +404,6 @@ class BookingApproverManagementService
                 ->with([
                     'user',
                     'booking.status',
-                    'booking.viceApprovers.user',
                 ])
                 ->where('is_deleted', false)
                 ->whereHas('booking', function ($bookingQuery) use ($statusIds) {

@@ -67,7 +67,7 @@ class ManagementAccessTest extends ManagementTestCase
 
         // One synthetic booking per status the type can reach (capped at six).
         $this->assertSame(6, $response->json('data.dashboard.total_bookings'));
-        $this->assertSame('approver_1', $response->json('data.auth_user_permission'));
+        $response->assertJsonMissingPath('data.auth_user_permission');
     }
 
     public function test_the_bookings_list_comes_with_its_formatted_values(): void

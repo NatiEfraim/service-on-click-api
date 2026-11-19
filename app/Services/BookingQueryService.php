@@ -175,7 +175,6 @@ class BookingQueryService
             'comments' => $display['comments'] ?? [],
             'attachments' => app(AttachmentService::class)->describe($booking),
             'history' => $booking->applicationLog->map(fn ($log): array => [
-                'action_type_id' => $log->action_type_id,
                 'action_label' => $log->actionType?->display_type,
                 'status_id' => $log->status_id,
                 'status_label' => $log->status_id !== null ? ($statusLabels[$log->status_id] ?? null) : null,
@@ -185,19 +184,6 @@ class BookingQueryService
                 'occurred_at' => $log->created_at?->toIso8601String(),
                 'correlation_id' => $log->correlation_id,
             ])->values()->all(),
-            'can_edit_values' => $scope->workflow()->canEditValues($booking->positionStatus(), $scope->actingPermissions, $bookingTypeId),
-            'editable_fields' => FormField::query()
-                ->where('unit_id', $booking->unit_id)
-                ->where('booking_type_id', $booking->booking_type_id)
-                ->where('editable', true)
-                ->where('is_active', true)
-                ->whereIn('field_type_id', FormFieldRules::EDITABLE_TYPES)
-                ->section(FormSectionEnum::REQUESTER)
-                ->orderBy('position')
-                ->orderBy('id')
-                ->get(['id', 'field_display_name', 'field_type_id'])
-                ->map(fn (FormField $field): array => ['form_field_id' => $field->id, 'field_display_name' => $field->field_display_name, 'field_type_id' => (int) $field->field_type_id])
-                ->all(),
             // Route types: the handler and the section the handlers fill.
             'handler' => $booking->handler === null ? null : [
                 'uuid' => $booking->handler->uuid,
@@ -211,17 +197,10 @@ class BookingQueryService
             'progress' => app(ProgressService::class)->progress($booking),
             'handler_fields' => $route === null ? [] : $this->handlerFields($booking, $scope),
             'sync' => [
-                'pending_export' => !BookingTypeEnum::isWebOnlyId($bookingTypeId) && !$booking->is_status_exported,
                 'ext_status_id' => $booking->ext_status_id,
                 'ext_status_label' => $booking->ext_status_id ? ($statusLabels[$booking->ext_status_id] ?? null) : null,
-                'open_conflict' => $openConflict ? [
-                    'id' => $openConflict->id,
-                    'internal_status_id' => $openConflict->internal_status_id,
-                    'internal_status_label' => $statusLabels[$openConflict->internal_status_id] ?? null,
-                    'external_status_id' => $openConflict->external_status_id,
-                    'external_status_label' => $statusLabels[$openConflict->external_status_id] ?? null,
-                    'detected_at' => $openConflict->created_at?->toIso8601String(),
-                ] : null,
+                // The screen needs only which conflict to settle; the sync screen lists the conflicts with their statuses.
+                'open_conflict' => $openConflict ? ['id' => $openConflict->id] : null,
             ],
             'audit' => $scope->can('audit.view')
                 ? AuditLog::query()->where('booking_serial', $serial)->orderBy('id')
@@ -257,7 +236,6 @@ class BookingQueryService
             'booking_type_id' => $bookingTypeId,
             'booking_type_label' => $booking->bookingType?->display_name,
             'unit_id' => $booking->unit_id,
-            'owner_uuid' => $booking->user?->uuid,
             'owner_name' => $booking->user?->full_name,
             'owner_personal_id' => $booking->user?->personal_id,
             'status_id' => $status->value,
@@ -313,7 +291,6 @@ class BookingQueryService
                 'label' => $action['label'],
                 'comment_required' => Workflow::validateComment($action['status'], '', $transition?->commentRequired) !== null,
                 'direction' => $transition?->direction ?? $this->genericDirection($action['status']),
-                'requires_handler' => $transition?->requiresHandler ?? false,
                 'required_fields' => $transition === null ? [] : array_values(array_filter(array_map(fn (string $name): ?int => $fieldIds[$name] ?? null, $transition->requiredFields))),
                 'clears_fields' => $transition === null ? [] : array_values(array_filter(array_map(fn (string $name): ?int => $fieldIds[$name] ?? null, $transition->clearsFields))),
                 'enabled' => $enabled,

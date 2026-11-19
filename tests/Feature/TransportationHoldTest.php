@@ -109,7 +109,8 @@ class TransportationHoldTest extends HatchTestCase
         $this->assertSame('control_officer', $row['stage']);
         $this->assertSame([17, 18, 9, 10], $this->buttons($officer));
         $this->assertSame([self::SERIAL], $this->listed($officer, 'mine=1&ids=' . self::SERIAL), 'on their "waiting for me" list');
-        $this->as($officer)->getJson(self::URL)->assertOk()->assertJsonPath('data.stage', 'control_officer')->assertJsonPath('data.can_edit_values', true);
+        $this->as($officer)->getJson(self::URL)->assertOk()->assertJsonPath('data.stage', 'control_officer');
+        $this->assertTrue($this->mayEditValues($officer, self::SERIAL), 'a hold does not take the turn to correct the values away');
 
         // The others see the same stage: the vice approver may take it over, the approver and the admin may decide.
         $this->assertSame([15, 16, 9, 10], $this->buttons(self::VICE_APPROVER));
@@ -269,7 +270,7 @@ class TransportationHoldTest extends HatchTestCase
         $this->assertSame([5801, 5802, 5803, 5804], $this->listed(self::APPROVER, "mine=1&{$ids}"));
 
         // The figures count a held booking in its stage.
-        $this->assertSame(['approver' => 1, 'control_officer' => 2, 'supplier_approval' => 1], collect($this->as(self::APPROVER)->getJson('/api/bookings-approver-management/overview')->assertOk()->json('data.by_stage'))->sortKeys()->all());
+        $this->assertSame(['approver' => 1, 'control_officer' => 2, 'supplier_approval' => 1], collect($this->as(self::APPROVER)->getJson('/api/bookings-approver-management/overview')->assertOk()->json('data.by_type_stage.8'))->sortKeys()->all());
         $this->assertSame(['approver' => 1, 'control_officer' => 2, 'supplier_approval' => 1], collect($this->as(self::ADMIN)->getJson('/api/bookings-admin-management/home')->assertOk()->json('data.by_type_stage.8'))->sortKeys()->all());
         $this->assertSame(4, $this->as(self::APPROVER)->getJson('/api/bookings-approver-management/overview')->json('data.awaiting_me.count'));
     }

@@ -80,6 +80,8 @@ class AuditService
     public function search(array $filters, int $perPage = 40): array
     {
         $page = AuditLog::query()
+            // The columns the screen shows, named: the chain's hash and prev_hash are not read from the table at all (AuditLog::$hidden too).
+            ->select(['id', 'occurred_at', 'actor_id', 'actor_name', 'actor_type', 'source', 'action', 'entity_type', 'entity_id', 'booking_serial', 'booking_type_id', 'unit_id', 'before', 'after', 'reason', 'result', 'correlation_id'])
             // Scheduled transfer events are hidden; human actions and conflicts are listed.
             ->where(fn ($query) => $query->where('action', 'not like', 'sync.%')->orWhere('action', 'like', 'sync.conflict.%')->orWhere('actor_type', 'user'))
             ->when($filters['serial'] ?? null, fn ($query, $value) => $query->where('booking_serial', (int) $value))
