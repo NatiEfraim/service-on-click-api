@@ -220,6 +220,9 @@ enum BookingTypeEnum
     /** Display name, with per-unit overrides. */
     public function getCustomDisplayName(int $unitId): string|bool
     {
+        /** @var BookingType|null $bookingType */
+        $bookingType = null;
+
         try {
             $bookingTypeId = $this->getBookingTypeId();
             $bookingType = BookingType::where('id', $bookingTypeId)->first();
@@ -300,7 +303,7 @@ enum BookingTypeEnum
             };
         } catch (\Exception $e) {
             Log::error('Error in BookingTypeEnum: getCustomDisplayName function: ' . $e->getMessage());
-            return $bookingType->display_name;
+            return $bookingType?->display_name ?? false;
         }
     }
 
