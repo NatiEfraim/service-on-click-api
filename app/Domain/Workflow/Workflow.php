@@ -16,6 +16,9 @@ use App\Enums\StatusBookingEnum as Status;
  * The barber booking is the exception: its route has one step, the barber's answer - approve (11) or reject (12) - and none of the vice approver's
  * or the approver's statuses (barberMoves). The barber is the APPROVER of the type (approver_5); the admin holds that turn too, as on every type.
  * The type has no vice approver (BookingTypeHasRoleSeeder), so nobody skips or waits for one.
+ * The infosec and ICT types (15-25) have no vice approver or approver either: their handler (infosec_officer_N / ict_handler_N) is the whole route,
+ * like the barber - one answer, approve (3) or reject (4), then the closing (5 / 7) - see officerMoves(). The stages stay the generic ones
+ * (vice_approver = "waiting for the handling party", realization), so the screens need no new stage.
  * A hold (TRANSPORTATION: 8, 9, 10) never moves a booking: the stage, the buttons and the visibility stay those of the status it was put on hold
  * from. So every method here takes that status as $current - the status that decides whose turn it is (Booking::positionStatus()) - and, where
  * buttons are built, the hold itself as $hold, which is not offered again. A hold with nowhere recorded is its own $current: the supplier stage.
@@ -143,6 +146,8 @@ final class Workflow
             'isControlOfficer' => $has(PermissionEnum::TRANSPORTATION_CONTROL_OFFICER),
             'isViceApprover' => $has(PermissionEnum::VICE_APPROVER),
             'isApprover' => $has(PermissionEnum::APPROVER),
+            // The domain handler of an infosec / ICT type (15-25): answers and closes the request alone, see officerMoves().
+            'isOfficer' => $has(PermissionEnum::INFOSEC_OFFICER) || $has(PermissionEnum::ICT_HANDLER),
             // The strongest role of the type: acts at every stage, as whoever's turn it is.
             'isAdmin' => $has(PermissionEnum::ADMIN),
         ];
@@ -223,19 +228,21 @@ final class Workflow
         $isControlOfficer = $isAdmin || !empty($flags['isControlOfficer']);
         $isViceApprover = $isAdmin || !empty($flags['isViceApprover']);
         $isApprover = $isAdmin || !empty($flags['isApprover']);
+        // The officer of an infosec / ICT type holds the one step of its route: the answer, wherever an old booking waits for it, and the closing.
+        $isOfficer = !empty($flags['isOfficer']);
         // The hold the booking is on is not offered again: the one it was put on, or its own status when it is parked nowhere (an old hold).
         $except = $hold ?? $current;
 
         return match ($this->stageOf($current, $bookingTypeId)) {
             BookingStageEnum::CONTROL_OFFICER => $isControlOfficer ? $this->controlOfficerMoves($except, $bookingTypeId) : [],
-            BookingStageEnum::VICE_APPROVER => $isViceApprover ? $this->viceApproverMoves($except, $bookingTypeId) : [],
-            BookingStageEnum::APPROVER,
+            BookingStageEnum::VICE_APPROVER => $isViceApprover ? $this->viceApproverMoves($except, $bookingTypeId) : ($isOfficer ? $this->officerMoves() : []),
+            BookingStageEnum::APPROVER => $isApprover ? $this->approverMoves($except, $bookingTypeId) : ($isOfficer ? $this->officerMoves() : []),
             BookingStageEnum::SUPPLIER_FILES,
             BookingStageEnum::SUPPLIER_APPROVAL,
             BookingStageEnum::SUPPLIER_NUMBER => $isApprover ? $this->approverMoves($except, $bookingTypeId) : [],
             // The barber is the approver of the type (approver_5); the admin holds the turn too. The type has no vice approver.
             BookingStageEnum::BARBER => $isApprover ? $this->barberMoves() : [],
-            BookingStageEnum::REALIZATION => $isApprover ? $this->closingMoves() : [],
+            BookingStageEnum::REALIZATION => $isApprover || $isOfficer ? $this->closingMoves() : [],
             BookingStageEnum::CLOSED => [],
         };
     }
@@ -340,6 +347,20 @@ final class Workflow
         return [
             ['status' => Status::APPROVED_BY_BARBER, 'label' => 'אישור על ידי הספר'],
             ['status' => Status::CANCELED_BY_BARBER, 'label' => 'דחייה על ידי הספר'],
+        ];
+    }
+
+    /**
+     * The officer's answer on an infosec / ICT request, the one step of its route (like the barber's): approve it (3) or reject it (4, which
+     * needs a comment). There is no vice approver or approver on these types, so nobody passes it on (15 / 16); the officer closes it after
+     * the approval with the closing moves.
+     * @return array<int, array{status: Status, label: string}>
+     */
+    private function officerMoves(): array
+    {
+        return [
+            ['status' => Status::APPROVED, 'label' => 'אישור הבקשה'],
+            ['status' => Status::REJECTED, 'label' => 'דחיית הבקשה'],
         ];
     }
 

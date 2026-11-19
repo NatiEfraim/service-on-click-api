@@ -138,6 +138,7 @@ class BookingAdminManagementService
             }
 
             $approverManagementRoles = $this->getApproverManagementRoles();
+            $userPermissionNames = $user->getAllPermissions()->pluck('name')->all();
 
             $bookingTypes = BookingType::whereIn('id', $bookingTypeIds)
                 ->where('id', '!=', BookingTypeEnum::EQUIPMENT_BOOKING->getBookingTypeId())
@@ -145,7 +146,7 @@ class BookingAdminManagementService
                 ->with('roles')
                 ->get();
 
-            $result = $bookingTypes->map(function ($bookingType) use ($user, $approverManagementRoles): array {
+            $result = $bookingTypes->map(function ($bookingType) use ($user, $approverManagementRoles, $userPermissionNames): array {
 
                 $bookingTypeId = $bookingType['id'];
 
@@ -164,6 +165,11 @@ class BookingAdminManagementService
                         ];
                     })
                     ->all();
+
+                // The requester flag: may this person open a request of the type (user_{id})? Only on a type whose requester is the plain user.
+                if ($applicableRoleNames->contains(RoleEnum::USER->toSpatieRoleName())) {
+                    $flags['is_user'] = in_array(PermissionEnum::USER->keyForId((int) $bookingTypeId), $userPermissionNames, true);
+                }
 
                 return array_merge(
                     [
@@ -252,6 +258,23 @@ class BookingAdminManagementService
                         $user->givePermissionTo($permission);
                     } else {
                         $user->revokePermissionTo($permission);
+                    }
+                }
+
+                // The requester flag (optional, never required): grants or takes away the permission to open a request of the type. The user
+                // role itself stays - everybody is at least a plain user - only user_{id} comes and goes.
+                if (array_key_exists('is_user', $assignment) && $applicableRoleIds->contains(RoleEnum::USER->value)) {
+                    $requesterPermission = Permission::where('name', PermissionEnum::USER->keyForId((int) $bookingTypeId))->first();
+
+                    if (!$requesterPermission) {
+                        DB::rollBack();
+                        return HttpStatusCodeEnum::UNPROCESSABLE_ENTITY;
+                    }
+
+                    if ((bool) $assignment['is_user']) {
+                        $user->givePermissionTo($requesterPermission);
+                    } else {
+                        $user->revokePermissionTo($requesterPermission);
                     }
                 }
             }

@@ -107,10 +107,15 @@ class AuthTest extends ManagementTestCase
     {
         $this->assertFalse(User::where('personal_number', self::NO_ROLE)->first()->hasAnyRole(['user', 'admin']));
 
-        $this->postJson('/api/login', ['personal_number' => self::NO_ROLE])
+        $response = $this->postJson('/api/login', ['personal_number' => self::NO_ROLE])
             ->assertCreated()
-            ->assertJsonPath('role', ['user'])
-            ->assertJsonPath('permissions', []);
+            ->assertJsonPath('role', ['user']);
+
+        // The plain user's role comes with what it needs to open a request: user_{id} for the types their unit offers a plain user (not the clearance grant).
+        $permissions = $response->json('permissions');
+        $this->assertContains('user_1', $permissions);
+        $this->assertNotContains('user_14', $permissions);
+        $this->assertSame([], array_values(array_filter($permissions, fn (string $name): bool => !str_starts_with($name, 'user_'))));
 
         $this->assertTrue(User::where('personal_number', self::NO_ROLE)->first()->hasRole('user'));
 

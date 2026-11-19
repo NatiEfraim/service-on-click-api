@@ -7,6 +7,7 @@ use App\Enums\ActionTypeEnum;
 use App\Enums\BookingTypeEnum;
 use App\Enums\FieldTypeEnum;
 use App\Enums\FormSectionEnum;
+use App\Enums\PermissionEnum;
 use App\Enums\RoleEnum;
 use App\Enums\StatusBookingEnum;
 use App\Http\Requests\StoreBookingRequest;
@@ -261,7 +262,8 @@ class RequesterService
      * The booking types the user may submit: the unit offers the type, and the user holds "{requester role}_{id}" for one of the
      * type's requester roles (user_{id} on every type but the ones with a requester role of their own, e.g. department_security_officer_14
      * on the clearance grant). Management roles may open every topic type whose requester is the plain user without holding user_{id};
-     * the super admin every topic type, the ones with a dedicated requester role included.
+     * the super admin every topic type, the ones with a dedicated requester role included. The domain handler of a type (infosec_officer_N,
+     * ict_handler_N) may open that type when its requester is the plain user (15-25; not the clearance grant, which only its קב"ט opens).
      * @return array<int> booking_type ids the user may submit
      */
     public function availableBookingTypeIds(User $user): array
@@ -278,12 +280,24 @@ class RequesterService
             ? GroupBookingType::whereNotNull('topic')->with('bookingTypes:id')->get()->flatMap(fn ($group) => $group->bookingTypes->pluck('id'))->map(fn ($id): int => (int) $id)->all()
             : [];
 
+        // The domain handler of an infosec / ICT type (infosec_officer_15, ict_handler_20) is a person of the unit like any other: they may open
+        // the requests of the type they handle, although their permission is a handling one and they hold no user_{id} on it.
+        $handledTypeIds = [];
+
+        foreach ($permissionNames as $permissionName) {
+            $parsed = PermissionEnum::parsePermissionName($permissionName);
+
+            if ($parsed !== null && in_array($parsed['permission'], [PermissionEnum::INFOSEC_OFFICER, PermissionEnum::ICT_HANDLER], true)) {
+                $handledTypeIds[] = $parsed['booking_type_id'];
+            }
+        }
+
         $permitted = [];
 
         foreach ($unitIds as $bookingTypeId) {
             $requesterRoles = $requesterRolesByType[$bookingTypeId] ?? [RoleEnum::USER];
 
-            $holdsRequesterPermission = false;
+            $holdsRequesterPermission = in_array(RoleEnum::USER, $requesterRoles, true) && in_array($bookingTypeId, $handledTypeIds, true);
 
             foreach ($requesterRoles as $role) {
                 if (in_array($role->toPermissionEnum()->keyForId($bookingTypeId), $permissionNames, true)) {

@@ -35,6 +35,40 @@ class WorkflowTest extends TestCase
         $this->assertFalse($this->workflow->canChangeTo(S::RECEIVED, S::APPROVED, ['vice_approver_1'], 1));
     }
 
+    public function test_the_domain_handler_of_an_infosec_or_ict_type_holds_the_whole_route(): void
+    {
+        foreach ([['infosec_officer_15', 15], ['infosec_officer_16', 16], ['ict_handler_20', 20]] as [$permission, $typeId]) {
+            // The one answer, then the closing: nothing is passed on to a stage nobody holds (15 / 16).
+            $this->assertSame([3, 4], $this->targets(S::RECEIVED, [$permission], $typeId), $permission);
+            // A request left at the old stages of the chain waits for them too, so none is stranded.
+            $this->assertSame([3, 4], $this->targets(S::VICE_APPROVER_APPROVED, [$permission], $typeId), $permission);
+            $this->assertSame([3, 4], $this->targets(S::VICE_APPROVER_REJECTED, [$permission], $typeId), $permission);
+            $this->assertSame([5, 7], $this->targets(S::APPROVED, [$permission], $typeId), $permission);
+
+            foreach ([S::REJECTED, S::COMPLETED, S::CANCELED_BY_APPROVER, S::CANCELED_BY_USER] as $closed) {
+                $this->assertSame([], $this->targets($closed, [$permission], $typeId), "{$permission} on {$closed->name}");
+            }
+
+            // The stages stay the generic ones, so no screen needs a new one.
+            $this->assertSame(BookingStageEnum::VICE_APPROVER, $this->workflow->stageOf(S::RECEIVED, $typeId));
+            $this->assertSame(BookingStageEnum::REALIZATION, $this->workflow->stageOf(S::APPROVED, $typeId));
+        }
+
+        // Only on the type they hold the permission for.
+        $this->assertSame([], $this->targets(S::RECEIVED, ['infosec_officer_15'], 17));
+        $this->assertSame([], $this->targets(S::RECEIVED, ['ict_handler_20'], 1));
+
+        // The rejection and the cancellation need a comment, as everywhere.
+        $this->assertNotNull(Workflow::validateComment(S::REJECTED, ''));
+        $this->assertNotNull(Workflow::validateComment(S::CANCELED_BY_APPROVER, ''));
+        $this->assertNull(Workflow::validateComment(S::APPROVED, ''));
+
+        // The admin of a type (the super admin on every type) keeps the whole chain, the passing-on moves included.
+        $this->assertSame([15, 16, 3, 4], $this->targets(S::RECEIVED, ['admin_15'], 15));
+        // The officer's turn is not a vice approver's or an approver's elsewhere: on a car the permission is just another name.
+        $this->assertSame([15, 16], $this->targets(S::RECEIVED, ['vice_approver_1', 'infosec_officer_15'], 1));
+    }
+
     public function test_the_approver_decides_once_the_vice_approver_has_answered(): void
     {
         $this->assertSame([3, 4], $this->targets(S::VICE_APPROVER_APPROVED, ['approver_1'], 1));

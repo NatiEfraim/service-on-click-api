@@ -55,13 +55,27 @@ final class AccessScope
         return $this->adminOfBookingTypeIds() !== [];
     }
 
-    /** @return array<int, int> Booking types where the user holds any managing permission, or a role of the type's own route. */
+    /** @return array<int, int> Booking types where the user holds any managing permission (the domain handler's included), or a role of the type's own route. */
     public function managedBookingTypeIds(): array
     {
         return $this->managed ??= array_values(array_unique([
             ...$this->bookingTypeIdsOf(['admin_', 'approver_', 'vice_approver_', 'transportation_control_officer_']),
+            ...$this->officerBookingTypeIds(),
             ...$this->routeBookingTypeIds(),
         ]));
+    }
+
+    /**
+     * @return array<int, int> The infosec / ICT types the user handles: holds infosec_officer_N or ict_handler_N. The handler is the whole route of
+     * such a type (Workflow::officerMoves): they see every request of it in their unit, closed ones too, and have its dashboard. The clearance
+     * grant (14) is a route of its own and not counted here, whoever holds the permission.
+     */
+    public function officerBookingTypeIds(): array
+    {
+        return array_values(array_filter(
+            $this->bookingTypeIdsOf(['infosec_officer_', 'ict_handler_']),
+            fn (int $bookingTypeId): bool => !$this->isRouteType($bookingTypeId),
+        ));
     }
 
     /** @return array<int, int> */
@@ -115,11 +129,12 @@ final class AccessScope
         return !$this->isSuperAdmin()
             && !$this->isAdmin()
             && $this->approverOfBookingTypeIds() === []
+            && $this->officerBookingTypeIds() === []
             && $this->routeOwnerBookingTypeIds() === []
             && $this->managedBookingTypeIds() !== [];
     }
 
-    /** Handler of this type, and neither its admin nor its approver; on a route type: a route role that is not the owner. */
+    /** Handler of this type, and neither its admin, its approver nor its domain handler; on a route type: a route role that is not the owner. */
     public function isHandlerOnlyFor(int $bookingTypeId): bool
     {
         if ($this->isSuperAdmin()) {
@@ -134,7 +149,8 @@ final class AccessScope
 
         return in_array($bookingTypeId, $this->managedBookingTypeIds(), true)
             && !in_array($bookingTypeId, $this->adminOfBookingTypeIds(), true)
-            && !in_array($bookingTypeId, $this->approverOfBookingTypeIds(), true);
+            && !in_array($bookingTypeId, $this->approverOfBookingTypeIds(), true)
+            && !in_array($bookingTypeId, $this->officerBookingTypeIds(), true);
     }
 
     /** @return array<int, int> Booking types whose dashboard the user may open. */
@@ -145,10 +161,10 @@ final class AccessScope
         }
 
         // Approvers and vice approvers see their own types (a vice approver's numbers are limited to their stage by applyToBookings);
-        // the owner of a route type sees that type's.
+        // the owner of a route type sees that type's, and the domain handler of an infosec / ICT type sees that type's.
         $ids = $this->isAdmin() ? $this->adminOfBookingTypeIds() : $this->bookingTypeIdsOf(['approver_', 'vice_approver_']);
 
-        return array_values(array_unique([...$ids, ...$this->routeOwnerBookingTypeIds()]));
+        return array_values(array_unique([...$ids, ...$this->routeOwnerBookingTypeIds(), ...$this->officerBookingTypeIds()]));
     }
 
     /** @return array<int, int> Every booking type that has bookings (outsource types have none). */
@@ -253,11 +269,13 @@ final class AccessScope
         return $this->isSuperAdmin() || in_array($bookingTypeId, $this->managedBookingTypeIds(), true);
     }
 
-    /** Super admin anywhere; otherwise a non-handler who manages the type in their own unit (on a route type: its owner). */
+    /** Super admin anywhere; otherwise a non-handler who manages the type in their own unit (on a route type: its owner). The domain handler of an infosec / ICT type has no settings. */
     public function canManageSettings(int $unitId, int $bookingTypeId): bool
     {
         return $this->isSuperAdmin()
-            || (!$this->isHandlerOnlyFor($bookingTypeId) && $this->managesBooking($unitId, $bookingTypeId));
+            || (!$this->isHandlerOnlyFor($bookingTypeId)
+                && !in_array($bookingTypeId, $this->officerBookingTypeIds(), true)
+                && $this->managesBooking($unitId, $bookingTypeId));
     }
 
     /**

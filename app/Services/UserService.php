@@ -3,12 +3,17 @@
 namespace App\Services;
 
 use App\Enums\AdfsColumnsEnum;
+use App\Enums\BookingTypeEnum;
 use App\Enums\HttpStatusCodeEnum;
 use App\Enums\PaginationEnum;
+use App\Enums\PermissionEnum;
 use App\Enums\RoleEnum;
 use App\Http\Resources\CurrentUserResource;
 use App\Http\Resources\UserResource;
+use App\Models\BookingTypeHasRole;
+use App\Models\UnitHasBookingType;
 use App\Models\User;
+use Spatie\Permission\Models\Permission;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ResponseException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -81,7 +86,10 @@ class UserService
         }
     }
 
-    /** Creates a user. @param array $data personal_number, full_name, phone, unit_id, department_id (optional) */
+    /**
+     * Creates a user: the plain user role and, with it, the permission to open a request of every type their unit offers to a plain user
+     * (grantRequesterPermissions) - a person made here could open nothing otherwise. @param array $data personal_number, full_name, phone, unit_id, department_id (optional)
+     */
     public function store(array $data): mixed
     {
         try {
@@ -95,12 +103,15 @@ class UserService
                     'is_deleted' => false,
                 ]);
 
+                $user->assignRole(RoleEnum::USER->value);
+                $granted = $this->grantRequesterPermissions($user);
+
                 app(AuditService::class)->record([
                     'action' => 'user.create',
                     'entity_type' => 'user',
                     'entity_id' => $user->actorId(),
                     'unit_id' => $user->unit_id,
-                    'after' => $user->only(['personal_number', 'full_name', 'unit_id', 'department_id']),
+                    'after' => [...$user->only(['personal_number', 'full_name', 'unit_id', 'department_id']), 'role' => RoleEnum::USER->toSpatieRoleName(), 'permissions' => $granted],
                 ], Auth::user());
 
                 return $user;
@@ -192,12 +203,71 @@ class UserService
         }
     }
 
-    /** Gives a person with no role the plain user role (e.g. after their last manager role was removed) so they still see their own bookings. */
+    /**
+     * Gives a person with no role the plain user role (e.g. after their last manager role was removed) so they still see their own bookings,
+     * with the permissions that role needs to open a request (grantRequesterPermissions). A person who already has a role is left as they are:
+     * what an admin took away from them stays taken away.
+     */
     public function ensureUserRole(User $user): void
     {
         if ($user->roles()->doesntExist()) {
             $user->assignRole(RoleEnum::USER->value);
+            $this->grantRequesterPermissions($user);
         }
+    }
+
+    /**
+     * The booking types of the unit whose requester is the plain user: the unit offers the type and the type has the user role - every
+     * type but the clearance grant, whose requester is the קב"ט. These are the types user_{id} is granted for.
+     * @return array<int, int>
+     */
+    public function requesterBookingTypeIdsOfUnit(?int $unitId): array
+    {
+        if ($unitId === null) {
+            return [];
+        }
+
+        return BookingTypeHasRole::query()
+            ->where('role_id', RoleEnum::USER->value)
+            ->whereIn('booking_type_id', UnitHasBookingType::query()->where('unit_id', $unitId)->select('booking_type_id'))
+            ->orderBy('booking_type_id')
+            ->pluck('booking_type_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
+     * What a person with the user role needs to open a request: user_{id} for every booking type of their unit whose requester is the plain
+     * user (requesterBookingTypeIdsOfUnit). Without it the requester screen is empty - no role carries permissions of its own. A permission
+     * the person has already is left alone. Runs in the caller's transaction; the mobile app hears of the change through the users file.
+     * @return array<int, string> the permission names granted now
+     */
+    public function grantRequesterPermissions(User $user): array
+    {
+        $typeIds = $this->requesterBookingTypeIdsOfUnit($user->unit_id === null ? null : (int) $user->unit_id);
+
+        if ($typeIds === []) {
+            return [];
+        }
+
+        $owned = $user->getAllPermissions()->pluck('name')->all();
+        $permissions = Permission::query()
+            ->whereIn('name', array_map(fn (int $id): string => PermissionEnum::USER->keyForId($id), $typeIds))
+            ->whereNotIn('name', $owned)
+            ->get();
+
+        if ($permissions->isEmpty()) {
+            return [];
+        }
+
+        $user->givePermissionTo($permissions);
+
+        // The mobile app knows the plain user's types (not the web-only infosec / ICT ones): it hears of the change only when it concerns it.
+        if (collect($typeIds)->contains(fn (int $id): bool => !BookingTypeEnum::isWebOnlyId($id))) {
+            $user->markRolesChanged();
+        }
+
+        return $permissions->pluck('name')->sort()->values()->all();
     }
 
     /** Public entry-point for a Vatican lookup by personal number; null when unknown or unreachable. @return ?array{personal_number: string, personal_id: ?string, full_name: ?string} */

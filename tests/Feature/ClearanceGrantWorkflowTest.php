@@ -402,15 +402,18 @@ class ClearanceGrantWorkflowTest extends ManagementTestCase
         $this->as(self::ADMIN)->getJson($this->url($booking))->assertNotFound();
         $this->as(self::APPROVER)->getJson($this->url($booking))->assertNotFound();
 
+        // An officer of the other infosec types (15, 16) does not see the clearance request: its route is the במ's of 14. They handle their own types.
         $mediaOfficer = $this->createPerson('1000025', \App\Enums\RoleEnum::INFOSEC_OFFICER);
         $mediaOfficer->revokePermissionTo('infosec_officer_14');
         app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
-        $this->assertSame([], $this->as('1000025')->getJson(self::BASE . '/bookings')->assertOk()->json('data'));
+        $this->assertSame([], $this->as('1000025')->getJson(self::BASE . '/bookings?types=14')->assertOk()->json('data'));
+        $this->assertNotContains($booking->serial_number, $this->as('1000025')->getJson(self::BASE . '/bookings?per_page=100')->assertOk()->json('data.*.serial_number'));
+        $this->as('1000025')->getJson($this->url($booking))->assertNotFound();
 
-        // What each one is told about themself.
+        // What each one is told about themself: the infosec officer handles 14 as the owner of its route, and 15 and 16 as their decider.
         $officer = $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/me')->assertOk()->json('data');
-        $this->assertSame([14], $officer['managed_booking_types']);
-        $this->assertSame([14], $officer['dashboard_booking_types']);
+        $this->assertEqualsCanonicalizing([14, 15, 16], $officer['managed_booking_types']);
+        $this->assertEqualsCanonicalizing([14, 15, 16], $officer['dashboard_booking_types']);
         $this->assertTrue($officer['capabilities']['dashboard.view']);
         $this->assertFalse($officer['is_handler_only']);
 

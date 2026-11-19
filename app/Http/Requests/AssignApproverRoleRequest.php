@@ -51,6 +51,8 @@ class AssignApproverRoleRequest extends FormRequest
             // the barber type no vice approver, so a flag that is never offered on the screen is not demanded here either.
             'role_assignments.*.is_approver' => 'sometimes|boolean',
             'role_assignments.*.is_vice_approver' => 'sometimes|boolean',
+            // The requester flag (user_{id}): optional, so a screen that does not draw it changes nothing; ignored on a type without the user role.
+            'role_assignments.*.is_user' => 'sometimes|boolean',
         ];
 
         foreach (BookingTypeHasRole::approverManagementRoleEnums() as $roleEnum) {
@@ -108,6 +110,7 @@ class AssignApproverRoleRequest extends FormRequest
             'role_assignments.array' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
             'role_assignments.*.booking_type_id.required' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
             'role_assignments.*.booking_type_id.exists' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
+            'role_assignments.*.is_user.boolean' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
         ];
 
         // The same generic message for every per-role flag, the domain roles included.

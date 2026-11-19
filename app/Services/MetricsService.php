@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Domain\Metrics\BottleneckAnalyzer;
 use App\Enums\BookingStageEnum;
+use App\Enums\RoleEnum;
 use App\Enums\StatusBookingEnum;
 use App\Models\Booking;
 use App\Models\BookingType;
+use App\Models\BookingTypeHasRole;
 use App\Models\SlaTarget;
 use App\Models\User;
 use App\Support\AccessScope;
@@ -139,11 +141,17 @@ class MetricsService
             ->take(12)
             ->all();
 
+        // An infosec / ICT type has no vice approver or approver: its domain handler answers and closes at those stages.
+        $domainHandlers = BookingTypeHasRole::query()
+            ->whereIn('role_id', [RoleEnum::INFOSEC_OFFICER->value, RoleEnum::ICT_HANDLER->value])
+            ->get(['booking_type_id', 'role_id'])
+            ->mapWithKeys(fn (BookingTypeHasRole $link): array => [(int) $link->booking_type_id => RoleEnum::from((int) $link->role_id)]);
+
         // Pools: open bookings waiting for a role, shared by the holders of that role for the type in the unit.
         $pools = $byType
             ->filter(fn (array $row): bool => BookingStageEnum::from($row['stage'])->actingRole() !== null)
-            ->map(function (array $row) use ($scope, $unit): array {
-                $role = BookingStageEnum::from($row['stage'])->actingRole();
+            ->map(function (array $row) use ($scope, $unit, $domainHandlers): array {
+                $role = $domainHandlers[$row['booking_type_id']] ?? BookingStageEnum::from($row['stage'])->actingRole();
                 $permissionName = $role->toPermissionEnum()->keyForId($row['booking_type_id']);
 
                 $holders = Permission::query()->where('name', $permissionName)->exists()

@@ -47,6 +47,13 @@ class UserSeeder extends Seeder
             ['full_name' => 'דנה לוי', 'personal_id' => '300000101', 'phone' => '0501110001', 'personal_number' => '7000101', 'role' => RoleEnum::DEPARTMENT_SECURITY_OFFICER],
             ['full_name' => 'יוסי כהן', 'personal_id' => '300000102', 'phone' => '0501110002', 'personal_number' => '7000102', 'role' => RoleEnum::INFOSEC_OFFICER],
             ['full_name' => 'מיכל ברק', 'personal_id' => '300000103', 'phone' => '0501110003', 'personal_number' => '7000103', 'role' => RoleEnum::INTERVIEW_COORDINATOR],
+
+            // One person for every other role, so each can be logged in as: the ICT handler (types 17-25), the domain commander (approver),
+            // the handler (vice approver) and the transportation control officer (type 8).
+            ['full_name' => 'גל ארד', 'personal_id' => '300000104', 'phone' => '0501110004', 'personal_number' => '7000104', 'role' => RoleEnum::ICT_HANDLER],
+            ['full_name' => 'אבי מזרחי', 'personal_id' => '300000105', 'phone' => '0501110005', 'personal_number' => '7000105', 'role' => RoleEnum::APPROVER],
+            ['full_name' => 'שרית גבאי', 'personal_id' => '300000106', 'phone' => '0501110006', 'personal_number' => '7000106', 'role' => RoleEnum::VICE_APPROVER],
+            ['full_name' => 'רונן אביטל', 'personal_id' => '300000107', 'phone' => '0501110007', 'personal_number' => '7000107', 'role' => RoleEnum::TRANSPORTATION_CONTROL_OFFICER],
         ];
 
         foreach ($managers as $manager) {
