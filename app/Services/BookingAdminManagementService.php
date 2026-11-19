@@ -121,10 +121,10 @@ class BookingAdminManagementService
             // only the super admin ever sees them here); an admin only the types of their admin_{id} permissions.
             $bookingTypeIds = $this->isSuperAdmin()
                 ? BookingTypeHasRole::query()->distinct()->pluck('booking_type_id')
-                : Auth::user()->getAllPermissions()->filter(function ($permission) {
-                    return str_starts_with($permission->name, 'admin_');
-                })->map(function ($permission) {
-                    $parts = explode('_', $permission->name);
+                : collect(Auth::user()->validPermissionNames())->filter(function (string $name) {
+                    return str_starts_with($name, 'admin_');
+                })->map(function (string $name) {
+                    $parts = explode('_', $name);
                     return end($parts);
                 })->unique()->values();
 
@@ -310,8 +310,8 @@ class BookingAdminManagementService
         $target = $this->grantTargetOf($validated);
 
         if (!$this->isSuperAdmin()) {
-            $administered = $admin->getAllPermissions()
-                ->map(fn ($permission) => PermissionEnum::parsePermissionName($permission->name))
+            $administered = collect($admin->validPermissionNames())
+                ->map(fn (string $name) => PermissionEnum::parsePermissionName($name))
                 ->filter(fn ($parsed) => $parsed !== null && $parsed['permission'] === PermissionEnum::ADMIN)
                 ->map(fn ($parsed): int => $parsed['booking_type_id'])
                 ->all();

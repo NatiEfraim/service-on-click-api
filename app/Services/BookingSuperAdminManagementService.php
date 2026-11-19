@@ -24,6 +24,7 @@ use App\Models\BookingValue;
 use App\Models\FormField;
 use App\Models\OptionField;
 use App\Models\User;
+use App\Support\PermissionRules;
 use App\Traits\AuditsConfigChanges;
 use App\Traits\AuditsPermissionChanges;
 use Illuminate\Database\Eloquent\Collection;
@@ -76,7 +77,8 @@ class BookingSuperAdminManagementService
                 $adminRole = Role::where('id', RoleEnum::ADMIN->value)->first();
                 $permission = Permission::where('name', PermissionEnum::ADMIN->value . $bookingTypeId)->first();
 
-                if (!$adminRole || !$permission) {
+                // Backstop of the request's rule: never grant the admin role of a type that does not have it.
+                if (!$adminRole || !$permission || ($isAdmin && !app(PermissionRules::class)->hasLink(RoleEnum::ADMIN->value, (int) $bookingTypeId))) {
                     DB::rollBack();
                     return HttpStatusCodeEnum::UNPROCESSABLE_ENTITY;
                 }

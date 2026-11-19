@@ -36,7 +36,8 @@ final class AccessScope
 
     public function __construct(public readonly User $user, private readonly ?Workflow $workflow = null)
     {
-        $this->permissions = $user->getAllPermissions()->pluck('name')->all();
+        // Only the grants the booking type knows (PermissionRules): a stray "{role}_{type}" of a role the type does not have manages nothing.
+        $this->permissions = $user->validPermissionNames();
         $this->actingPermissions = $user->workflowPermissionNames();
     }
 

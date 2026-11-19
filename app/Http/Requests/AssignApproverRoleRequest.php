@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\BookingTypeEnum;
 use App\Enums\RoleEnum;
 use App\Models\BookingTypeHasRole;
+use App\Support\PermissionRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -87,6 +89,24 @@ class AssignApproverRoleRequest extends FormRequest
                     $flagKey = 'is_' . $roleEnum->toSpatieRoleName();
 
                     if (in_array($roleEnum->value, $bookingTypeRoleIds, true) && !array_key_exists($flagKey, $assignment)) {
+                        $validator->errors()->add("role_assignments.{$index}.{$flagKey}", 'אחד או יותר מהנתונים שנשלחו אינו תקין.');
+                    }
+                }
+
+                // A role the type does not have cannot be GRANTED (infosec_officer_1: the cars have no infosec officer): it would be a permission
+                // nobody can see on the screen and nothing may count. Taking one away (false) is harmless and stays ignored.
+                // The one documented exception: a vice approver flag sent for the BARBER type is ignored, as it always was (the type has no vice
+                // approver, nothing is written, and screens that send every flag of the row keep working) - see BarberBookingRouteTest.
+                foreach ([...BookingTypeHasRole::approverManagementRoleEnums(), RoleEnum::USER] as $roleEnum) {
+                    $flagKey = 'is_' . $roleEnum->toSpatieRoleName();
+
+                    if ($roleEnum === RoleEnum::VICE_APPROVER && (int) ($assignment['booking_type_id'] ?? 0) === BookingTypeEnum::BARBER_BOOKING->getBookingTypeId()) {
+                        continue;
+                    }
+
+                    if (array_key_exists($flagKey, $assignment)
+                        && filter_var($assignment[$flagKey], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === true
+                        && !app(PermissionRules::class)->hasLink($roleEnum->value, (int) ($assignment['booking_type_id'] ?? 0))) {
                         $validator->errors()->add("role_assignments.{$index}.{$flagKey}", 'אחד או יותר מהנתונים שנשלחו אינו תקין.');
                     }
                 }

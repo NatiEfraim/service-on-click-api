@@ -259,29 +259,32 @@ class RequesterService
     // -------------------------------------------------------------------------
 
     /**
-     * The booking types the user may submit: the unit offers the type, and the user holds "{requester role}_{id}" for one of the
-     * type's requester roles (user_{id} on every type but the ones with a requester role of their own, e.g. department_security_officer_14
-     * on the clearance grant). Management roles may open every topic type whose requester is the plain user without holding user_{id};
-     * the super admin every topic type, the ones with a dedicated requester role included. The domain handler of a type (infosec_officer_N,
-     * ict_handler_N) may open that type when its requester is the plain user (15-25; not the clearance grant, which only its קב"ט opens).
+     * The booking types the user may submit. The unit offers the type, and one of:
+     *  1. the user holds "{requester role}_{id}" for one of the type's requester roles (user_{id} on every type but the ones with a requester
+     *     role of their own: department_security_officer_14 on the clearance grant);
+     *  2. the user is the DOMAIN HANDLER of the type (infosec_officer_N, ict_handler_N): the infosec officer opens 14, 15 and 16, the ICT handler
+     *     17-25 - the clearance grant too, although its requester is the קב"ט;
+     *  3. the type is an infosec / ICT topic type whose requester is the plain user (15-25) and the user holds ANY role besides the plain user's
+     *     (admin, approver, vice approver, control officer, the domain handlers, the קב"ט, the interview coordinator): a person with a special role
+     *     opens what every employee opens, whether or not they also hold user_{id};
+     *  4. the user is the super admin: every topic type, the clearance grant included.
+     * A plain user (the user role alone) needs user_{id}: that is what the roles screen's is_user flag grants and takes away. Permissions of a role
+     * the type does not have never count (PermissionRules). The camp commander and the other management roles do NOT open the clearance grant.
      * @return array<int> booking_type ids the user may submit
      */
     public function availableBookingTypeIds(User $user): array
     {
         $unitIds = UnitHasBookingType::where('unit_id', $user->unit_id)->pluck('booking_type_id')->map(fn ($id): int => (int) $id)->all();
-        $permissionNames = $user->getAllPermissions()->pluck('name')->all();
+        $permissionNames = $user->validPermissionNames();
         $requesterRolesByType = $this->requesterRolesByType();
 
-        $managementRoles = ['super_admin', 'admin', 'approver', 'vice_approver', 'transportation_control_officer'];
-        $hasManagementRole = $user->hasAnyRole($managementRoles);
         $isSuperAdmin = $user->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName());
+        $hasSpecialRole = $user->getRoleNames()->contains(fn (string $name): bool => $name !== RoleEnum::USER->toSpatieRoleName());
 
-        $topicTypeIds = ($hasManagementRole || $isSuperAdmin)
+        $topicTypeIds = ($hasSpecialRole || $isSuperAdmin)
             ? GroupBookingType::whereNotNull('topic')->with('bookingTypes:id')->get()->flatMap(fn ($group) => $group->bookingTypes->pluck('id'))->map(fn ($id): int => (int) $id)->all()
             : [];
 
-        // The domain handler of an infosec / ICT type (infosec_officer_15, ict_handler_20) is a person of the unit like any other: they may open
-        // the requests of the type they handle, although their permission is a handling one and they hold no user_{id} on it.
         $handledTypeIds = [];
 
         foreach ($permissionNames as $permissionName) {
@@ -297,7 +300,7 @@ class RequesterService
         foreach ($unitIds as $bookingTypeId) {
             $requesterRoles = $requesterRolesByType[$bookingTypeId] ?? [RoleEnum::USER];
 
-            $holdsRequesterPermission = in_array(RoleEnum::USER, $requesterRoles, true) && in_array($bookingTypeId, $handledTypeIds, true);
+            $holdsRequesterPermission = in_array($bookingTypeId, $handledTypeIds, true);
 
             foreach ($requesterRoles as $role) {
                 if (in_array($role->toPermissionEnum()->keyForId($bookingTypeId), $permissionNames, true)) {
@@ -309,7 +312,7 @@ class RequesterService
             $plainRequester = in_array(RoleEnum::USER, $requesterRoles, true);
             $isTopicType = in_array($bookingTypeId, $topicTypeIds, true);
 
-            if ($holdsRequesterPermission || ($isTopicType && ($isSuperAdmin || ($hasManagementRole && $plainRequester)))) {
+            if ($holdsRequesterPermission || ($isTopicType && ($isSuperAdmin || ($hasSpecialRole && $plainRequester)))) {
                 $permitted[] = $bookingTypeId;
             }
         }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PermissionEnum;
 use App\Enums\RoleEnum;
+use App\Support\PermissionRules;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -156,6 +157,16 @@ class User extends Authenticatable
         return $marked;
     }
 
+    /**
+     * The person's permission names that are real grants (PermissionRules): "{role}_{type}" only where the type has the role. What decides what
+     * a person may open, see or press is read from here - a stray permission of a pair the type does not have never counts.
+     * @return array<int, string>
+     */
+    public function validPermissionNames(): array
+    {
+        return app(PermissionRules::class)->onlyValid($this->getAllPermissions()->pluck('name'));
+    }
+
     /** Permission names that drive Workflow checks; super admin holds none so it acts as admin for every type. Cached per instance. @return array<int, string> */
     public function workflowPermissionNames(): array
     {
@@ -163,7 +174,7 @@ class User extends Authenticatable
             return $this->workflowPermissionNames;
         }
 
-        $names = $this->getAllPermissions()->pluck('name')->all();
+        $names = $this->validPermissionNames();
 
         if ($this->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName())) {
             foreach (BookingType::query()->where('is_outsource', false)->pluck('id') as $bookingTypeId) {

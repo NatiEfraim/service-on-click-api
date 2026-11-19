@@ -302,22 +302,23 @@ class RoleAccessTest extends ManagementTestCase
         $topics = array_merge($this->infosecTypeIds(), $this->ictTypeIds());
         $only = fn (array $ids): array => array_values(array_intersect($unit, $ids));
 
+        $clearance = [$this->clearanceTypeId()];
+
         $expected = [
-            // A plain user: every type with a plain requester - not the clearance grant, which only the קב"ט opens.
+            // A plain user: every type with a plain requester - not the clearance grant, which only the קב"ט (and the infosec officer) open.
             self::PLAIN_USER => $only(array_merge($this->plainTypeIds(), $topics)),
-            // The domain handlers open the requests of the types they handle, and nothing else.
-            self::INFOSEC_OFFICER => $only($this->infosecTypeIds()),
-            self::ICT_HANDLER => $only($this->ictTypeIds()),
-            // The clearance route: the קב"ט submits, the coordinator only schedules.
-            self::SECURITY_OFFICER => $only([$this->clearanceTypeId()]),
-            self::INTERVIEW_COORDINATOR => [],
-            // The management roles open the topic types through the management shortcut.
+            // A person with a special role opens what every employee opens of the topic types (15-25), whatever else they hold ...
+            self::ICT_HANDLER => $only($topics),
+            self::INTERVIEW_COORDINATOR => $only($topics),
             self::ADMIN => $only($topics),
             self::APPROVER => $only($topics),
             self::VICE_APPROVER => $only($topics),
             self::CONTROL_OFFICER => $only($topics),
+            // ... plus the clearance grant for the two who own it: the infosec officer (the במ of the route) and its requester, the קב"ט.
+            self::INFOSEC_OFFICER => $only(array_merge($clearance, $topics)),
+            self::SECURITY_OFFICER => $only(array_merge($clearance, $topics)),
             // The super admin opens everything topic, the clearance grant included.
-            self::SUPER_ADMIN => $only(array_merge([$this->clearanceTypeId()], $topics)),
+            self::SUPER_ADMIN => $only(array_merge($clearance, $topics)),
         ];
 
         foreach ($expected as $personalNumber => $types) {
@@ -330,20 +331,52 @@ class RoleAccessTest extends ManagementTestCase
         $this->as(self::NO_ROLE)->getJson('/api/requester/catalog')->assertForbidden();
     }
 
-    public function test_the_domain_handler_opens_the_form_of_their_type_and_not_the_clearance_grant(): void
+    public function test_everybody_with_a_role_opens_the_topic_forms_and_only_the_owners_open_the_clearance_grant(): void
     {
-        $this->as(self::INFOSEC_OFFICER)->getJson('/api/requester/form/' . $this->infosecTypeIds()[0])->assertOk();
-        $this->as(self::INFOSEC_OFFICER)->getJson('/api/requester/form/' . $this->ictTypeIds()[0])->assertForbidden();
-        $this->as(self::INFOSEC_OFFICER)->getJson('/api/requester/form/' . $this->clearanceTypeId())->assertForbidden();
-        $this->as(self::ICT_HANDLER)->getJson('/api/requester/form/' . $this->ictTypeIds()[0])->assertOk();
-        $this->as(self::INTERVIEW_COORDINATOR)->getJson('/api/requester/form/' . $this->infosecTypeIds()[0])->assertForbidden();
+        $clearance = $this->clearanceTypeId();
 
-        // Submitting follows the same rule: an empty form is refused for what it lacks (422), not for who sends it (403) - and only for their own types.
-        $this->as(self::INFOSEC_OFFICER)->postJson('/api/bookings/' . $this->infosecTypeIds()[0], [])->assertUnprocessable();
-        $this->as(self::ICT_HANDLER)->postJson('/api/bookings/' . $this->ictTypeIds()[0], [])->assertUnprocessable();
-        $this->as(self::ICT_HANDLER)->postJson('/api/bookings/' . $this->infosecTypeIds()[0], [])->assertForbidden();
-        $this->as(self::INFOSEC_OFFICER)->postJson('/api/bookings/' . $this->clearanceTypeId(), [])->assertForbidden();
-        $this->as(self::INTERVIEW_COORDINATOR)->postJson('/api/bookings/' . $this->infosecTypeIds()[0], [])->assertForbidden();
+        // The topic types (15-25): the form of every person with a role, whichever domain they handle.
+        foreach ([self::INFOSEC_OFFICER, self::ICT_HANDLER, self::INTERVIEW_COORDINATOR, self::SECURITY_OFFICER, self::APPROVER] as $person) {
+            $this->as($person)->getJson('/api/requester/form/' . $this->infosecTypeIds()[0])->assertOk();
+            $this->as($person)->getJson('/api/requester/form/' . $this->ictTypeIds()[0])->assertOk();
+        }
+
+        // The clearance grant: its requester (the קב"ט) and its owner (the infosec officer, the במ), nobody else - the coordinator, the camp
+        // commander and the other management roles do not.
+        $this->as(self::INFOSEC_OFFICER)->getJson('/api/requester/form/' . $clearance)->assertOk();
+        $this->as(self::SECURITY_OFFICER)->getJson('/api/requester/form/' . $clearance)->assertOk();
+
+        foreach ([self::INTERVIEW_COORDINATOR, self::ICT_HANDLER, self::ADMIN, self::APPROVER, self::VICE_APPROVER, self::PLAIN_USER] as $person) {
+            $this->as($person)->getJson('/api/requester/form/' . $clearance)->assertForbidden();
+        }
+
+        // Submitting follows the same rule: an empty form is refused for what it lacks (422), not for who sends it (403).
+        foreach ([self::INFOSEC_OFFICER, self::ICT_HANDLER, self::INTERVIEW_COORDINATOR] as $person) {
+            $this->as($person)->postJson('/api/bookings/' . $this->infosecTypeIds()[0], [])->assertUnprocessable();
+            $this->as($person)->postJson('/api/bookings/' . $this->ictTypeIds()[0], [])->assertUnprocessable();
+        }
+
+        $this->as(self::INFOSEC_OFFICER)->postJson('/api/bookings/' . $clearance, [])->assertUnprocessable();
+        $this->as(self::INTERVIEW_COORDINATOR)->postJson('/api/bookings/' . $clearance, [])->assertForbidden();
+        $this->as(self::ICT_HANDLER)->postJson('/api/bookings/' . $clearance, [])->assertForbidden();
+
+        // The ordinary types stay with user_{id}: a special role does not open the cars.
+        $this->as(self::INFOSEC_OFFICER)->postJson('/api/bookings/1', [])->assertForbidden();
+        $this->as(self::ICT_HANDLER)->getJson('/api/requester/form/1')->assertForbidden();
+    }
+
+    public function test_the_infosec_officer_uses_the_person_lookup_of_the_clearance_grant_like_its_requester(): void
+    {
+        $clearance = $this->clearanceTypeId();
+        $lookup = fn (string $person) => $this->as($person)->getJson('/api/requester/person-lookup?booking_type_id=' . $clearance . '&personal_id=12345');
+
+        // Authorized (the ID number is too short, so the answer is the validation's 422, not the 403 of who asks).
+        $lookup(self::INFOSEC_OFFICER)->assertUnprocessable();
+        $lookup(self::SECURITY_OFFICER)->assertUnprocessable();
+
+        foreach ([self::INTERVIEW_COORDINATOR, self::ICT_HANDLER, self::PLAIN_USER, self::ADMIN] as $person) {
+            $lookup($person)->assertForbidden();
+        }
     }
 
     //----------------------------- What every role sees of the management side --//
@@ -491,14 +524,14 @@ class RoleAccessTest extends ManagementTestCase
         $this->assignRequester(self::SUPER_ADMIN, $person, [['booking_type_id' => $infosecTypeId, 'is_infosec_officer' => false, 'is_user' => false]])->assertOk();
         $this->assertNotContains('user_' . $infosecTypeId, $person->fresh()->getDirectPermissions()->pluck('name')->all());
 
-        // A type whose requester is not the plain user (the clearance grant) has no such flag, and one sent anyway changes nothing.
+        // A type whose requester is not the plain user (the clearance grant) has no such flag: it cannot be granted (422); taking it away is ignored.
         $rows = collect($this->as(self::SUPER_ADMIN)->getJson(self::ADMIN_BASE . '/get-approver-permissions/' . $person->uuid)->assertOk()->json('data.permissions'))->keyBy('booking_type_id');
         $this->assertArrayNotHasKey('is_user', $rows[$this->clearanceTypeId()]);
         $this->assertArrayHasKey('is_user', $rows[$infosecTypeId]);
 
-        $this->assignRequester(self::SUPER_ADMIN, $person, [[
-            'booking_type_id' => $this->clearanceTypeId(), 'is_infosec_officer' => false, 'is_department_security_officer' => false, 'is_interview_coordinator' => false, 'is_user' => true,
-        ]])->assertOk();
+        $clearanceRow = ['booking_type_id' => $this->clearanceTypeId(), 'is_infosec_officer' => false, 'is_department_security_officer' => false, 'is_interview_coordinator' => false];
+        $this->assignRequester(self::SUPER_ADMIN, $person, [[...$clearanceRow, 'is_user' => true]])->assertUnprocessable();
+        $this->assignRequester(self::SUPER_ADMIN, $person, [[...$clearanceRow, 'is_user' => false]])->assertOk();
         $this->assertNotContains('user_' . $this->clearanceTypeId(), $person->fresh()->getDirectPermissions()->pluck('name')->all());
 
         // Not a boolean: refused like any other flag.

@@ -53,7 +53,7 @@ class AuthService
 
         $roles = $user->roles()->orderBy('id')->pluck('name')->all();
 
-        $permissions = $user->getAllPermissions()->pluck('name')->all();
+        $permissions = $user->validPermissionNames();
 
         return response()->json(
             [
