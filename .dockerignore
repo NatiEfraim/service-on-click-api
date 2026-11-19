@@ -27,6 +27,7 @@ Dockerfile
 README.md
 AGENTS.md
 CLAUDE.md
+CLAUDE.local.md
 docs/
 tests/
 phpunit.xml
