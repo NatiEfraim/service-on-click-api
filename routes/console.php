@@ -14,8 +14,7 @@ Schedule::command(AdvanceWorkflowCommand::class)
     ->onOneServer()
     ->withoutOverlapping(10);
 
-// Digital hatch. Every command below does nothing while HATCH_ENABLED=false, and a queue worker must be running:
-// the r2b sends only queue a job, and the b2r import queues its chunk jobs.
+
 
 // r2b: the users file (people with their roles) goes to the FTP - every 15 minutes.
 Schedule::command(ExportUsersJsonFtpCommand::class)
@@ -29,7 +28,7 @@ Schedule::command(ExportBookingStatusJsonFtpCommand::class)
     ->everyThirtyMinutes()
     ->timezone(config('app.timezone'))
     ->onOneServer()
-    ->withoutOverlapping(30);
+    ->withoutOverlapping(15);
 
 // b2r: the booking json files are taken from the FTP into the bucket and imported - every 15 minutes.
 // A clean run chains, in this order: importBookingJson:ftp -> importFile:ftp -> importApplicationLogJson:ftp
