@@ -222,7 +222,7 @@ class ClearanceGrantFormTest extends ManagementTestCase
             ->json('data');
 
         $this->assertTrue($lookup['found']);
-        $this->assertSame(['personal_number' => '7777777', 'first_name' => 'משה אהרון', 'last_name' => 'כהן', 'rank' => null], $lookup['person']);
+        $this->assertSame(['personal_number' => '7777777', 'first_name' => 'משה אהרון', 'last_name' => 'כהן', 'rank' => null, 'phone' => null], $lookup['person']);
         $this->assertDatabaseHas('audit_log', ['action' => 'person.lookup', 'entity_id' => '300000777', 'booking_type_id' => self::TYPE]);
 
         $this->as(self::SECURITY_OFFICER)->getJson('/api/requester/person-lookup?booking_type_id=' . self::TYPE . '&personal_id=300000001')

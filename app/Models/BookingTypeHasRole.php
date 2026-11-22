@@ -29,12 +29,14 @@ class BookingTypeHasRole extends Model
         return $this->belongsTo(Role::class, 'role_id');
     }
 
-    /** Role enums used for approver management (excludes SUPER_ADMIN, ADMIN, USER). */
+    /** Role enums used for approver management (excludes SUPER_ADMIN, ADMIN, ADMIN_ICT, USER). */
     public static function approverManagementRoleEnums(): Collection
     {
         $excludedRoleIds = [
             RoleEnum::SUPER_ADMIN->value,
             RoleEnum::ADMIN->value,
+            // Granted by the super admin only (assign-admin-role), never from the approvers screen.
+            RoleEnum::ADMIN_ICT->value,
             RoleEnum::USER->value,
         ];
 

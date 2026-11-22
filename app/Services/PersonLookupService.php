@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Log;
  * Finds a person's details from an ID number (תעודת זהות) for forms whose field carries lookup_source = "person" (the clearance grant):
  * the users table first (the mobile import and the logins fill it), then Vatican by the personal number found there (Vatican is asked
  * by personal number only; it does not look people up by ID number), to split the name into first and last as it holds them.
- * The result keys match form_fields.autofill_key: personal_number, first_name, last_name, rank. Rank is not held by any source
- * today and is always null, so that field stays open for the requester.
+ * The result keys match form_fields.autofill_key: personal_number, first_name, last_name, rank, phone. Rank is not held by any
+ * source today and is always null, so that field stays open for the requester; phone comes from the users table and is offered
+ * but never locked (autofill_locked = false on its field).
  */
 class PersonLookupService
 {
@@ -22,7 +23,7 @@ class PersonLookupService
     }
 
     /**
-     * @return array{found: bool, available: bool, source: ?string, person: ?array{personal_number: ?string, first_name: ?string, last_name: ?string, rank: ?string}}
+     * @return array{found: bool, available: bool, source: ?string, person: ?array{personal_number: ?string, first_name: ?string, last_name: ?string, rank: ?string, phone: ?string}}
      *         available = false when the only source that could know the person could not be reached
      */
     public function byPersonalId(string $personalId): array
@@ -68,6 +69,8 @@ class PersonLookupService
                 'first_name' => $firstName,
                 'last_name' => $lastName,
                 'rank' => null,
+                // From the users table (the logins and the mobile import fill it): offered, never locked (autofill_locked = false).
+                'phone' => blank($local->phone) ? null : (string) $local->phone,
             ],
         ];
     }

@@ -41,6 +41,8 @@ class CatalogService
             'capabilities' => collect(self::CAPABILITIES)->mapWithKeys(fn (string $capability): array => [$capability => $scope->can($capability)])->all(),
             'is_super_admin' => $scope->isSuperAdmin(),
             'is_admin' => $scope->isAdmin(),
+            // The ICT service desk commander (admin_ict_N): the desk's dashboard, users and reports - on the ICT types only.
+            'is_ict_admin' => $scope->isIctAdmin(),
             'is_handler_only' => $scope->isHandlerOnly(),
             'managed_booking_types' => $scope->isSuperAdmin() ? $scope->allManageableBookingTypeIds() : $scope->managedBookingTypeIds(),
             'dashboard_booking_types' => $scope->dashboardBookingTypeIds(),

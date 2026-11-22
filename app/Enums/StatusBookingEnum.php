@@ -36,6 +36,8 @@ enum StatusBookingEnum: int
     case INTERVIEWED = 103;
     case AWAITING_CLEARANCE = 104;
     case CLEARANCE_GRANTED = 105;
+    // The ICT service desk route (types 20-25, web only - 110+ is kept for it): a representative has taken the request.
+    case IN_SERVICE_DESK = 111;
 
     /** Resolves the enum from `statuses.name`. */
     public static function fromStatusName(string $name): ?self
@@ -64,6 +66,7 @@ enum StatusBookingEnum: int
             'interviewed' => self::INTERVIEWED,
             'awaiting_clearance' => self::AWAITING_CLEARANCE,
             'clearance_granted' => self::CLEARANCE_GRANTED,
+            'in_service_desk' => self::IN_SERVICE_DESK,
             default => null,
         };
     }
@@ -95,6 +98,7 @@ enum StatusBookingEnum: int
             self::INTERVIEWED => 'interviewed',
             self::AWAITING_CLEARANCE => 'awaiting_clearance',
             self::CLEARANCE_GRANTED => 'clearance_granted',
+            self::IN_SERVICE_DESK => 'in_service_desk',
         };
     }
 
@@ -131,6 +135,7 @@ enum StatusBookingEnum: int
             self::INTERVIEWED => 21,
             self::AWAITING_CLEARANCE => 22,
             self::CLEARANCE_GRANTED => 23,
+            self::IN_SERVICE_DESK => 24,
         };
     }
 
@@ -212,6 +217,8 @@ enum StatusBookingEnum: int
             // A route request arrives at its first status by creation (store_booking, logged by the creator) or by a move back.
             self::INTERVIEW_ASSIGNMENT => ActionTypeEnum::RETURN_STAGE,
             self::INTERVIEW_SCHEDULED, self::INTERVIEWED, self::AWAITING_CLEARANCE, self::CLEARANCE_GRANTED => ActionTypeEnum::ADVANCE_STAGE,
+            // The ICT service desk route: a representative took the request (the closes reuse 5 / 7 above).
+            self::IN_SERVICE_DESK => ActionTypeEnum::ADVANCE_STAGE,
         };
     }
 
@@ -310,6 +317,7 @@ enum StatusBookingEnum: int
             self::INTERVIEWED => 'תוחקר',
             self::AWAITING_CLEARANCE => 'ממתין לקבלת הכשר',
             self::CLEARANCE_GRANTED => 'קיבל הכשר ביטחוני',
+            self::IN_SERVICE_DESK => 'בטיפול המוקד',
         };
     }
 
@@ -322,6 +330,7 @@ enum StatusBookingEnum: int
             self::INTERVIEWED => 'התחקיר בוצע',
             self::AWAITING_CLEARANCE => 'ממתין לקבלת הכשר ביטחוני',
             self::CLEARANCE_GRANTED => 'הסיווג הביטחוני נקלט והבקשה נסגרה',
+            self::IN_SERVICE_DESK => 'הקריאה בטיפול צוות המוקד',
             self::RECEIVED => 'התקבלה בהצלחה',
             self::PROCESSING,
             self::VICE_APPROVER_APPROVED,
@@ -379,6 +388,7 @@ enum StatusBookingEnum: int
             self::INTERVIEWED => 'התחקיר בוצע וממתין להעברה להכשר',
             self::AWAITING_CLEARANCE => 'הבקשה ממתינה לקבלת הכשר ביטחוני',
             self::CLEARANCE_GRANTED => 'הסיווג נקלט והבקשה נסגרה',
+            self::IN_SERVICE_DESK => 'נציג מוקד מטפל בקריאה',
             self::PROCESSING,
             self::VICE_APPROVER_APPROVED => 'הבקשה ממתינה לאישור סופי',
             self::VICE_APPROVER_REJECTED => 'בקשה ממתינה לביטול סופי',
@@ -440,6 +450,8 @@ enum StatusBookingEnum: int
             self::INTERVIEWED => 'שלב 3',
             self::AWAITING_CLEARANCE => 'שלב 4',
             self::CLEARANCE_GRANTED => 'שלב 5',
+            // The ICT service desk route: 1 (sent) is its first step, this its second; 5 closes it.
+            self::IN_SERVICE_DESK => 'שלב 2',
             default => null,
         };
     }

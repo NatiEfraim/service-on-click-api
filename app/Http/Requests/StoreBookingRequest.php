@@ -89,6 +89,19 @@ class StoreBookingRequest extends FormRequest
                 $value = $submitted[$fieldId] ?? null;
                 $isEmpty = $value === null || $value === '' || $value === [];
 
+                // A field that depends on another one (the printer IP on "מדפסת מחוברת") counts only while the condition holds:
+                // otherwise it is neither required nor checked.
+                if (is_array($field->depends_on) && isset($field->depends_on['field'])) {
+                    $parent = $rootFields->firstWhere('field_name', $field->depends_on['field']);
+                    $parentValue = $parent ? (string) ($submitted[(string) $parent->id] ?? '') : '';
+                    // A select sends the option's id; the condition names the option.
+                    $parentLabel = $parentValue !== '' ? (OptionField::query()->whereKey($parentValue)->value('name') ?? $parentValue) : '';
+
+                    if (!in_array($parentLabel, (array) ($field->depends_on['values'] ?? []), true)) {
+                        continue;
+                    }
+                }
+
                 if ($field->is_required && $isEmpty) {
                     $v->errors()->add("values.{$fieldId}", FieldValueValidator::requiredMessage($field));
                     continue;

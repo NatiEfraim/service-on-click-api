@@ -262,8 +262,8 @@ class RequesterService
      * The booking types the user may submit. The unit offers the type, and one of:
      *  1. the user holds "{requester role}_{id}" for one of the type's requester roles (user_{id} on every type but the ones with a requester
      *     role of their own: department_security_officer_14 on the clearance grant);
-     *  2. the user is the DOMAIN HANDLER of the type (infosec_officer_N, ict_handler_N): the infosec officer opens 14, 15 and 16, the ICT handler
-     *     20-25 - the clearance grant too, although its requester is the קב"ט;
+     *  2. the user is the DOMAIN HANDLER / COMMANDER of the type (infosec_officer_N, admin_ict_N): the infosec officer opens 14, 15 and 16,
+     *     the ICT commander 20-25 - the clearance grant too, although its requester is the קב"ט (the desk representative opens by rule 3);
      *  3. the type is an infosec / ICT topic type whose requester is the plain user (15, 16, 20-25) and the user holds ANY role besides the plain user's
      *     (admin, approver, vice approver, control officer, the domain handlers, the קב"ט, the interview coordinator): a person with a special role
      *     opens what every employee opens, whether or not they also hold user_{id};
@@ -290,7 +290,7 @@ class RequesterService
         foreach ($permissionNames as $permissionName) {
             $parsed = PermissionEnum::parsePermissionName($permissionName);
 
-            if ($parsed !== null && in_array($parsed['permission'], [PermissionEnum::INFOSEC_OFFICER, PermissionEnum::ICT_HANDLER], true)) {
+            if ($parsed !== null && in_array($parsed['permission'], [PermissionEnum::INFOSEC_OFFICER, PermissionEnum::ADMIN_ICT], true)) {
                 $handledTypeIds[] = $parsed['booking_type_id'];
             }
         }
@@ -429,7 +429,8 @@ class RequesterService
         foreach ($fields as $field) {
             $key = $field->autofill_key;
 
-            if ($key === null || !(bool) $field->is_active) {
+            // An editable autofill field (the mobile phone) keeps what the requester typed; only the locked ones are written again.
+            if ($key === null || !(bool) $field->is_active || !($field->autofill_locked ?? true)) {
                 continue;
             }
 
@@ -467,6 +468,11 @@ class RequesterService
                 continue;
             }
 
+            // A value sent for a field whose condition does not hold (the printer IP of a new printer) is not stored.
+            if (!$this->dependsOnHolds($field, $fields, $values)) {
+                continue;
+            }
+
             $optionFieldId = null;
             if ((int) $field->field_type_id === FieldTypeEnum::SELECT->value) {
                 $optionFieldId = $value !== null ? (int) $value : null;
@@ -485,6 +491,27 @@ class RequesterService
                 'value' => $value === null ? null : (is_scalar($value) ? (string) $value : $value),
             ]);
         }
+    }
+
+    /**
+     * Whether a field's depends_on condition holds: the field it names holds one of the named option values. A field
+     * without a condition always counts. The same rule as StoreBookingRequest's, so what is refused is also not stored.
+     * @param \Illuminate\Support\Collection<int, FormField> $fields keyed by id @param array<string, mixed> $values
+     */
+    private function dependsOnHolds(FormField $field, $fields, array $values): bool
+    {
+        $condition = $field->depends_on;
+
+        if (!is_array($condition) || !isset($condition['field'])) {
+            return true;
+        }
+
+        $parent = $fields->first(fn (FormField $candidate): bool => $candidate->field_name === $condition['field']);
+        $parentValue = $parent !== null ? (string) ($values[$parent->id] ?? $values[(string) $parent->id] ?? '') : '';
+        // A select sends the option's id; the condition names the option.
+        $parentLabel = $parentValue !== '' ? (OptionField::query()->whereKey($parentValue)->value('name') ?? $parentValue) : '';
+
+        return in_array($parentLabel, (array) ($condition['values'] ?? []), true);
     }
 
     /**

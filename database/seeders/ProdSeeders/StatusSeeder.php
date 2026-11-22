@@ -44,6 +44,8 @@ class StatusSeeder extends Seeder
             'interviewed' => 'תוחקר',
             'awaiting_clearance' => 'ממתין לקבלת הכשר',
             'clearance_granted' => 'קיבל הכשר ביטחוני',
+            // ICT service desk route (types 20-25), web only: see App\Domain\Workflow\Routes\IctServiceDeskRoute
+            'in_service_desk' => 'בטיפול המוקד',
         ];
 
         foreach ($statusTypes as $statusType => $statusTypeDisplayName) {

@@ -34,6 +34,11 @@ return [
         'token' => env('VATICAN_TOKEN'),
     ],
 
+    // The infosec guidelines the user-open declaration links to (טופס פתיחת משתמש).
+    'ict' => [
+        'infosec_guidelines_url' => env('ICT_INFOSEC_GUIDELINES_URL'),
+    ],
+
 
     'digital-hatch' => [
         'red_to_black_ftp_path' => env('RED_TO_BLACK_FTP_PATH', '/R2B/Tikshoret-R2B-Prod/'),

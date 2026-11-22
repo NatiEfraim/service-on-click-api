@@ -28,7 +28,7 @@ Route::controller(AuthController::class)->group(function () {
 
 Route::controller(BookingController::class)
     ->prefix('bookings')
-    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler|department_security_officer|interview_coordinator'])
+    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler|admin_ict|department_security_officer|interview_coordinator'])
     ->group(function () {
         Route::get('/my-bookings', 'myBookings');
         Route::get('/{bookingUuid}', 'show')->whereUuid('bookingUuid');
@@ -36,7 +36,7 @@ Route::controller(BookingController::class)
 
 // Requester portal (web submission): catalog, form, person lookup, counters, create booking.
 Route::controller(RequesterController::class)
-    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler|department_security_officer|interview_coordinator'])
+    ->middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|user|infosec_officer|ict_handler|admin_ict|department_security_officer|interview_coordinator'])
     ->group(function () {
         Route::prefix('requester')->group(function () {
             Route::get('/catalog', 'catalog');
@@ -64,7 +64,7 @@ Route::controller(BookingApproverManagementController::class)
     });
 
 
-Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|infosec_officer|ict_handler|interview_coordinator'])
+Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|vice_approver|transportation_control_officer|infosec_officer|ict_handler|admin_ict|interview_coordinator'])
     ->prefix('bookings-approver-management')
     ->group(function () {
         Route::controller(ManagementBookingController::class)->group(function () {
@@ -106,7 +106,8 @@ Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|approver|
         Route::get('/handlers', [BookingAdminManagementController::class, 'getHandlers']);
     });
 
-Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin'])
+// admin_ict: the ICT service desk commander appoints the desk's representatives (the services scope them to the ICT types).
+Route::middleware(['auth:api', 'throttle:api', 'role:super_admin|admin|admin_ict'])
     ->group(function () {
         Route::controller(UserController::class)
             ->prefix('users')

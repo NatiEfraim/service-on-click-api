@@ -31,6 +31,12 @@ class FormField extends Model
         'col_span',
         'lookup_source',
         'autofill_key',
+        // Help line under the field, a link beside its label, whether an autofilled value stays editable, and the
+        // other field (with its option names) this one is shown and required for ({"field": ..., "values": [...]}).
+        'hint',
+        'help_url',
+        'autofill_locked',
+        'depends_on',
     ];
 
     protected $hidden = [
@@ -48,6 +54,8 @@ class FormField extends Model
         'position' => 'integer',
         'is_active' => 'boolean',
         'col_span' => 'integer',
+        'autofill_locked' => 'boolean',
+        'depends_on' => 'array',
     ];
 
     /** field_name prefix of fields created in this system (seeded ones follow the mobile FormFieldEnum). */

@@ -190,18 +190,23 @@ class RoleAccessTest extends ManagementTestCase
         $this->assertSame([3, 4], array_column($row['actions'], 'status_id'));
     }
 
-    public function test_the_ict_handler_answers_and_closes_the_requests_of_their_types(): void
+    public function test_the_legacy_ict_handler_manages_nothing_and_the_desk_representative_works_the_queue(): void
     {
         $typeId = $this->ictTypeIds()[0];
         $booking = $this->booking($typeId);
         $url = self::BASE . '/bookings/' . $booking->uuid . '/status';
 
-        $row = $this->as(self::ICT_HANDLER)->getJson(self::BASE . '/bookings?mine=1&ids=' . $booking->serial_number)->assertOk()->json('data.0');
-        $this->assertSame([3, 4], array_column($row['actions'], 'status_id'));
+        // ICT runs on the service desk route now: the old single-handler role is linked to no type and sees nothing.
+        $this->as(self::ICT_HANDLER)->getJson(self::BASE . '/bookings/' . $booking->uuid)->assertNotFound();
+        $this->assertNotContains($booking->serial_number, collect($this->as(self::ICT_HANDLER)->getJson(self::BASE . '/bookings?per_page=100')->assertOk()->json('data'))->pluck('serial_number')->all());
 
-        $this->as(self::ICT_HANDLER)->postJson($url, ['status_id' => 3, 'version' => 1])->assertOk();
-        $this->as(self::ICT_HANDLER)->postJson($url, ['status_id' => 7, 'version' => 2])->assertUnprocessable('closing by cancellation needs a comment');
-        $this->as(self::ICT_HANDLER)->postJson($url, ['status_id' => 7, 'version' => 2, 'comment' => 'בוטל לבקשת המזמין'])->assertOk();
+        // The desk representative (the vice approver of the type) takes the request and closes it (the full flow: IctServiceDeskWorkflowTest).
+        $row = $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/bookings?ids=' . $booking->serial_number)->assertOk()->json('data.0');
+        $this->assertSame([111, 5, 7], array_column($row['actions'], 'status_id'));
+
+        $this->as(self::VICE_APPROVER)->postJson($url, ['status_id' => 111, 'version' => 1])->assertOk();
+        $this->as(self::VICE_APPROVER)->postJson($url, ['status_id' => 7, 'version' => 2])->assertUnprocessable('closing without doing the work needs a comment');
+        $this->as(self::VICE_APPROVER)->postJson($url, ['status_id' => 7, 'version' => 2, 'comment' => 'בוטל לבקשת המזמין'])->assertOk();
         $this->assertSame(7, (int) $booking->fresh()->status_id);
     }
 
@@ -213,17 +218,17 @@ class RoleAccessTest extends ManagementTestCase
 
         // Each sees the requests of their domain, in their unit, and no other: the other's request is not there to open.
         $infosecList = collect($this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/bookings?per_page=100')->assertOk()->json('data'))->pluck('serial_number');
-        $ictList = collect($this->as(self::ICT_HANDLER)->getJson(self::BASE . '/bookings?per_page=100')->assertOk()->json('data'))->pluck('serial_number');
+        $deskList = collect($this->as(self::VICE_APPROVER)->getJson(self::BASE . '/bookings?per_page=100')->assertOk()->json('data'))->pluck('serial_number');
 
         $this->assertTrue($infosecList->contains($infosec->serial_number));
         $this->assertFalse($infosecList->contains($ict->serial_number));
         $this->assertFalse($infosecList->contains($otherUnit->serial_number), 'the other unit\'s request');
-        $this->assertTrue($ictList->contains($ict->serial_number));
-        $this->assertFalse($ictList->contains($infosec->serial_number));
+        $this->assertTrue($deskList->contains($ict->serial_number), 'the desk representative holds the ICT queue');
+        $this->assertFalse($deskList->contains($infosec->serial_number), 'an infosec type has no vice approver');
 
-        $this->as(self::ICT_HANDLER)->getJson(self::BASE . '/bookings/' . $infosec->uuid)->assertNotFound();
+        $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/bookings/' . $infosec->uuid)->assertNotFound();
         $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/bookings/' . $ict->uuid)->assertNotFound();
-        $this->as(self::ICT_HANDLER)->postJson(self::BASE . '/bookings/' . $infosec->uuid . '/status', ['status_id' => 3, 'version' => 1])->assertNotFound();
+        $this->as(self::VICE_APPROVER)->postJson(self::BASE . '/bookings/' . $infosec->uuid . '/status', ['status_id' => 3, 'version' => 1])->assertNotFound();
     }
 
     public function test_the_super_admin_and_the_barber_and_the_other_roles_keep_the_buttons_they_had(): void
@@ -259,7 +264,6 @@ class RoleAccessTest extends ManagementTestCase
     public function test_the_officers_have_a_dashboard_and_a_queue_for_their_types_and_no_settings(): void
     {
         $infosecOpen = $this->openOf($this->infosecTypeIds()[0]);
-        $ictOpen = array_sum(array_map(fn (int $id): int => $this->openOf($id), $this->ictTypeIds()));
 
         $this->booking($this->infosecTypeIds()[0]);
         $this->booking($this->ictTypeIds()[0]);
@@ -270,25 +274,27 @@ class RoleAccessTest extends ManagementTestCase
         $this->assertTrue($infosec['capabilities']['dashboard.view']);
         $this->assertFalse($infosec['is_handler_only']);
 
+        // The legacy ict_handler role is linked to no type: ICT runs on the service desk route (IctServiceDeskWorkflowTest).
         $ict = $this->me(self::ICT_HANDLER);
-        $this->assertSame($this->ictTypeIds(), $ict['managed_booking_types']);
-        $this->assertSame($this->ictTypeIds(), $ict['dashboard_booking_types']);
-        $this->assertTrue($ict['capabilities']['dashboard.view']);
-        $this->assertFalse($ict['is_handler_only']);
-        $this->assertSame([], $ict['route_booking_types'], 'the ICT types have no route of their own');
+        $this->assertSame([], $ict['managed_booking_types']);
+        $this->assertSame([], $ict['dashboard_booking_types']);
+        $this->assertFalse($ict['capabilities']['dashboard.view']);
+        $this->assertSame([], $ict['route_booking_types']);
+
+        // The desk representative works the ICT queue but does not own the route; the dashboard of the desk is the commander's.
+        $representative = $this->me(self::VICE_APPROVER);
+        $this->assertSame($this->ictTypeIds(), array_values(array_intersect($representative['route_booking_types'], $this->ictTypeIds())));
+        $this->assertSame([], $representative['route_owner_booking_types']);
 
         // The dashboard of their own types; not another domain's.
         $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/domain-dashboard?types=' . $this->infosecTypeIds()[0])->assertOk()
             ->assertJsonPath('data.totals.open', $infosecOpen + 1);
-        $this->as(self::ICT_HANDLER)->getJson(self::BASE . '/domain-dashboard?types=' . $this->ictTypeIds()[0])->assertOk();
+        $this->as(self::ICT_HANDLER)->getJson(self::BASE . '/domain-dashboard?types=' . $this->ictTypeIds()[0])->assertForbidden();
         $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/domain-dashboard?types=' . $this->ictTypeIds()[0])->assertForbidden();
 
-        // The figures the top bar reads count what waits for them: every open request of their types (the officer holds the only turn there is).
-        $this->assertSame($ictOpen + 1, $this->as(self::ICT_HANDLER)->getJson(self::BASE . '/overview')->assertOk()->json('data.awaiting_me.count'));
-
-        // No settings: the settings of a type are the commanders'.
+        // No settings: the settings of a type are the commanders' (the desk's: admin_ict, see IctServiceDeskWorkflowTest).
         $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/settings/1/' . $this->infosecTypeIds()[0])->assertForbidden();
-        $this->as(self::ICT_HANDLER)->getJson(self::BASE . '/settings/1/' . $this->ictTypeIds()[0])->assertForbidden();
+        $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/settings/1/' . $this->ictTypeIds()[0])->assertForbidden();
     }
 
     //----------------------------- What each role opens (gap 3) --------------//
@@ -395,9 +401,10 @@ class RoleAccessTest extends ManagementTestCase
         $this->assertSame($plain, $approver['dashboard_booking_types']);
         $this->assertFalse($approver['is_handler_only']);
 
-        // The vice approver handles one stage of every type that has the role (the barber has none) - a queue, no dashboard of their own commander.
+        // The vice approver handles one stage of every type that has the role (the barber has none) - the ICT types too, where
+        // they are the desk's representative - a queue, no dashboard of their own commander.
         $vice = $this->me(self::VICE_APPROVER);
-        $this->assertSame($withoutBarber, $vice['managed_booking_types']);
+        $this->assertSame(array_values(array_merge($withoutBarber, $this->ictTypeIds())), $vice['managed_booking_types']);
         $this->assertTrue($vice['is_handler_only']);
 
         // The control officer handles the transportation type only.

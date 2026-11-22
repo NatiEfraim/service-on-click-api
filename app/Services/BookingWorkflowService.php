@@ -87,6 +87,16 @@ class BookingWorkflowService
             $valueChanges = null;
 
             if ($route !== null && $transition !== null) {
+                // "Take it": the one who presses becomes the handler when nobody is; "back to the queue": nobody is. Written in the
+                // same update as the status, so one version bump covers both.
+                $assignmentChange = [];
+
+                if ($transition->assignsActor && $booking->handler_user_id === null) {
+                    $assignmentChange = ['handler_user_id' => $user->id, 'handler_assigned_at' => now()];
+                } elseif ($transition->releasesHandler && $booking->handler_user_id !== null) {
+                    $assignmentChange = ['handler_user_id' => null, 'handler_assigned_at' => null];
+                }
+
                 $handlerFields = $this->handlerFields($booking);
                 $written = $this->writeHandlerValues($booking, $handlerFields, $values);
                 $cleared = $this->clearHandlerValues($booking, $handlerFields, $transition->clearsFields);
@@ -99,7 +109,7 @@ class BookingWorkflowService
                     'internal',
                     null,
                     $this->actionTypeFor($transition),
-                    ['stage_due_at' => $dueAt],
+                    ['stage_due_at' => $dueAt] + $assignmentChange,
                 );
 
                 if ($written !== [] || $cleared !== []) {
@@ -223,7 +233,7 @@ class BookingWorkflowService
      */
     private function assertRouteMove(TypeRoute $route, Booking $booking, Transition $transition, array $values): void
     {
-        if ($transition->requiresHandler && $booking->handler_user_id === null) {
+        if ($transition->requiresHandler && !$transition->assignsActor && $booking->handler_user_id === null) {
             throw new DomainError('יש להקצות מטפל לפני קביעת מועד התחקיר', 422);
         }
 

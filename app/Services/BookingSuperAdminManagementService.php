@@ -70,27 +70,38 @@ class BookingSuperAdminManagementService
 
             $permissionsBefore = $this->permissionNamesOf($user);
 
+            // Each type answers one commander flag: is_admin (camp commander) or is_admin_ict (ICT service desk commander).
+            $commanderFlags = ['is_admin' => RoleEnum::ADMIN, 'is_admin_ict' => RoleEnum::ADMIN_ICT];
+
             foreach ($validated['role_assignments'] as $assignment) {
-                $bookingTypeId = $assignment['booking_type_id'];
-                $isAdmin = $assignment['is_admin'];
+                $bookingTypeId = (int) $assignment['booking_type_id'];
 
-                $adminRole = Role::where('id', RoleEnum::ADMIN->value)->first();
-                $permission = Permission::where('name', PermissionEnum::ADMIN->value . $bookingTypeId)->first();
+                foreach ($commanderFlags as $flagKey => $roleEnum) {
+                    if (!array_key_exists($flagKey, $assignment)) {
+                        continue;
+                    }
 
-                // Backstop of the request's rule: never grant the admin role of a type that does not have it.
-                if (!$adminRole || !$permission || ($isAdmin && !app(PermissionRules::class)->hasLink(RoleEnum::ADMIN->value, (int) $bookingTypeId))) {
-                    DB::rollBack();
-                    return HttpStatusCodeEnum::UNPROCESSABLE_ENTITY;
-                }
+                    $isGranted = (bool) $assignment[$flagKey];
+                    $role = Role::where('id', $roleEnum->value)->first();
+                    $permission = Permission::where('name', $roleEnum->toPermissionEnum()->keyForId($bookingTypeId))->first();
 
-                if ($isAdmin) {
-                    $user->assignRole($adminRole);
-                    $user->givePermissionTo($permission);
-                } else {
-                    $user->revokePermissionTo($permission);
+                    // Backstop of the request's rule: never grant a commander role on a type that does not have it.
+                    if (!$role || ($isGranted && (!$permission || !app(PermissionRules::class)->hasLink($roleEnum->value, $bookingTypeId)))) {
+                        DB::rollBack();
+                        return HttpStatusCodeEnum::UNPROCESSABLE_ENTITY;
+                    }
+
+                    if ($isGranted) {
+                        $user->assignRole($role);
+                        $user->givePermissionTo($permission);
+                    } elseif ($permission) {
+                        $user->revokePermissionTo($permission);
+                    }
                 }
             }
+
             $this->cleanupRolePermissions(user: $user, rolePrefix: PermissionEnum::ADMIN->trimSuffix());
+            $this->cleanupRolePermissions(user: $user, rolePrefix: PermissionEnum::ADMIN_ICT->trimSuffix());
             $this->auditPermissionChange($user, $permissionsBefore, $validated['reason'] ?? null);
             DB::commit();
             return $this->getAdminsWithPermission(identifier: $user->personal_number);
@@ -110,7 +121,7 @@ class BookingSuperAdminManagementService
     {
         try {
 
-            $query = User::role(RoleEnum::ADMIN->value)
+            $query = User::role([RoleEnum::ADMIN->value, RoleEnum::ADMIN_ICT->value])
                 ->manageableBy(Auth::user())
                 ->select('uuid', 'full_name', 'personal_number');
 
@@ -173,7 +184,14 @@ class BookingSuperAdminManagementService
                 ->map(fn($id) => (int) $id)
                 ->all();
 
-            $result = $bookingTypes->map(function ($bookingType) use ($userPermissions, $typesWithAdmin): array {
+            // Ids of types with an ICT service desk commander (the ICT route's owner): the ICT types only.
+            $typesWithIctAdmin = BookingTypeHasRole::query()
+                ->where('role_id', RoleEnum::ADMIN_ICT->value)
+                ->pluck('booking_type_id')
+                ->map(fn($id) => (int) $id)
+                ->all();
+
+            $result = $bookingTypes->map(function ($bookingType) use ($userPermissions, $typesWithAdmin, $typesWithIctAdmin): array {
                 $bookingTypeId = (int) $bookingType['id'];
                 $hasAdmin = in_array($bookingTypeId, $typesWithAdmin, true);
 
@@ -187,12 +205,17 @@ class BookingSuperAdminManagementService
                     'is_admin' => $hasAdmin
                         ? $userPermissions->contains(PermissionEnum::ADMIN->value . $bookingTypeId)
                         : null,
+                    // null = the type has no ICT commander (every camp type) → the screen shows —
+                    'is_admin_ict' => in_array($bookingTypeId, $typesWithIctAdmin, true)
+                        ? $userPermissions->contains(PermissionEnum::ADMIN_ICT->value . $bookingTypeId)
+                        : null,
                 ];
             });
 
             return [
                 'role_options' => [
                     'admin' => RoleEnum::ADMIN->value,
+                    'admin_ict' => RoleEnum::ADMIN_ICT->value,
                 ],
                 'user' => [
                     'full_name' => $user->full_name,
@@ -1192,9 +1215,11 @@ class BookingSuperAdminManagementService
 
         if ($role) {
 
+            // Parsed, not a prefix match: "admin_" must not count "admin_ict_20" (nor "approver_" count "vice_approver_3").
             $hasPermissions = $user->permissions->contains(function ($permission) use ($rolePrefix) {
+                $parsed = PermissionEnum::parsePermissionName($permission->name);
 
-                return str_starts_with($permission->name, $rolePrefix . '_');
+                return $parsed !== null && $parsed['permission']->trimSuffix() === $rolePrefix;
             });
 
             if (!$hasPermissions) {
@@ -1344,7 +1369,7 @@ class BookingSuperAdminManagementService
         try {
 
             $users = User::whereHas('roles', function ($query) {
-                $query->whereIn('id', [RoleEnum::ADMIN->value]);
+                $query->whereIn('id', [RoleEnum::ADMIN->value, RoleEnum::ADMIN_ICT->value]);
             })
                 ->when($identifier, function ($query, $identifier) {
                     $query->where(function ($q) use ($identifier) {

@@ -49,14 +49,15 @@ class DatabaseStructureTest extends ManagementTestCase
         $expected[14] = ['department_security_officer_', 'infosec_officer_', 'interview_coordinator_'];
         $expected[15] = $expected[16] = ['user_', 'infosec_officer_'];
 
+        // The ICT service desk route: the plain user submits, the representative (vice approver) works the queue, the commander owns it.
         foreach ([20, 21, 22, 23, 24, 25] as $id) {
-            $expected[$id] = ['user_', 'ict_handler_'];
+            $expected[$id] = ['user_', 'vice_approver_', 'admin_ict_'];
         }
 
         return $expected;
     }
 
-    public function test_the_ten_roles_are_seeded_with_the_ids_of_the_role_enum(): void
+    public function test_the_roles_are_seeded_with_the_ids_of_the_role_enum(): void
     {
         $roles = DB::table('roles')->orderBy('id')->pluck('name', 'id')->all();
 
@@ -71,6 +72,7 @@ class DatabaseStructureTest extends ManagementTestCase
             RoleEnum::ICT_HANDLER->value => 'ict_handler',
             RoleEnum::DEPARTMENT_SECURITY_OFFICER->value => 'department_security_officer',
             RoleEnum::INTERVIEW_COORDINATOR->value => 'interview_coordinator',
+            RoleEnum::ADMIN_ICT->value => 'admin_ict',
         ], $roles);
 
         $this->assertSame(['passport'], DB::table('roles')->distinct()->pluck('guard_name')->all());
@@ -99,7 +101,8 @@ class DatabaseStructureTest extends ManagementTestCase
         $this->assertNotContains('vice_approver_5', $permissions, 'no vice approver on the barber type');
         $this->assertNotContains('user_14', $permissions, 'the clearance grant is submitted by its own role, not the plain user');
         $this->assertNotContains('admin_14', $permissions, 'nothing of the approver chain on a route type');
-        $this->assertSame(55, $count);
+        $this->assertNotContains('ict_handler_20', $permissions, 'the old single-handler role of the ICT types is gone');
+        $this->assertSame(61, $count);
         $this->assertCount($count, $permissions);
     }
 
@@ -155,17 +158,18 @@ class DatabaseStructureTest extends ManagementTestCase
             DB::table('booking_type_has_roles')->where('booking_type_id', 14)->orderBy('role_id')->pluck('role_id')->map(fn ($id): int => (int) $id)->all()
         );
         $this->assertSame(5, DB::table('booking_type_has_roles')->where('booking_type_id', 8)->count(), 'the other types keep their roles');
-        $this->assertSame(55, DB::table('booking_type_has_roles')->count());
+        $this->assertSame(61, DB::table('booking_type_has_roles')->count());
     }
 
     public function test_each_booking_type_can_reach_its_own_statuses(): void
     {
-        // 18 shared with the mobile app, 5 of the clearance grant route (101-105).
-        $this->assertSame(23, DB::table('statuses')->count());
-        $this->assertSame([101, 102, 103, 104, 105], DB::table('statuses')->where('id', '>=', 100)->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all());
+        // 18 shared with the mobile app, 5 of the clearance grant route (101-105), 1 of the ICT service desk route (111).
+        $this->assertSame(24, DB::table('statuses')->count());
+        $this->assertSame([101, 102, 103, 104, 105, 111], DB::table('statuses')->where('id', '>=', 100)->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all());
         $this->assertSame(17, DB::table('action_types')->count());
 
-        $expectedCounts = [1 => 8, 2 => 8, 3 => 8, 4 => 8, 5 => 5, 8 => 13, 10 => 8, 11 => 8, 13 => 8, 14 => 6, 15 => 8, 20 => 8, 25 => 8];
+        // An ICT type reaches the service desk route's five statuses (1, 111, 5, 7, 6).
+        $expectedCounts = [1 => 8, 2 => 8, 3 => 8, 4 => 8, 5 => 5, 8 => 13, 10 => 8, 11 => 8, 13 => 8, 14 => 6, 15 => 8, 20 => 5, 25 => 5];
 
         foreach ($expectedCounts as $bookingTypeId => $count) {
             $this->assertSame(

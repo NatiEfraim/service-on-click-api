@@ -130,7 +130,8 @@ class PermissionRulesTest extends ManagementTestCase
 
         // The infosec officer on the cars; the control officer on the cars; the vice approver on the barber type; the approver on an infosec type.
         $this->assign(self::SUPER_ADMIN, $person, [[...$cars, 'is_infosec_officer' => true]])->assertUnprocessable();
-        $this->assign(self::SUPER_ADMIN, $person, [[...$cars, 'is_ict_handler' => true]])->assertUnprocessable();
+        // ict_handler is a role no type has any more (ICT runs on the service desk route): its flag is unknown to the screen and ignored.
+        $this->assign(self::SUPER_ADMIN, $person, [[...$cars, 'is_ict_handler' => true]])->assertOk();
         $this->assign(self::SUPER_ADMIN, $person, [[...$cars, 'is_transportation_control_officer' => true]])->assertUnprocessable();
         $this->assign(self::SUPER_ADMIN, $person, [['booking_type_id' => $infosec, 'is_infosec_officer' => false, 'is_approver' => true]])->assertUnprocessable();
 
