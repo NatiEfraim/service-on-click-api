@@ -2,24 +2,9 @@
 
 use App\Console\Commands\AdvanceWorkflowCommand;
 use App\Console\Commands\ExportBookingStatusJsonFtpCommand;
-use App\Console\Commands\ExportSysRefJsonFtpCommand;
 use App\Console\Commands\ExportUsersJsonFtpCommand;
-use App\Console\Commands\ExportBookingStatusJsonBucketCommand;
-use App\Console\Commands\ImportApplicationLogJsonBucketCommand;
-use App\Console\Commands\ImportApplicationLogJsonFtpCommand;
-use App\Console\Commands\ImportBookingJsonBucketCommand;
 use App\Console\Commands\ImportBookingJsonFtpCommand;
-use App\Console\Commands\ImportFileBucketCommand;
-use App\Console\Commands\ImportFileFtpCommand;
-use App\Console\Commands\VerifyAuditLogCommand;
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
-
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
 
 // Route types (the clearance grant): a request whose interview moment has passed moves on, and - when CLEARANCE_AUTO_CLOSE is on - a request
 // the clearance registry confirms is closed. Runs in the process itself (no queue worker needed).
@@ -29,51 +14,28 @@ Schedule::command(AdvanceWorkflowCommand::class)
     ->onOneServer()
     ->withoutOverlapping(10);
 
+// Digital hatch. Every command below does nothing while HATCH_ENABLED=false, and a queue worker must be running:
+// the r2b sends only queue a job, and the b2r import queues its chunk jobs.
 
-// These commands only queue jobs, so a queue worker must be running.
+// r2b: the users file (people with their roles) goes to the FTP - every 15 minutes.
+Schedule::command(ExportUsersJsonFtpCommand::class)
+    ->everyFifteenMinutes()
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping(15);
 
-// r2b: today's users file (people with their roles) goes to the FTP — every 20 minutes.
-// Schedule::command(ExportUsersJsonFtpCommand::class)
-//     ->everyFiveMinutes()
-//     ->timezone(config('app.timezone'))
-//     ->onOneServer()
-//     ->withoutOverlapping(10);
+// r2b: the booking status file goes to the FTP - every 30 minutes.
+Schedule::command(ExportBookingStatusJsonFtpCommand::class)
+    ->everyThirtyMinutes()
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping(30);
 
-// r2b: today's system references file (settings with their values) goes to the FTP.
-// Schedule::command(ExportSysRefJsonFtpCommand::class)
-//     ->everyFiveMinutes()
-//     ->timezone(config('app.timezone'))
-//     ->onOneServer()
-//     ->withoutOverlapping(10);
-
-// r2b: the booking status file goes to the FTP — every 30 minutes.
-// Schedule::command(ExportBookingStatusJsonFtpCommand::class)
-//     ->everyThirtyMinutes()
-//     ->timezone(config('app.timezone'))
-//        ->onOneServer()
-//     ->withoutOverlapping(10);
-
-// b2r: new booking files are taken from the FTP into the bucket and saved — every 30 seconds.
-// withoutOverlapping(1): cron syntax is minute-level; 1 minute is the shortest usable lock.
-// Schedule::command(ImportBookingJsonFtpCommand::class)
-//     ->everyThirtySeconds()
-//     ->timezone(config('app.timezone'))
-//        ->onOneServer()
-//     ->withoutOverlapping(1);
-
-// b2r: application logs, after the bookings because a log belongs to a booking — every 30 seconds.
-// Schedule::command(ImportApplicationLogJsonFtpCommand::class)
-//     ->everyThirtySeconds()
-//     ->timezone(config('app.timezone'))
-//        ->onOneServer()
-//     ->withoutOverlapping(1);
-
-// b2r: the files and images the bookings name are taken into the bucket and linked — every 30 seconds.
-// Schedule::command(ImportFileFtpCommand::class)
-//     ->everyThirtySeconds()
-//     ->timezone(config('app.timezone'))
-//     ->onOneServer()
-//     ->withoutOverlapping(1);
-
-
-
+// b2r: the booking json files are taken from the FTP into the bucket and imported - every 15 minutes.
+// A clean run chains, in this order: importBookingJson:ftp -> importFile:ftp -> importApplicationLogJson:ftp
+// (ImportBookingJsonFtpCommand::followUpCommands), so the files and the logs are not scheduled on their own.
+Schedule::command(ImportBookingJsonFtpCommand::class)
+    ->everyFifteenMinutes()
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping(15);
