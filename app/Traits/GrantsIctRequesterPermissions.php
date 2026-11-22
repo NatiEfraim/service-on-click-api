@@ -16,7 +16,7 @@ use Spatie\Permission\Models\Permission;
 trait GrantsIctRequesterPermissions
 {
     /**
-     * Ensures the user holds user_{typeId} for all 9 ICT booking types.
+     * Ensures the user holds user_{typeId} for all ICT booking types.
      * Permissions that already exist on the user are left alone; nothing is removed.
      * No markRolesChanged() call is needed: ICT types are web-only and never reach the mobile app.
      */

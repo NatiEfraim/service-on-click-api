@@ -42,13 +42,7 @@ enum BookingTypeIconEnum: string
     case REMOVABLE_MEDIA_BOOKING = '32';
     case SECURITY_INCIDENT_BOOKING = '33';
 
-    // תקשוב (ICT)
-    case ICT_GROUP = '34';
-    case FOLDER_PERMISSION_BOOKING = '35';
-    case MANTA_PERMISSION_BOOKING = '36';
-    case NETWORK_FOLDER_BOOKING = '37';
-
-    // תקשוב: installations, faults, user management (groups, then types)
+    // תקשוב (ICT): installations, faults, user management (groups, then types)
     case ICT_INSTALL_GROUP = '38';
     case ICT_FAULT_GROUP = '39';
     case ICT_USERS_GROUP = '40';

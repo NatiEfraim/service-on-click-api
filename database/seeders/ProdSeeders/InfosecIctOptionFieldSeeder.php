@@ -27,8 +27,6 @@ class InfosecIctOptionFieldSeeder extends Seeder
 
             $this->seedClearanceGrantOptions();
             $this->seedRemovableMediaOptions();
-            $this->seedFolderPermissionOptions();
-            $this->seedMantaPermissionOptions();
 
             DB::commit();
         } catch (\Exception $e) {
@@ -78,34 +76,6 @@ class InfosecIctOptionFieldSeeder extends Seeder
             'כונן חיצוני',
             'דיסק',
             'כרטיס זיכרון',
-        ]);
-    }
-
-    private function seedFolderPermissionOptions(): void
-    {
-        $bookingTypeId = BookingTypeEnum::FOLDER_PERMISSION_BOOKING->getBookingTypeId();
-        if (!$bookingTypeId) {
-            return;
-        }
-
-        $this->seedOptions($bookingTypeId, 'access', [
-            'קריאה',
-            'קריאה וכתיבה',
-            'שליטה מלאה',
-        ]);
-    }
-
-    private function seedMantaPermissionOptions(): void
-    {
-        $bookingTypeId = BookingTypeEnum::MANTA_PERMISSION_BOOKING->getBookingTypeId();
-        if (!$bookingTypeId) {
-            return;
-        }
-
-        $this->seedOptions($bookingTypeId, 'profile', [
-            'צפייה',
-            'עריכה',
-            'מנהל',
         ]);
     }
 

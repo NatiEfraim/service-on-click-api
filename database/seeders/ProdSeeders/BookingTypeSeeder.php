@@ -196,50 +196,7 @@ class BookingTypeSeeder extends Seeder
                 ],
             ],
 
-            // תקשוב – one sub-group under topic='ict'
-            [
-                'group_booking_types' => [
-                    0 => [
-                        'id' => 7,
-                        'name' => 'ict_permissions',
-                        'display_name' => 'הרשאות',
-                        'icon' => BookingTypeIconEnum::ICT_GROUP->value,
-                        'position' => '32',
-                        'topic' => 'ict',
-                    ],
-                ],
-                'booking_types' => [
-                    0 => [
-                        'id' => 17,
-                        'name' => 'folder_permission',
-                        'display_name' => 'הרשאות לתיקייה',
-                        'description' => 'הוספה או שינוי של הרשאות לתיקייה קיימת',
-                        'icon' => BookingTypeIconEnum::FOLDER_PERMISSION_BOOKING->value,
-                        'position' => BookingTypePositionEnum::FOLDER_PERMISSION_BOOKING->value,
-                        'has_group' => true,
-                    ],
-                    1 => [
-                        'id' => 18,
-                        'name' => 'manta_permission',
-                        'display_name' => 'הרשאות למנת"ה',
-                        'description' => 'בקשת הרשאה למערכת מנת"ה',
-                        'icon' => BookingTypeIconEnum::MANTA_PERMISSION_BOOKING->value,
-                        'position' => BookingTypePositionEnum::MANTA_PERMISSION_BOOKING->value,
-                        'has_group' => true,
-                    ],
-                    2 => [
-                        'id' => 19,
-                        'name' => 'network_folder',
-                        'display_name' => 'יצירת תיקיית רשת',
-                        'description' => 'פתיחת תיקייה משותפת חדשה ברשת',
-                        'icon' => BookingTypeIconEnum::NETWORK_FOLDER_BOOKING->value,
-                        'position' => BookingTypePositionEnum::NETWORK_FOLDER_BOOKING->value,
-                        'has_group' => true,
-                    ],
-                ],
-            ],
-
-            // תקשוב – installations (beside types 17-19, which stay until the product owner decides)
+            // תקשוב – installations (the permissions group that held types 17-19 was removed by the product owner's decision; ids 17-19 stay unused)
             [
                 'group_booking_types' => [
                     0 => [

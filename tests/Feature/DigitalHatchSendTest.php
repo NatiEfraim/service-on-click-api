@@ -61,7 +61,7 @@ class DigitalHatchSendTest extends HatchTestCase
 
         $this->assertSame(['000000001', '123456789', '223456789', '323456789'], array_column($payload, 'personal_id'), 'ordered by ID number');
 
-        // The mobile app knows the booking types 1-13 only: the web-only types (infosec 14-16, ICT 17-25) never travel, whoever holds them.
+        // The mobile app knows the booking types 1-13 only: the web-only types (infosec 14-16, ICT 20-25) never travel, whoever holds them.
         $mobileIds = array_values(array_diff($ids, BookingTypeEnum::webOnlyIds()));
         $this->assertSame([1, 2, 3, 4, 5, 8, 10, 11, 13], $mobileIds, 'the shared types are the nine below 14');
 

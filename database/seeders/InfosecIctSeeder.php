@@ -15,7 +15,7 @@ use Database\Seeders\ProdSeeders\UnitHasBookingTypeSeeder;
 use Illuminate\Database\Seeder;
 
 /**
- * Seeds the ביטחון מידע and תקשוב booking types end-to-end (types 14-25, their roles, statuses, fields and options).
+ * Seeds the ביטחון מידע and תקשוב booking types end-to-end (types 14-16 and 20-25, their roles, statuses, fields and options).
  * Run after a fresh migration with: php artisan db:seed --class=InfosecIctSeeder --force
  * Also safe to run on top of an existing ProdSeeder database.
  */
@@ -33,7 +33,7 @@ class InfosecIctSeeder extends Seeder
             ActionTypeSeeder::class,
             // 4. Assign the statuses to the types (the common ones, or a route's own).
             BookingTypeHasStatusSeeder::class,
-            // 5. Seed form fields: types 14-19, then 20-25.
+            // 5. Seed form fields: types 14-16, then 20-25.
             InfosecIctFormFieldSeeder::class,
             IctFormFieldSeeder::class,
             // 6. Seed dropdown options.

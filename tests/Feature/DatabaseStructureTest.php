@@ -25,9 +25,6 @@ class DatabaseStructureTest extends ManagementTestCase
         14 => 'clearance_grant',
         15 => 'removable_media',
         16 => 'security_incident',
-        17 => 'folder_permission',
-        18 => 'manta_permission',
-        19 => 'network_folder',
         20 => 'software_install',
         21 => 'printer_install',
         22 => 'email_fault',
@@ -52,7 +49,7 @@ class DatabaseStructureTest extends ManagementTestCase
         $expected[14] = ['department_security_officer_', 'infosec_officer_', 'interview_coordinator_'];
         $expected[15] = $expected[16] = ['user_', 'infosec_officer_'];
 
-        foreach ([17, 18, 19, 20, 21, 22, 23, 24, 25] as $id) {
+        foreach ([20, 21, 22, 23, 24, 25] as $id) {
             $expected[$id] = ['user_', 'ict_handler_'];
         }
 
@@ -102,7 +99,7 @@ class DatabaseStructureTest extends ManagementTestCase
         $this->assertNotContains('vice_approver_5', $permissions, 'no vice approver on the barber type');
         $this->assertNotContains('user_14', $permissions, 'the clearance grant is submitted by its own role, not the plain user');
         $this->assertNotContains('admin_14', $permissions, 'nothing of the approver chain on a route type');
-        $this->assertSame(61, $count);
+        $this->assertSame(55, $count);
         $this->assertCount($count, $permissions);
     }
 
@@ -158,7 +155,7 @@ class DatabaseStructureTest extends ManagementTestCase
             DB::table('booking_type_has_roles')->where('booking_type_id', 14)->orderBy('role_id')->pluck('role_id')->map(fn ($id): int => (int) $id)->all()
         );
         $this->assertSame(5, DB::table('booking_type_has_roles')->where('booking_type_id', 8)->count(), 'the other types keep their roles');
-        $this->assertSame(61, DB::table('booking_type_has_roles')->count());
+        $this->assertSame(55, DB::table('booking_type_has_roles')->count());
     }
 
     public function test_each_booking_type_can_reach_its_own_statuses(): void

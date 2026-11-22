@@ -56,9 +56,6 @@ class RoleAccessTest extends ManagementTestCase
     private function ictTypeIds(): array
     {
         return array_map(fn (BookingTypeEnum $type): int => $type->getBookingTypeId(), [
-            BookingTypeEnum::FOLDER_PERMISSION_BOOKING,
-            BookingTypeEnum::MANTA_PERMISSION_BOOKING,
-            BookingTypeEnum::NETWORK_FOLDER_BOOKING,
             BookingTypeEnum::SOFTWARE_INSTALL_BOOKING,
             BookingTypeEnum::PRINTER_INSTALL_BOOKING,
             BookingTypeEnum::EMAIL_FAULT_BOOKING,

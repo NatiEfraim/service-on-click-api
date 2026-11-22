@@ -42,11 +42,7 @@ enum BookingTypeEnum
     case REMOVABLE_MEDIA_BOOKING;
     case SECURITY_INCIDENT_BOOKING;
 
-    // תקשוב (ICT)
-    case FOLDER_PERMISSION_BOOKING;
-    case MANTA_PERMISSION_BOOKING;
-    case NETWORK_FOLDER_BOOKING;
-    // תקשוב: installations, faults, user management
+    // תקשוב (ICT): installations, faults, user management
     case SOFTWARE_INSTALL_BOOKING;
     case PRINTER_INSTALL_BOOKING;
     case EMAIL_FAULT_BOOKING;
@@ -148,9 +144,6 @@ enum BookingTypeEnum
             self::CLEARANCE_GRANT_BOOKING => 'clearance_grant',
             self::REMOVABLE_MEDIA_BOOKING => 'removable_media',
             self::SECURITY_INCIDENT_BOOKING => 'security_incident',
-            self::FOLDER_PERMISSION_BOOKING => 'folder_permission',
-            self::MANTA_PERMISSION_BOOKING => 'manta_permission',
-            self::NETWORK_FOLDER_BOOKING => 'network_folder',
             self::SOFTWARE_INSTALL_BOOKING => 'software_install',
             self::PRINTER_INSTALL_BOOKING => 'printer_install',
             self::EMAIL_FAULT_BOOKING => 'email_fault',
@@ -203,9 +196,6 @@ enum BookingTypeEnum
             'clearance_grant' => self::CLEARANCE_GRANT_BOOKING,
             'removable_media' => self::REMOVABLE_MEDIA_BOOKING,
             'security_incident' => self::SECURITY_INCIDENT_BOOKING,
-            'folder_permission' => self::FOLDER_PERMISSION_BOOKING,
-            'manta_permission' => self::MANTA_PERMISSION_BOOKING,
-            'network_folder' => self::NETWORK_FOLDER_BOOKING,
             'software_install' => self::SOFTWARE_INSTALL_BOOKING,
             'printer_install' => self::PRINTER_INSTALL_BOOKING,
             'email_fault' => self::EMAIL_FAULT_BOOKING,
@@ -420,16 +410,13 @@ enum BookingTypeEnum
     }
 
     /**
-     * The 9 ICT (תקשוב) booking types whose requester is the plain user role.
+     * The 6 ICT (תקשוב) booking types whose requester is the plain user role.
      * Unlike the regular types they are not unit-scoped: any authenticated person may open one.
      * @return array<int, self>
      */
     public static function ictCases(): array
     {
         return [
-            self::FOLDER_PERMISSION_BOOKING,
-            self::MANTA_PERMISSION_BOOKING,
-            self::NETWORK_FOLDER_BOOKING,
             self::SOFTWARE_INSTALL_BOOKING,
             self::PRINTER_INSTALL_BOOKING,
             self::EMAIL_FAULT_BOOKING,
@@ -446,9 +433,6 @@ enum BookingTypeEnum
             self::CLEARANCE_GRANT_BOOKING,
             self::REMOVABLE_MEDIA_BOOKING,
             self::SECURITY_INCIDENT_BOOKING,
-            self::FOLDER_PERMISSION_BOOKING,
-            self::MANTA_PERMISSION_BOOKING,
-            self::NETWORK_FOLDER_BOOKING,
             self::SOFTWARE_INSTALL_BOOKING,
             self::PRINTER_INSTALL_BOOKING,
             self::EMAIL_FAULT_BOOKING,

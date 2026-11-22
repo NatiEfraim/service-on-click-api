@@ -81,7 +81,7 @@ class PermissionRulesTest extends ManagementTestCase
         $catalogBefore = $this->catalogTypeIds(self::INFOSEC_OFFICER);
 
         // The two the frontend found, and one that would manage an ICT type as an approver.
-        $this->stray(self::INFOSEC_OFFICER, 'infosec_officer_1', 'infosec_officer_2', 'approver_17');
+        $this->stray(self::INFOSEC_OFFICER, 'infosec_officer_1', 'infosec_officer_2', 'approver_20');
 
         $after = $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/me')->assertOk()->json('data');
 
@@ -89,7 +89,7 @@ class PermissionRulesTest extends ManagementTestCase
         $this->assertEqualsCanonicalizing($before['dashboard_booking_types'], $after['dashboard_booking_types']);
         $this->assertEqualsCanonicalizing($before['permissions'], $after['permissions'], 'the screens are not told of a grant that means nothing');
         $this->assertNotContains(1, $after['managed_booking_types']);
-        $this->assertNotContains(17, $after['managed_booking_types']);
+        $this->assertNotContains(20, $after['managed_booking_types']);
 
         // Nothing to open either: not the cars (1, 2).
         $this->assertSame($catalogBefore, $this->catalogTypeIds(self::INFOSEC_OFFICER));

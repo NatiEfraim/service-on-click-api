@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Form fields of the ביטחון מידע types (14-16) and the first תקשוב types (17-19). Uses updateOrCreate so the seeder is safe to re-run.
+ * Form fields of the ביטחון מידע types (14-16). Uses updateOrCreate so the seeder is safe to re-run.
  *
  * The clearance grant (14) is the legacy screen's form: a requester section (פרטים נוספים) with the candidate's details - the ID number
  * looks the person up and fills personal number, names and rank - and a handler section (למילוי על ידי גורמים רלוונטיים) that the
@@ -32,9 +32,6 @@ class InfosecIctFormFieldSeeder extends Seeder
             $this->seedClearanceGrantFields();
             $this->seedRemovableMediaFields();
             $this->seedSecurityIncidentFields();
-            $this->seedFolderPermissionFields();
-            $this->seedMantaPermissionFields();
-            $this->seedNetworkFolderFields();
 
             DB::commit();
         } catch (\Exception $e) {
@@ -163,81 +160,6 @@ class InfosecIctFormFieldSeeder extends Seeder
         $this->create($id, 'location', 'מיקום', FieldTypeEnum::TEXT, false, [
             'string' => 'פורמט אינו תקין',
             'max:255' => 'ניתן להזין עד 255 תווים',
-        ]);
-    }
-
-    // ---------------------------------------------------------------------------
-    // תקשוב
-    // ---------------------------------------------------------------------------
-
-    private function seedFolderPermissionFields(): void
-    {
-        $id = BookingTypeEnum::FOLDER_PERMISSION_BOOKING->getBookingTypeId();
-        if (!$id) {
-            return;
-        }
-
-        $this->create($id, 'path', 'נתיב התיקייה', FieldTypeEnum::TEXT, true, [
-            'required' => 'יש להזין נתיב התיקייה',
-            'string' => 'פורמט אינו תקין',
-            'max:500' => 'ניתן להזין עד 500 תווים',
-        ]);
-        $this->create($id, 'access', 'סוג ההרשאה', FieldTypeEnum::SELECT, true);
-        $this->create($id, 'beneficiary', 'מספר אישי של מקבל ההרשאה', FieldTypeEnum::TEXT, true, [
-            'required' => 'יש להזין מספר אישי',
-            'regex:/^\d{5,9}$/' => 'מספר אישי חייב להכיל 5 עד 9 ספרות',
-        ]);
-        $this->create($id, 'justification', 'הצדקה', FieldTypeEnum::TEXT_AREA, true, [
-            'required' => 'יש להזין הצדקה',
-            'string' => 'פורמט אינו תקין',
-        ]);
-        $this->create($id, 'until', 'בתוקף עד', FieldTypeEnum::DATE, false, [
-            'date' => 'פורמט תאריך אינו תקין',
-        ]);
-    }
-
-    private function seedMantaPermissionFields(): void
-    {
-        $id = BookingTypeEnum::MANTA_PERMISSION_BOOKING->getBookingTypeId();
-        if (!$id) {
-            return;
-        }
-
-        $this->create($id, 'profile', 'פרופיל מבוקש', FieldTypeEnum::SELECT, true);
-        $this->create($id, 'beneficiary', 'מספר אישי של מקבל ההרשאה', FieldTypeEnum::TEXT, true, [
-            'required' => 'יש להזין מספר אישי',
-            'regex:/^\d{5,9}$/' => 'מספר אישי חייב להכיל 5 עד 9 ספרות',
-        ]);
-        $this->create($id, 'justification', 'הצדקה', FieldTypeEnum::TEXT_AREA, true, [
-            'required' => 'יש להזין הצדקה',
-            'string' => 'פורמט אינו תקין',
-        ]);
-    }
-
-    private function seedNetworkFolderFields(): void
-    {
-        $id = BookingTypeEnum::NETWORK_FOLDER_BOOKING->getBookingTypeId();
-        if (!$id) {
-            return;
-        }
-
-        $this->create($id, 'folder_name', 'שם התיקייה', FieldTypeEnum::TEXT, true, [
-            'required' => 'יש להזין שם תיקייה',
-            'string' => 'פורמט אינו תקין',
-            'max:255' => 'ניתן להזין עד 255 תווים',
-        ]);
-        $this->create($id, 'location', 'מיקום (שרת או נתיב אב)', FieldTypeEnum::TEXT, true, [
-            'required' => 'יש להזין מיקום',
-            'string' => 'פורמט אינו תקין',
-            'max:500' => 'ניתן להזין עד 500 תווים',
-        ]);
-        $this->create($id, 'owners', 'בעלי התיקייה (מספרים אישיים)', FieldTypeEnum::TEXT_AREA, true, [
-            'required' => 'יש להזין מספרים אישיים של בעלי התיקייה',
-            'string' => 'פורמט אינו תקין',
-        ]);
-        $this->create($id, 'size', 'נפח משוער (GB)', FieldTypeEnum::NUMBER, false, [
-            'numeric' => 'יש להזין מספר תקין',
-            'min:0' => 'נפח חייב להיות מספר חיובי',
         ]);
     }
 

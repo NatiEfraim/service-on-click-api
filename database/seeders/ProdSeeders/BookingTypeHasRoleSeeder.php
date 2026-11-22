@@ -120,9 +120,6 @@ class BookingTypeHasRoleSeeder extends Seeder
     {
         if ($this->ictIds === null) {
             $this->ictIds = array_filter([
-                BookingTypeEnum::FOLDER_PERMISSION_BOOKING->getBookingTypeId(),
-                BookingTypeEnum::MANTA_PERMISSION_BOOKING->getBookingTypeId(),
-                BookingTypeEnum::NETWORK_FOLDER_BOOKING->getBookingTypeId(),
                 BookingTypeEnum::SOFTWARE_INSTALL_BOOKING->getBookingTypeId(),
                 BookingTypeEnum::PRINTER_INSTALL_BOOKING->getBookingTypeId(),
                 BookingTypeEnum::EMAIL_FAULT_BOOKING->getBookingTypeId(),

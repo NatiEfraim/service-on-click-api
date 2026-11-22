@@ -263,8 +263,8 @@ class RequesterService
      *  1. the user holds "{requester role}_{id}" for one of the type's requester roles (user_{id} on every type but the ones with a requester
      *     role of their own: department_security_officer_14 on the clearance grant);
      *  2. the user is the DOMAIN HANDLER of the type (infosec_officer_N, ict_handler_N): the infosec officer opens 14, 15 and 16, the ICT handler
-     *     17-25 - the clearance grant too, although its requester is the קב"ט;
-     *  3. the type is an infosec / ICT topic type whose requester is the plain user (15-25) and the user holds ANY role besides the plain user's
+     *     20-25 - the clearance grant too, although its requester is the קב"ט;
+     *  3. the type is an infosec / ICT topic type whose requester is the plain user (15, 16, 20-25) and the user holds ANY role besides the plain user's
      *     (admin, approver, vice approver, control officer, the domain handlers, the קב"ט, the interview coordinator): a person with a special role
      *     opens what every employee opens, whether or not they also hold user_{id};
      *  4. the user is the super admin: every topic type, the clearance grant included.

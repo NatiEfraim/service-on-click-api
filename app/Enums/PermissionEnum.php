@@ -26,7 +26,7 @@ enum PermissionEnum: string
         return rtrim(string: $this->value, characters: '_');
     }
 
-    /** Builds "admin_17", "approver_3", etc. */
+    /** Builds "admin_1", "approver_3", etc. */
     public function keyForId(int $bookingTypeId): ?string
     {
         return $this->value . $bookingTypeId;

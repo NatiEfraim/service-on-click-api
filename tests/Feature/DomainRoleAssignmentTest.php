@@ -19,7 +19,7 @@ class DomainRoleAssignmentTest extends ManagementTestCase
 
     private function ictTypeId(): int
     {
-        return (int) BookingTypeEnum::FOLDER_PERMISSION_BOOKING->getBookingTypeId();
+        return (int) BookingTypeEnum::SOFTWARE_INSTALL_BOOKING->getBookingTypeId();
     }
 
     public function test_a_super_admin_grants_and_revokes_the_domain_handler_roles(): void
