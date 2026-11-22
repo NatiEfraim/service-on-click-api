@@ -419,6 +419,26 @@ enum BookingTypeEnum
         };
     }
 
+    /**
+     * The 9 ICT (תקשוב) booking types whose requester is the plain user role.
+     * Unlike the regular types they are not unit-scoped: any authenticated person may open one.
+     * @return array<int, self>
+     */
+    public static function ictCases(): array
+    {
+        return [
+            self::FOLDER_PERMISSION_BOOKING,
+            self::MANTA_PERMISSION_BOOKING,
+            self::NETWORK_FOLDER_BOOKING,
+            self::SOFTWARE_INSTALL_BOOKING,
+            self::PRINTER_INSTALL_BOOKING,
+            self::EMAIL_FAULT_BOOKING,
+            self::USER_RENAME_BOOKING,
+            self::USER_OPEN_BOOKING,
+            self::USER_MOVE_BOOKING,
+        ];
+    }
+
     /** @return array<int, self> The booking types the mobile app does not know (infosec and ICT): web only. */
     public static function webOnlyCases(): array
     {

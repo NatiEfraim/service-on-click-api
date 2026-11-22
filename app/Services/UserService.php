@@ -13,6 +13,7 @@ use App\Http\Resources\UserResource;
 use App\Models\BookingTypeHasRole;
 use App\Models\UnitHasBookingType;
 use App\Models\User;
+use App\Traits\GrantsIctRequesterPermissions;
 use Spatie\Permission\Models\Permission;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ResponseException;
@@ -23,6 +24,8 @@ use Illuminate\Support\Facades\Log;
 
 class UserService
 {
+    use GrantsIctRequesterPermissions;
+
     const MIN_LEN = 1;
     const MAX_LEN = 9;
 
@@ -167,6 +170,11 @@ class UserService
 
         if ($user && $vatican) {
             $this->fillMissingDetails($user, $vatican);
+        }
+
+
+        if ($user) {
+            $this->ensureIctRequesterPermissions($user);
         }
 
         return $user;
