@@ -96,6 +96,10 @@ return [
 
         'import_files' => (string) env('IMPORT_FILES_FOLDER_NAME', 'import-files'),
         'loaded_files' => (string) env('LOADED_FILES_FOLDER_NAME', 'loaded-files'),
+
+        // People brought in by xlsx (importUsersXlsx:bucket): read from the first, moved to the second.
+        'import_xlsx' => (string) env('IMPORT_XLSX_FOLDER_NAME', 'import-xlsx'),
+        'loaded_xlsx' => (string) env('LOADED_XLSX_FOLDER_NAME', 'loaded-xlsx'),
         'attachments' => (string) env('ATTACHMENTS_FOLDER_NAME', 'files'),
 
         'export_json' => [

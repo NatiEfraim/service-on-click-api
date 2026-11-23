@@ -41,6 +41,8 @@
         <env name="LOADED_JSON_FOLDER_NAME" value="loaded-json"/>
         <env name="IMPORT_FILES_FOLDER_NAME" value="import-files"/>
         <env name="LOADED_FILES_FOLDER_NAME" value="loaded-files"/>
+        <env name="IMPORT_XLSX_FOLDER_NAME" value="import-xlsx"/>
+        <env name="LOADED_XLSX_FOLDER_NAME" value="loaded-xlsx"/>
         <env name="ATTACHMENTS_FOLDER_NAME" value="files"/>
         <env name="EXPORT_REPORT_FOLDER_NAME" value="export-report"/>
         <env name="EXPORT_REPORT_TIMEZONE" value="Asia/Jerusalem"/>
