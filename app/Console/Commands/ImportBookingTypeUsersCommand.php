@@ -9,20 +9,20 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Base for the four users:import-* commands (IMPORT_BOOKING_TYPE_USERS.md): each one imports its own xlsx from the
- * bucket's import-xlsx folder and gives everyone in it the user_{booking type id} permissions of its booking types
- * plus the common infosec + ICT ones (ImportUsersXlsxService::COMMON_BOOKING_TYPES). The file moves to loaded-xlsx
- * when done and stays put when the run failed.
+ * Base for the four *:xlsx user imports (IMPORT_BOOKING_TYPE_USERS.md): importCarBooking:xlsx, importCarMaintenanceBooking:xlsx,
+ * importOutUnitFoodBooking:xlsx and importUser:xlsx. Each one imports its own file from the bucket's import-xlsx folder and makes it
+ * the full list of its booking types: everyone in the file gets their user_{booking type id} permissions plus the common
+ * infosec + ICT ones (ImportUsersXlsxService::COMMON_BOOKING_TYPES), and everyone else loses the file's own permissions
+ * (never the common ones). The file moves to loaded-xlsx when done and stays put when the run failed.
  */
 abstract class ImportBookingTypeUsersCommand extends Command
 {
     /** Argument and options shared by every subclass; each subclass puts its own command name in front. */
     public const ARGS = ' {file? : Another file name in the bucket\'s import-xlsx folder (default: the file this command owns)}
-        {--dry-run : Run and report, then roll everything back; the file stays in the inbox}
-        {--revoke-missing : Remove the file\'s own permissions from users who are not in the file (common ones are never removed)}
-        {--force : Do not ask before --revoke-missing, and import even when the exact same file is already in loaded-xlsx}';
+        {--dry-run : Run and report, then roll everything back; the file stays in import-xlsx}
+        {--force : Import even when the exact same file is already in loaded-xlsx}';
 
-    /** @return array<int, BookingTypeEnum> The booking types this file grants on top of the common ones. */
+    /** @return array<int, BookingTypeEnum> The booking types only the people in this file keep, on top of the common ones. */
     abstract protected function bookingTypes(): array;
 
     /** The name of the xlsx this command owns in import-xlsx. */
@@ -31,22 +31,14 @@ abstract class ImportBookingTypeUsersCommand extends Command
     public function handle(ImportUsersXlsxService $service): int
     {
         $fileName = trim((string) $this->argument('file')) ?: $this->defaultFileName();
-        $dryRun = (bool) $this->option('dry-run');
-        $revokeMissing = (bool) $this->option('revoke-missing');
-        $force = (bool) $this->option('force');
-
-        if ($revokeMissing && !$dryRun && !$force) {
-            $typeNames = implode(', ', array_map(fn (BookingTypeEnum $bookingType): string => $bookingType->name, $this->bookingTypes()));
-
-            if (!$this->confirm("--revoke-missing removes the user permissions of {$typeNames} from everyone who is not in {$fileName}. Continue?")) {
-                $this->warn('Stopped. Nothing was changed.');
-
-                return self::FAILURE;
-            }
-        }
 
         try {
-            $result = $service->importFile($fileName, $this->bookingTypes(), $dryRun, $revokeMissing, $force);
+            $result = $service->importFile(
+                $fileName,
+                $this->bookingTypes(),
+                (bool) $this->option('dry-run'),
+                (bool) $this->option('force'),
+            );
 
             foreach ($result['messages'] as $message) {
                 $this->line($message);

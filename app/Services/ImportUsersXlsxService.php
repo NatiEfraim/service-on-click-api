@@ -19,14 +19,15 @@ use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Imports one booking-type user list from the bucket's import-xlsx folder (IMPORT_BOOKING_TYPE_USERS.md). Each of the
- * four users:import-* commands passes its own file name and booking types: everyone in the file gets the direct
- * user_{booking type id} permission of those types plus the common (infosec + ICT) types of COMMON_BOOKING_TYPES, and
- * the plain user role only when they have no role at all. A person is matched by מספר אישי, else by ת.ז, and created
- * when missing; an existing person only has empty fields filled, never overwritten. The run is one transaction; the
- * file moves to loaded-xlsx when done and stays in import-xlsx when it failed. A file whose exact bytes already sit
- * in loaded-xlsx was imported before: the run says so and touches nothing (--force imports it anyway; a renewed list
- * with the same name has different bytes and imports normally). --dry-run rolls everything back; --revoke-missing
- * makes the file the full list of its own types (the common permissions are never revoked).
+ * four *:xlsx commands passes its own file name and booking types, and the file becomes the full list of those types:
+ * everyone in it gets the direct user_{booking type id} permission of those types plus the common (infosec + ICT) types
+ * of COMMON_BOOKING_TYPES, and everyone else loses the file's own permissions (the common ones are never revoked).
+ * A person gets the plain user role only when they have no role at all. A person is matched by מספר אישי, else by ת.ז,
+ * and created when missing; an existing person only has empty fields filled, never overwritten. A file with no valid
+ * person fails, so it can never strip everyone. The run is one transaction; the file moves to loaded-xlsx when done and
+ * stays in import-xlsx when it failed. A file whose exact bytes already sit in loaded-xlsx under its own name (or a dated
+ * copy of it) was imported before: the run says so and touches nothing (--force imports it anyway; a renewed list with
+ * the same name has different bytes and imports normally). --dry-run rolls everything back.
  */
 class ImportUsersXlsxService
 {
@@ -67,16 +68,17 @@ class ImportUsersXlsxService
     /** @var array<int, string> warnings and skip reasons in file order; the command prints them and each is logged too */
     private array $messages = [];
 
-    /** @var array<int, true> ids of the users the file holds, for --revoke-missing */
+    /** @var array<int, true> ids of the users the file holds: everyone else loses the file's own permissions */
     private array $userIdsInFile = [];
 
     /**
-     * Imports one file; throws when it could not be imported (the file then stays in import-xlsx).
+     * Imports one file and makes it the full list of its own booking types; throws when it could not be imported
+     * (nothing is saved and the file stays in import-xlsx).
      * @param array<int, BookingTypeEnum> $bookingTypes the file's own types
      * @param bool $force import even when the exact same file already sits in loaded-xlsx
      * @return array{summary: string, messages: array<int, string>}
      */
-    public function importFile(string $fileName, array $bookingTypes, bool $dryRun = false, bool $revokeMissing = false, bool $force = false): array
+    public function importFile(string $fileName, array $bookingTypes, bool $dryRun = false, bool $force = false): array
     {
         // The four commands share the users table; only one import runs at a time.
         $lock = Cache::lock('import-users-xlsx', 600);
@@ -118,9 +120,13 @@ class ImportUsersXlsxService
             try {
                 $this->importOne($contents, $fileName, $permissions);
 
-                if ($revokeMissing) {
-                    $this->revokeMissing($filePermissions);
+                // An empty or fully invalid list would take the file's permissions from everyone: refuse it.
+                if ($this->userIdsInFile === []) {
+                    throw new \RuntimeException("{$fileName}: no valid person in the file - nothing was imported and nothing was revoked.");
                 }
+
+                // Only the people in this file keep its own permissions (the common ones are never touched).
+                $this->revokeMissing($filePermissions);
 
                 $dryRun ? DB::rollBack() : DB::commit();
             } catch (\Throwable $e) {
@@ -149,7 +155,9 @@ class ImportUsersXlsxService
 
     /**
      * The name in loaded-xlsx holding exactly these bytes, or null. Only this file's own copies are compared: the
-     * original name and the date-suffixed names moveBucketFile gives a second load of the same list.
+     * original name and the dated names moveBucketFile gives a second load of the same list
+     * ({name}_YYYY-mm-dd_HH-ii-ss[_N].{ext}). A plain "{name}_" prefix is not enough: users.xlsx must not match
+     * users_car_booking.xlsx.
      */
     private function loadedCopyOf(string $contents, string $fileName, string $loaded): ?string
     {
@@ -159,13 +167,14 @@ class ImportUsersXlsxService
         $base = mb_strtolower(pathinfo($fileName, PATHINFO_FILENAME));
         $extension = mb_strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
         $hash = hash('sha256', $contents);
+        $datedCopy = '/^' . preg_quote($base, '/') . '_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(_\d+)?$/u';
 
         foreach ($disk->files($storage->buildBucketKey($loaded)) as $key) {
             $name = basename($key);
             $stem = mb_strtolower(pathinfo($name, PATHINFO_FILENAME));
 
             $sameFamily = (mb_strtolower($name) === mb_strtolower($fileName))
-                || (str_starts_with($stem, $base . '_') && mb_strtolower(pathinfo($name, PATHINFO_EXTENSION)) === $extension);
+                || (preg_match($datedCopy, $stem) === 1 && mb_strtolower(pathinfo($name, PATHINFO_EXTENSION)) === $extension);
 
             if ($sameFamily && hash('sha256', (string) $disk->get($key)) === $hash) {
                 return $name;

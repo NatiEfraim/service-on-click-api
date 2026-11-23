@@ -4,11 +4,11 @@ namespace App\Console\Commands;
 
 use App\Enums\BookingTypeEnum;
 
-class ImportEquipmentBarberInUnitFoodConstructionUsersCommand extends ImportBookingTypeUsersCommand
+class ImportUserXlsxCommand extends ImportBookingTypeUsersCommand
 {
-    protected $signature = 'users:import-equipment-barber-in-unit-food-construction' . ImportBookingTypeUsersCommand::ARGS;
+    protected $signature = 'importUser:xlsx' . ImportBookingTypeUsersCommand::ARGS;
 
-    protected $description = 'Give the people in users_equipment_barber_in_unit_food_construction_booking.xlsx (bucket import-xlsx) the user permissions of equipment (male + female), barber, in-unit food and construction plus the common infosec + ICT ones';
+    protected $description = 'Import users.xlsx: only these people keep the user permissions of equipment (male + female), barber, transportation, in-unit food and construction (plus the common infosec + ICT ones)';
 
     protected function bookingTypes(): array
     {
@@ -17,6 +17,7 @@ class ImportEquipmentBarberInUnitFoodConstructionUsersCommand extends ImportBook
             BookingTypeEnum::EQUIPMENT_BOOKING_MALE,
             BookingTypeEnum::EQUIPMENT_BOOKING_FEMALE,
             BookingTypeEnum::BARBER_BOOKING,
+            BookingTypeEnum::TRANSPORTATION_BOOKING,
             BookingTypeEnum::IN_UNIT_FOOD_BOOKING,
             BookingTypeEnum::CONSTRUCTION_BOOKING,
         ];
@@ -24,6 +25,6 @@ class ImportEquipmentBarberInUnitFoodConstructionUsersCommand extends ImportBook
 
     protected function defaultFileName(): string
     {
-        return 'users_equipment_barber_in_unit_food_construction_booking.xlsx';
+        return 'users.xlsx';
     }
 }
