@@ -355,6 +355,10 @@ class RequesterPortalLabTest extends ManagementTestCase
             if ($bookingTypeId === 14) {
                 $this->assertSame(101, (int) $shown['status']['id'], "{$label}: a new clearance request waits for its assignment");
                 $this->assertSame('current', collect($shown['progress'])->firstWhere('status_id', 101)['state'], "{$label}: the progress bar stands at the first step");
+            } elseif ($bookingTypeId >= 20 && $bookingTypeId <= 25) {
+                // The ICT service desk route: a new request waits in the queue (1), the first step of its own progress bar.
+                $this->assertSame(1, (int) $shown['status']['id'], "{$label}: a new request waits in the desk's queue");
+                $this->assertSame('current', collect($shown['progress'])->firstWhere('status_id', 1)['state'], "{$label}: the progress bar stands at the first step");
             } else {
                 $this->assertSame(1, (int) $shown['status']['id'], "{$label}: a new submission stands at received");
                 $this->assertArrayNotHasKey('progress', $shown, "{$label}: a generic type has no progress bar");
