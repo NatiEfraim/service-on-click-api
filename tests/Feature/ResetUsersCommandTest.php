@@ -50,6 +50,43 @@ class ResetUsersCommandTest extends TestCase
         $this->assertNotNull($strayUser->fresh());
     }
 
+    public function test_every_management_role_also_holds_the_plain_user_grants_of_its_types(): void
+    {
+        $admin = User::where('personal_number', '99807387')->firstOrFail(); // an admin in the UserSeeder
+
+        // Alongside admin_{id} the person holds user_{id} for every type of the role that takes a plain user.
+        $this->assertTrue($admin->hasRole('user'), 'whoever manages a type can also open its requests');
+
+        $adminTypeIds = DB::table('booking_type_has_roles')->where('role_id', RoleEnum::ADMIN->value)->pluck('booking_type_id');
+        $userTypeIds = DB::table('booking_type_has_roles')->where('role_id', RoleEnum::USER->value)->pluck('booking_type_id');
+
+        foreach ($adminTypeIds as $typeId) {
+            $this->assertTrue($admin->hasDirectPermission('admin_' . $typeId), 'admin_' . $typeId);
+
+            if ($userTypeIds->contains($typeId)) {
+                $this->assertTrue($admin->hasDirectPermission('user_' . $typeId), 'user_' . $typeId);
+            }
+        }
+
+        // The single-user path gives the same guarantee.
+        $this->artisan('users:reset', ['--personalId' => $admin->personal_id, '--role' => (string) RoleEnum::APPROVER->value])->assertSuccessful();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $admin = $admin->fresh();
+
+        $this->assertTrue($admin->hasRole('approver'));
+        $this->assertTrue($admin->hasRole('user'));
+        $this->assertTrue($admin->hasDirectPermission('user_1'));
+
+        // A role whose types take no plain user gets no user grants: the clearance grant has its own requester role.
+        $this->artisan('users:reset', ['--personalId' => $admin->personal_id, '--role' => (string) RoleEnum::DEPARTMENT_SECURITY_OFFICER->value])->assertSuccessful();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $admin = $admin->fresh();
+
+        $this->assertTrue($admin->hasDirectPermission('department_security_officer_14'));
+        $this->assertFalse($admin->hasRole('user'), 'no type of the role takes a plain user');
+        $this->assertSame(0, DB::table('permissions')->where('name', 'user_14')->count(), 'no stray user_14 was created');
+    }
+
     public function test_everybody_waits_for_the_users_file_again_after_a_reset(): void
     {
         // The assignments are rebuilt, so what went to the mobile side before may not be what they are now.

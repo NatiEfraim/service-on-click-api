@@ -43,17 +43,6 @@ class UserSeeder extends Seeder
             ['full_name' => 'הילה דרעי', 'personal_id' => '216287003', 'phone' => '0522797391', 'personal_number' => '9531058', 'role' => RoleEnum::USER],
             ['full_name' => 'טובה קלנר', 'personal_id' => '303009245', 'phone' => '0525607795', 'personal_number' => '99805335', 'role' => RoleEnum::USER],
             ['full_name' => 'נועה גולדברג ראובן', 'personal_id' => '206912214', 'phone' => '0545465999', 'personal_number' => '998126531', 'role' => RoleEnum::USER],
-
-            ['full_name' => 'דנה לוי', 'personal_id' => '300000101', 'phone' => '0501110001', 'personal_number' => '7000101', 'role' => RoleEnum::DEPARTMENT_SECURITY_OFFICER],
-            ['full_name' => 'יוסי כהן', 'personal_id' => '300000102', 'phone' => '0501110002', 'personal_number' => '7000102', 'role' => RoleEnum::INFOSEC_OFFICER],
-            ['full_name' => 'מיכל ברק', 'personal_id' => '300000103', 'phone' => '0501110003', 'personal_number' => '7000103', 'role' => RoleEnum::INTERVIEW_COORDINATOR],
-
-            // One person for every other role, so each can be logged in as: the ICT handler (types 17-25), the domain commander (approver),
-            // the handler (vice approver) and the transportation control officer (type 8).
-            ['full_name' => 'גל ארד', 'personal_id' => '300000104', 'phone' => '0501110004', 'personal_number' => '7000104', 'role' => RoleEnum::ICT_HANDLER],
-            ['full_name' => 'אבי מזרחי', 'personal_id' => '300000105', 'phone' => '0501110005', 'personal_number' => '7000105', 'role' => RoleEnum::APPROVER],
-            ['full_name' => 'שרית גבאי', 'personal_id' => '300000106', 'phone' => '0501110006', 'personal_number' => '7000106', 'role' => RoleEnum::VICE_APPROVER],
-            ['full_name' => 'רונן אביטל', 'personal_id' => '300000107', 'phone' => '0501110007', 'personal_number' => '7000107', 'role' => RoleEnum::TRANSPORTATION_CONTROL_OFFICER],
         ];
 
         foreach ($managers as $manager) {
@@ -72,20 +61,54 @@ class UserSeeder extends Seeder
                 'is_deleted' => false,
             ])->save();
 
-            $user->assignRole($roleEnum->value);
+            self::assignRoleWithRequesterGrants($user, $roleEnum);
+        }
+    }
 
+    /**
+     * The role with its "{role}_{booking type id}" permissions - and, for every management role, the plain user role with
+     * user_{id} on the same types, so whoever manages a type can also open its requests (admin_1 comes with user_1, and so
+     * on). Only where the type takes the plain user: the clearance grant has its own requester role and no user_14 exists.
+     * The super admin keeps no per-type permissions, as everywhere.
+     * Shared with users:reset --personalId (ResetUsersCommand), so both paths give the same guarantee.
+     */
+    public static function assignRoleWithRequesterGrants(User $user, RoleEnum $roleEnum): void
+    {
+        $user->assignRole($roleEnum->value);
 
-            if ($roleEnum !== RoleEnum::SUPER_ADMIN) {
-                $linkedTypeIds = BookingTypeHasRole::where('role_id', $roleEnum->value)
-                    ->pluck('booking_type_id');
-
-                $user->givePermissionTo(
-                    $linkedTypeIds
-                        ->map(fn(int $id): string => $roleEnum->toPermissionEnum()->keyForId($id))
-                        ->all()
-                );
-            }
+        if ($roleEnum === RoleEnum::SUPER_ADMIN) {
+            return;
         }
 
+        $linkedTypeIds = BookingTypeHasRole::where('role_id', $roleEnum->value)
+            ->pluck('booking_type_id')
+            ->map(fn ($id): int => (int) $id);
+
+        $user->givePermissionTo(
+            $linkedTypeIds
+                ->map(fn (int $id): string => $roleEnum->toPermissionEnum()->keyForId($id))
+                ->all()
+        );
+
+        if ($roleEnum === RoleEnum::USER) {
+            return;
+        }
+
+        $requesterTypeIds = BookingTypeHasRole::where('role_id', RoleEnum::USER->value)
+            ->whereIn('booking_type_id', $linkedTypeIds)
+            ->pluck('booking_type_id')
+            ->map(fn ($id): int => (int) $id);
+
+        if ($requesterTypeIds->isEmpty()) {
+            return;
+        }
+
+        $user->assignRole(RoleEnum::USER->value);
+
+        $user->givePermissionTo(
+            $requesterTypeIds
+                ->map(fn (int $id): string => RoleEnum::USER->toPermissionEnum()->keyForId($id))
+                ->all()
+        );
     }
 }

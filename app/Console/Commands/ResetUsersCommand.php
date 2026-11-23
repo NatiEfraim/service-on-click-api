@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Enums\RoleEnum;
-use App\Models\BookingTypeHasRole;
 use App\Models\User;
 use Database\Seeders\ProdSeeders\RoleAndPermissionSeeder;
 use Database\Seeders\TestSeeders\UserSeeder;
@@ -113,20 +112,7 @@ class ResetUsersCommand extends Command
 
                 app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-                $user->assignRole($roleEnum->value);
-
-                if ($roleEnum !== RoleEnum::SUPER_ADMIN) {
-                    $bookingTypeIds = BookingTypeHasRole::query()
-                        ->where('role_id', $roleEnum->value)
-                        ->pluck('booking_type_id')
-                        ->map(fn($id) => (int) $id);
-
-                    $user->givePermissionTo(
-                        $bookingTypeIds
-                            ->map(fn(int $id): string => $roleEnum->toPermissionEnum()->keyForId($id))
-                            ->all()
-                    );
-                }
+                UserSeeder::assignRoleWithRequesterGrants($user, $roleEnum);
 
                 $user->toBase()->update(['is_exported_role' => false]);
             });
