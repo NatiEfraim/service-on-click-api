@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:LOG_CHANNEL='stderr'; php artisan test --filter='BookingWorkflowTest|TransportationHoldTest|ManagementAccessTest|ManagementAdminTest|ManagementInsightTest|SyncExportTest|RoleAccessTest|PermissionRulesTest|RoleAssignmentTest|DomainRoleAssignmentTest|ProtectedRolesTest|ClearanceGrantWorkflowTest|BarberBookingRouteTest|ImportBookingJsonTest|DatabaseStructureTest|ResetUsersCommandTest|ManagementHardeningTest|ManagementUuidKeyTest|UserBookingsTest|BookingReportTest|InUnitFoodControlOfficerTest' 2>&1 | Select-String -Pattern '\"result\"|\"test\":' | Select-Object -First 40)",
+      "PowerShell($env:LOG_CHANNEL='stderr'; php artisan test --filter='BookingWorkflowTest|TransportationHoldTest|DomainRoleAssignmentTest|ManagementInsightTest' 2>&1 | Select-String -Pattern '\"result\"|\"test\":\"[^\"]+\"' | Select-Object -First 25)"
+    ]
+  }
+}
