@@ -202,9 +202,9 @@ class RoleAccessTest extends ManagementTestCase
 
         // The desk representative (the vice approver of the type) takes the request and closes it (the full flow: IctServiceDeskWorkflowTest).
         $row = $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/bookings?ids=' . $booking->serial_number)->assertOk()->json('data.0');
-        $this->assertSame([111, 5, 7], array_column($row['actions'], 'status_id'));
+        $this->assertSame([151, 5, 7], array_column($row['actions'], 'status_id'));
 
-        $this->as(self::VICE_APPROVER)->postJson($url, ['status_id' => 111, 'version' => 1])->assertOk();
+        $this->as(self::VICE_APPROVER)->postJson($url, ['status_id' => 151, 'version' => 1])->assertOk();
         $this->as(self::VICE_APPROVER)->postJson($url, ['status_id' => 7, 'version' => 2])->assertUnprocessable('closing without doing the work needs a comment');
         $this->as(self::VICE_APPROVER)->postJson($url, ['status_id' => 7, 'version' => 2, 'comment' => 'בוטל לבקשת המזמין'])->assertOk();
         $this->assertSame(7, (int) $booking->fresh()->status_id);
