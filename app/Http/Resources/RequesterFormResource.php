@@ -26,6 +26,11 @@ class RequesterFormResource extends JsonResource
             'col_span'           => (int) ($this->col_span ?? 1),
             'lookup_source'      => $this->lookup_source,
             'autofill_key'       => $this->autofill_key,
+            // A help line, a link beside the label, whether an autofilled value stays editable, and the field this one depends on.
+            'hint'               => $this->hint,
+            'help_url'           => $this->help_url,
+            'autofill_locked'    => (bool) ($this->autofill_locked ?? true),
+            'depends_on'         => $this->depends_on,
             'field_type'         => [
                 'id'   => $this->fieldType?->id,
                 'name' => $this->fieldType?->name,
@@ -112,6 +117,10 @@ class RequesterFormResource extends JsonResource
                 'col_span'           => (int) ($child->col_span ?? 1),
                 'lookup_source'      => $child->lookup_source,
                 'autofill_key'       => $child->autofill_key,
+                'hint'               => $child->hint,
+                'help_url'           => $child->help_url,
+                'autofill_locked'    => (bool) ($child->autofill_locked ?? true),
+                'depends_on'         => $child->depends_on,
                 'field_type'         => [
                     'id'   => $child->fieldType?->id,
                     'name' => $child->fieldType?->name,

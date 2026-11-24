@@ -67,14 +67,14 @@ final class AccessScope
     }
 
     /**
-     * @return array<int, int> The infosec / ICT types the user handles: holds infosec_officer_N or ict_handler_N. The handler is the whole route of
+     * @return array<int, int> The infosec types the user handles: holds infosec_officer_N. The handler is the whole route of
      * such a type (Workflow::officerMoves): they see every request of it in their unit, closed ones too, and have its dashboard. The clearance
-     * grant (14) is a route of its own and not counted here, whoever holds the permission.
+     * grant (14) and the ICT types (20-25) are routes of their own and not counted here, whoever holds the permission.
      */
     public function officerBookingTypeIds(): array
     {
         return array_values(array_filter(
-            $this->bookingTypeIdsOf(['infosec_officer_', 'ict_handler_']),
+            $this->bookingTypeIdsOf(['infosec_officer_']),
             fn (int $bookingTypeId): bool => !$this->isRouteType($bookingTypeId),
         ));
     }
@@ -83,6 +83,17 @@ final class AccessScope
     public function adminOfBookingTypeIds(): array
     {
         return $this->bookingTypeIdsOf(['admin_']);
+    }
+
+    /** @return array<int, int> The ICT types the user commands (admin_ict_N): the ICT service desk commander. */
+    public function ictAdminOfBookingTypeIds(): array
+    {
+        return $this->bookingTypeIdsOf(['admin_ict_']);
+    }
+
+    public function isIctAdmin(): bool
+    {
+        return $this->ictAdminOfBookingTypeIds() !== [];
     }
 
     /** @return array<int, int> */
@@ -201,7 +212,8 @@ final class AccessScope
     {
         return match ($capability) {
             'audit.view', 'sync.view', 'sync.operate', 'sla.manage', 'config.global' => $this->isSuperAdmin(),
-            'users.manage', 'reports.view', 'targets.manage' => $this->isSuperAdmin() || $this->isAdmin(),
+            // The ICT service desk commander manages the desk's people, reports and targets - on the ICT types only (the services scope it).
+            'users.manage', 'reports.view', 'targets.manage' => $this->isSuperAdmin() || $this->isAdmin() || $this->isIctAdmin(),
             'dashboard.view' => $this->isSuperAdmin() || $this->isAdmin() || $this->dashboardBookingTypeIds() !== [],
             default => false,
         };

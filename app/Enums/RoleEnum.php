@@ -23,8 +23,10 @@ enum RoleEnum: int
     case DEPARTMENT_SECURITY_OFFICER = 103;
     case INTERVIEW_COORDINATOR = 104;
 
-    // תקשוב (the dev-nati-ict branch's ADMIN_ICT joins this block, e.g. 152, when merged).
+    // תקשוב: the legacy single handler (ict_handler, kept for ict:migrate-handlers) and the service desk commander
+    // (מפקד תקשוב, admin_ict) who owns the ICT route (types 20-25) - dashboard, users of the desk, settings.
     case ICT_HANDLER = 151;
+    case ADMIN_ICT = 152;
 
     /** Hebrew display name of the role. */
     public function getPermissionDisplayName(): string
@@ -41,6 +43,7 @@ enum RoleEnum: int
             self::ICT_HANDLER => 'מנהל תקשוב',
             self::DEPARTMENT_SECURITY_OFFICER => 'קב"ט מחלקתי',
             self::INTERVIEW_COORDINATOR => 'מתאם תחקיר',
+            self::ADMIN_ICT => 'מפקד תקשוב',
         };
     }
 
@@ -59,6 +62,7 @@ enum RoleEnum: int
             'ict_handler' => self::ICT_HANDLER,
             'department_security_officer' => self::DEPARTMENT_SECURITY_OFFICER,
             'interview_coordinator' => self::INTERVIEW_COORDINATOR,
+            'admin_ict' => self::ADMIN_ICT,
             default => null,
         };
     }
@@ -78,6 +82,7 @@ enum RoleEnum: int
             self::ICT_HANDLER => PermissionEnum::ICT_HANDLER,
             self::DEPARTMENT_SECURITY_OFFICER => PermissionEnum::DEPARTMENT_SECURITY_OFFICER,
             self::INTERVIEW_COORDINATOR => PermissionEnum::INTERVIEW_COORDINATOR,
+            self::ADMIN_ICT => PermissionEnum::ADMIN_ICT,
         };
     }
 
@@ -141,6 +146,7 @@ enum RoleEnum: int
             self::ICT_HANDLER => 'ict_handler',
             self::DEPARTMENT_SECURITY_OFFICER => 'department_security_officer',
             self::INTERVIEW_COORDINATOR => 'interview_coordinator',
+            self::ADMIN_ICT => 'admin_ict',
         };
     }
 

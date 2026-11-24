@@ -20,12 +20,16 @@ final class Transition
     public const AUTO_DUE = 'due';
     /** The system moves the booking once the clearance registry (ותיקן) confirms the requested level. */
     public const AUTO_REGISTRY = 'registry';
+    /** The system moves the booking once the type's automation (config workflow.ict.automation) reports success. */
+    public const AUTO_AUTOMATION = 'automation';
 
     /**
      * @param array<int, RoleEnum> $roles roles that may press the move; [] = the system only (see $auto)
      * @param array<int, string> $requiredFields handler field names that must hold a value once the move is made
      * @param array<int, string> $clearsFields handler field names whose values are deleted by the move
-     * @param ?string $auto null = manual; AUTO_DUE | AUTO_REGISTRY = made by the scheduler
+     * @param ?string $auto null = manual; AUTO_DUE | AUTO_REGISTRY | AUTO_AUTOMATION = made by the scheduler
+     * @param bool $assignsActor the one who presses the move becomes the handler when nobody is assigned yet ("take it")
+     * @param bool $releasesHandler the move removes the assigned handler (back to the queue)
      */
     public function __construct(
         public readonly int $from,
@@ -38,6 +42,8 @@ final class Transition
         public readonly array $requiredFields = [],
         public readonly array $clearsFields = [],
         public readonly ?string $auto = null,
+        public readonly bool $assignsActor = false,
+        public readonly bool $releasesHandler = false,
     ) {
     }
 

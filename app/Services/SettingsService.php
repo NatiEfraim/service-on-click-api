@@ -90,6 +90,10 @@ class SettingsService
                 'col_span' => (int) ($field->col_span ?? 1),
                 'lookup_source' => $field->lookup_source,
                 'autofill_key' => $field->autofill_key,
+                'hint' => $field->hint,
+                'help_url' => $field->help_url,
+                'autofill_locked' => (bool) ($field->autofill_locked ?? true),
+                'depends_on' => $field->depends_on,
                 'version' => (int) $field->version,
                 'used_by' => (int) ($usedBy[$field->id] ?? 0),
                 // Custom fields only (not the mobile app's) can change type or be removed.

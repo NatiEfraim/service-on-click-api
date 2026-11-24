@@ -22,6 +22,9 @@ enum BookingStageEnum: string
     case INTERVIEW_SCHEDULED = 'interview_scheduled';
     case INTERVIEWED = 'interviewed';
     case AWAITING_CLEARANCE = 'awaiting_clearance';
+    // The ICT service desk route (types 20-25): see App\Domain\Workflow\Routes\IctServiceDeskRoute.
+    case SERVICE_DESK_QUEUE = 'service_desk_queue';
+    case SERVICE_DESK_HANDLING = 'service_desk_handling';
 
     public function label(): string
     {
@@ -40,6 +43,8 @@ enum BookingStageEnum: string
             self::INTERVIEW_SCHEDULED => 'תחקיר נקבע - ממתין למועד',
             self::INTERVIEWED => 'תוחקר - ממתין להעברה להכשר',
             self::AWAITING_CLEARANCE => 'ממתין לקבלת הכשר',
+            self::SERVICE_DESK_QUEUE => 'ממתין לנציג מוקד',
+            self::SERVICE_DESK_HANDLING => 'בטיפול נציג מוקד',
         };
     }
 
@@ -54,6 +59,8 @@ enum BookingStageEnum: string
             self::CLOSED => null,
             self::INTERVIEW_ASSIGNMENT, self::INTERVIEWED => 'approval',
             self::INTERVIEW_SCHEDULED, self::AWAITING_CLEARANCE => 'realization',
+            self::SERVICE_DESK_QUEUE => 'approval',
+            self::SERVICE_DESK_HANDLING => 'realization',
         };
     }
 
@@ -68,6 +75,8 @@ enum BookingStageEnum: string
             self::APPROVER, self::REALIZATION, self::BARBER, self::EXTERNAL_PARTY => RoleEnum::APPROVER,
             self::INTERVIEW_ASSIGNMENT, self::INTERVIEWED => RoleEnum::INTERVIEW_COORDINATOR,
             self::AWAITING_CLEARANCE => RoleEnum::INFOSEC_OFFICER,
+            // The service desk representative (נציג מוקד) is the VICE_APPROVER of the ICT types.
+            self::SERVICE_DESK_QUEUE, self::SERVICE_DESK_HANDLING => RoleEnum::VICE_APPROVER,
             // The interview is scheduled: the system moves the request on when its moment has passed.
             default => null,
         };

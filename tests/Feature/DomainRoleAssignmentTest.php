@@ -6,9 +6,11 @@ use App\Enums\BookingTypeEnum;
 use App\Models\User;
 
 /**
- * The infosec and ICT booking types are handled by their own officer roles (infosec_officer, ict_handler) instead of the
- * approver chain: only the super admin grants them, through the same assign-approver-role screen (frontend-roles-permissions-guide.md).
+ * The infosec booking types are handled by their own officer role (infosec_officer) instead of the approver chain: only the
+ * super admin grants it, through the same assign-approver-role screen (frontend-roles-permissions-guide.md).
  * The clearance grant (14) has three roles of its own: the קב"ט who submits, the במ (infosec officer) and the interview coordinator.
+ * The ICT types (20-25) run on the service desk route: the desk representative is the vice approver of the type, granted here
+ * by the super admin or by the desk commander (admin_ict, IctServiceDeskWorkflowTest).
  */
 class DomainRoleAssignmentTest extends ManagementTestCase
 {
@@ -26,14 +28,15 @@ class DomainRoleAssignmentTest extends ManagementTestCase
     {
         $person = User::where('personal_number', self::NO_ROLE)->firstOrFail();
 
-        // The rows carry exactly the flags of the roles the type has, as the roles screen sends them: three on the clearance grant, one on an ICT type.
+        // The rows carry exactly the flags of the roles the type has, as the roles screen sends them: three on the clearance grant,
+        // and the desk representative (the vice approver) on an ICT type.
         $assign = fn (bool $granted) => $this->actingAsPersonalNumber(self::SUPER_ADMIN)
             ->postJson('/api/bookings-admin-management/assign-approver-role', [
                 'uuid' => $person->uuid,
                 'reason' => 'אחראי ביטחון מידע ותקשוב',
                 'role_assignments' => [
                     ['booking_type_id' => $this->infosecTypeId(), 'is_infosec_officer' => $granted, 'is_department_security_officer' => false, 'is_interview_coordinator' => $granted],
-                    ['booking_type_id' => $this->ictTypeId(), 'is_ict_handler' => $granted],
+                    ['booking_type_id' => $this->ictTypeId(), 'is_vice_approver' => $granted],
                 ],
             ])
             ->assertOk();
@@ -43,10 +46,10 @@ class DomainRoleAssignmentTest extends ManagementTestCase
         $person = $person->fresh();
         $this->assertTrue($person->hasRole('infosec_officer'));
         $this->assertTrue($person->hasRole('interview_coordinator'));
-        $this->assertTrue($person->hasRole('ict_handler'));
+        $this->assertTrue($person->hasRole('vice_approver'));
         $this->assertFalse($person->hasRole('department_security_officer'));
         $this->assertEqualsCanonicalizing(
-            ['infosec_officer_' . $this->infosecTypeId(), 'interview_coordinator_' . $this->infosecTypeId(), 'ict_handler_' . $this->ictTypeId()],
+            ['infosec_officer_' . $this->infosecTypeId(), 'interview_coordinator_' . $this->infosecTypeId(), 'vice_approver_' . $this->ictTypeId()],
             $person->getDirectPermissions()->pluck('name')->all()
         );
 
@@ -57,7 +60,7 @@ class DomainRoleAssignmentTest extends ManagementTestCase
         $person = $person->fresh();
         $this->assertFalse($person->hasRole('infosec_officer'), 'the last permission of the role takes the role with it');
         $this->assertFalse($person->hasRole('interview_coordinator'));
-        $this->assertFalse($person->hasRole('ict_handler'));
+        $this->assertFalse($person->hasRole('vice_approver'));
         $this->assertEmpty($person->getDirectPermissions());
     }
 
@@ -140,7 +143,9 @@ class DomainRoleAssignmentTest extends ManagementTestCase
         $this->assertArrayNotHasKey('is_interview_coordinator', $media, 'the coordinator belongs to the clearance grant only');
 
         $this->assertNotNull($ict, 'the super admin sees the ICT types');
-        $this->assertArrayHasKey('is_ict_handler', $ict);
+        $this->assertArrayHasKey('is_vice_approver', $ict, 'the desk representative is the vice approver of the type');
+        $this->assertArrayNotHasKey('is_ict_handler', $ict, 'the old single-handler role is gone');
+        $this->assertArrayNotHasKey('is_admin_ict', $ict, 'the commander is appointed on the admins screen only');
         $this->assertArrayNotHasKey('is_approver', $ict);
 
         $this->assertNotNull($car, 'the super admin sees the classic types too');

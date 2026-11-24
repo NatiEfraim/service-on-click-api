@@ -60,17 +60,8 @@ class BookingTypeHasRoleSeeder extends Seeder
         RoleEnum::INFOSEC_OFFICER->value,
     ];
 
-    /** ICT types: USER submits, ICT_HANDLER handles. No generic ADMIN/APPROVER/VICE_APPROVER. @var array<int> */
-    private array $ictRoleIds = [
-        RoleEnum::USER->value,
-        RoleEnum::ICT_HANDLER->value,
-    ];
-
     /** Infosec booking type ids (resolved once and cached). @var array<int>|null */
     private ?array $infosecIds = null;
-
-    /** ICT booking type ids (resolved once and cached). @var array<int>|null */
-    private ?array $ictIds = null;
 
     /** @return array<int> Every role the booking type has. */
     private function roleIdsByBookingType(int $bookingTypeId): array
@@ -91,10 +82,6 @@ class BookingTypeHasRoleSeeder extends Seeder
             return $this->infosecRoleIds;
         }
 
-        if (in_array($bookingTypeId, $this->getIctIds(), true)) {
-            return $this->ictRoleIds;
-        }
-
         return [
             ...$this->commonRoleIds,
             ...$this->extraRoleIdsByBookingType($bookingTypeId),
@@ -113,23 +100,6 @@ class BookingTypeHasRoleSeeder extends Seeder
         }
 
         return $this->infosecIds;
-    }
-
-    /** @return array<int> */
-    private function getIctIds(): array
-    {
-        if ($this->ictIds === null) {
-            $this->ictIds = array_filter([
-                BookingTypeEnum::SOFTWARE_INSTALL_BOOKING->getBookingTypeId(),
-                BookingTypeEnum::PRINTER_INSTALL_BOOKING->getBookingTypeId(),
-                BookingTypeEnum::EMAIL_FAULT_BOOKING->getBookingTypeId(),
-                BookingTypeEnum::USER_RENAME_BOOKING->getBookingTypeId(),
-                BookingTypeEnum::USER_OPEN_BOOKING->getBookingTypeId(),
-                BookingTypeEnum::USER_MOVE_BOOKING->getBookingTypeId(),
-            ]);
-        }
-
-        return $this->ictIds;
     }
 
     /** @return array<int> Roles on top of $commonRoleIds, only for specific booking types. */

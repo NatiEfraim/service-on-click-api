@@ -117,16 +117,16 @@ class BookingAdminManagementService
     {
         try {
 
-            // A super admin manages every booking type (the infosec/ICT types have no admin_{id} permission at all, so
-            // only the super admin ever sees them here); an admin only the types of their admin_{id} permissions.
+            // A super admin manages every booking type; an admin the types of their admin_{id} permissions, the ICT service desk
+            // commander the ICT types of their admin_ict_{id} permissions. Parsed, not a prefix match: "admin_ict_20" is not "admin_".
             $bookingTypeIds = $this->isSuperAdmin()
                 ? BookingTypeHasRole::query()->distinct()->pluck('booking_type_id')
-                : collect(Auth::user()->validPermissionNames())->filter(function (string $name) {
-                    return str_starts_with($name, 'admin_');
-                })->map(function (string $name) {
-                    $parts = explode('_', $name);
-                    return end($parts);
-                })->unique()->values();
+                : collect(Auth::user()->validPermissionNames())
+                    ->map(fn (string $name) => PermissionEnum::parsePermissionName($name))
+                    ->filter(fn ($parsed) => $parsed !== null && in_array($parsed['permission'], [PermissionEnum::ADMIN, PermissionEnum::ADMIN_ICT], true))
+                    ->map(fn ($parsed): int => $parsed['booking_type_id'])
+                    ->unique()
+                    ->values();
 
 
             $user = User::where('uuid', $userUuid)->with(['roles', 'permissions'])
@@ -312,7 +312,7 @@ class BookingAdminManagementService
         if (!$this->isSuperAdmin()) {
             $administered = collect($admin->validPermissionNames())
                 ->map(fn (string $name) => PermissionEnum::parsePermissionName($name))
-                ->filter(fn ($parsed) => $parsed !== null && $parsed['permission'] === PermissionEnum::ADMIN)
+                ->filter(fn ($parsed) => $parsed !== null && in_array($parsed['permission'], [PermissionEnum::ADMIN, PermissionEnum::ADMIN_ICT], true))
                 ->map(fn ($parsed): int => $parsed['booking_type_id'])
                 ->all();
 
@@ -391,9 +391,11 @@ class BookingAdminManagementService
 
         if ($role) {
 
+            // Parsed, not a prefix match: "admin" must not count "admin_ict_20" (nor "approver" count "vice_approver_3").
             $hasPermissions = $user->permissions->contains(function ($permission) use ($rolePrefix) {
+                $parsed = PermissionEnum::parsePermissionName($permission->name);
 
-                return str_starts_with($permission->name, $rolePrefix);
+                return $parsed !== null && $parsed['permission']->trimSuffix() === $rolePrefix;
             });
 
             if (!$hasPermissions) {

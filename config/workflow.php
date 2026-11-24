@@ -20,4 +20,9 @@ return [
         'registry_every_minutes' => (int) env('CLEARANCE_REGISTRY_EVERY_MINUTES', 60),
     ],
 
+    // The ICT service desk: a booking type id => an App\Domain\Workflow\Automation\IctAutomation class. Empty = no automation runs.
+    'ict' => [
+        'automation' => [],
+    ],
+
 ];

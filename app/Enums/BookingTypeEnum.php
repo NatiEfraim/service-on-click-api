@@ -50,7 +50,7 @@ enum BookingTypeEnum
     case USER_OPEN_BOOKING;
     case USER_MOVE_BOOKING;
 
-    /** The booking type's DB id, memoized per request. */
+    /** The booking type's DB id, memoized per process. A miss is never memoized: a lookup made while the table is empty (a test between seedings) must not starve every later caller of the id. */
     public function getBookingTypeId(): ?int
     {
         static $cache = [];
@@ -61,7 +61,7 @@ enum BookingTypeEnum
             return null;
         }
 
-        if (!array_key_exists($name, $cache)) {
+        if (!isset($cache[$name])) {
             $cache[$name] = BookingType::query()
                 ->where('name', $name)
                 ->value('id');
@@ -510,16 +510,22 @@ enum BookingTypeEnum
         return in_array($this, self::webOnlyCases(), true);
     }
 
-    /** @return array<int, int> The DB ids of the web-only types (memoized per request; a type missing from the DB is skipped). */
+    /** @return array<int, int> The DB ids of the web-only types (memoized per process once every type resolved; a type missing from the DB is skipped, and such a partial list is not memoized). */
     public static function webOnlyIds(): array
     {
         static $cache = null;
 
-        if ($cache === null) {
-            $cache = array_values(array_filter(array_map(fn (self $type): ?int => $type->getBookingTypeId(), self::webOnlyCases())));
+        if ($cache !== null) {
+            return $cache;
         }
 
-        return $cache;
+        $ids = array_values(array_filter(array_map(fn (self $type): ?int => $type->getBookingTypeId(), self::webOnlyCases())));
+
+        if (count($ids) === count(self::webOnlyCases())) {
+            $cache = $ids;
+        }
+
+        return $ids;
     }
 
     public static function isWebOnlyId(?int $bookingTypeId): bool

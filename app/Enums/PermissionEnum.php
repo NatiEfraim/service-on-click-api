@@ -22,6 +22,9 @@ enum PermissionEnum: string
     case DEPARTMENT_SECURITY_OFFICER = 'department_security_officer_';
     case INTERVIEW_COORDINATOR = 'interview_coordinator_';
 
+    // The ICT service desk commander: seeded only for the ICT types (20-25), through the ICT route.
+    case ADMIN_ICT = 'admin_ict_';
+
     public function trimSuffix(): string
     {
         return rtrim(string: $this->value, characters: '_');
@@ -92,6 +95,7 @@ enum PermissionEnum: string
             self::ICT_HANDLER => RoleEnum::ICT_HANDLER,
             self::DEPARTMENT_SECURITY_OFFICER => RoleEnum::DEPARTMENT_SECURITY_OFFICER,
             self::INTERVIEW_COORDINATOR => RoleEnum::INTERVIEW_COORDINATOR,
+            self::ADMIN_ICT => RoleEnum::ADMIN_ICT,
         };
     }
 

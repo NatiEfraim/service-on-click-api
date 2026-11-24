@@ -39,7 +39,9 @@ class AssignAdminRoleRequest extends FormRequest
             'reason' => 'nullable|string|max:500',
             'role_assignments' => 'required|array|min:1',
             'role_assignments.*.booking_type_id' => 'required|integer|exists:booking_types,id',
-            'role_assignments.*.is_admin' => 'required|boolean',
+            // A camp type answers is_admin; an ICT type answers is_admin_ict (the ICT service desk commander).
+            'role_assignments.*.is_admin' => 'required_without:role_assignments.*.is_admin_ict|boolean',
+            'role_assignments.*.is_admin_ict' => 'required_without:role_assignments.*.is_admin|boolean',
         ];
     }
 
@@ -66,23 +68,32 @@ class AssignAdminRoleRequest extends FormRequest
             'role_assignments.array' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
             'role_assignments.*.booking_type_id.required' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
             'role_assignments.*.booking_type_id.exists' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
-            'role_assignments.*.is_admin.required' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
+            'role_assignments.*.is_admin.required_without' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
             'role_assignments.*.is_admin.boolean' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
+            'role_assignments.*.is_admin_ict.required_without' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
+            'role_assignments.*.is_admin_ict.boolean' => 'אחד או יותר מהנתונים שנשלחו אינו תקין.',
         ];
     }
 
     /**
-     * The admin role cannot be GRANTED on a type that does not have it (the clearance grant and the infosec / ICT types have their own roles
-     * and no admin_{id}): refused like any other flag rule, so a stray permission can never be written here.
+     * A commander role cannot be GRANTED on a type that does not have it: admin_{id} only on the camp types, admin_ict_{id} only on the
+     * ICT types. Refused like any other flag rule, so a stray permission can never be written here.
      */
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $flags = ['is_admin' => RoleEnum::ADMIN, 'is_admin_ict' => RoleEnum::ADMIN_ICT];
+
             foreach ((array) $this->input('role_assignments', []) as $index => $assignment) {
-                if (is_array($assignment)
-                    && filter_var($assignment['is_admin'] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === true
-                    && !app(PermissionRules::class)->hasLink(RoleEnum::ADMIN->value, (int) ($assignment['booking_type_id'] ?? 0))) {
-                    $validator->errors()->add("role_assignments.{$index}.is_admin", 'אחד או יותר מהנתונים שנשלחו אינו תקין.');
+                if (!is_array($assignment)) {
+                    continue;
+                }
+
+                foreach ($flags as $flagKey => $roleEnum) {
+                    if (filter_var($assignment[$flagKey] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === true
+                        && !app(PermissionRules::class)->hasLink($roleEnum->value, (int) ($assignment['booking_type_id'] ?? 0))) {
+                        $validator->errors()->add("role_assignments.{$index}.{$flagKey}", 'אחד או יותר מהנתונים שנשלחו אינו תקין.');
+                    }
                 }
             }
         });

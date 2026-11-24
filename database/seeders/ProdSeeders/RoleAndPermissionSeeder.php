@@ -34,6 +34,8 @@ class RoleAndPermissionSeeder extends Seeder
         // The clearance grant route (type 14): its requester and its interview coordinator.
         RoleEnum::DEPARTMENT_SECURITY_OFFICER,
         RoleEnum::INTERVIEW_COORDINATOR,
+        // The ICT service desk commander (types 20-25 only, through the ICT route).
+        RoleEnum::ADMIN_ICT,
     ];
 
     public function run(): void
@@ -113,7 +115,7 @@ class RoleAndPermissionSeeder extends Seeder
                         'guard_name' => self::GUARD_NAME,
                     ],
                     [
-                        'display_name' => $roleEnum->getPermissionDisplayName() . ' ' . $bookingType->display_name,
+                        'display_name' => $this->roleLabelForType($roleEnum, (int) $bookingType->id) . ' ' . $bookingType->display_name,
                     ]
                 );
             }
@@ -125,5 +127,15 @@ class RoleAndPermissionSeeder extends Seeder
                 $permission->delete();
             }
         }
+    }
+
+    /** The vice approver of an ICT type is the service desk representative (נציג מוקד); every other pair keeps the role's name. */
+    private function roleLabelForType(RoleEnum $roleEnum, int $bookingTypeId): string
+    {
+        if ($roleEnum === RoleEnum::VICE_APPROVER && in_array($bookingTypeId, \App\Domain\Workflow\Routes\IctServiceDeskRoute::bookingTypeIds(), true)) {
+            return 'נציג מוקד';
+        }
+
+        return $roleEnum->getPermissionDisplayName();
     }
 }

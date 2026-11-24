@@ -19,7 +19,7 @@ use App\Enums\StatusBookingEnum as Status;
  * Status 19 (ממתין לגורם חיצוני, the types of $waitingForExternalPartyBookingTypeIds only): every managing role may park a booking there from its
  * own turn or skip (externalPartyMoves), and only the approver or the admin closes it - the final approval or rejection. No way back to an earlier
  * stage, no hold from it, and the requester cannot cancel while it waits there (StatusBookingEnum::canBeCanceledByUser).
- * The infosec and ICT types (15-25) have no vice approver or approver either: their handler (infosec_officer_N / ict_handler_N) is the whole route,
+ * The infosec types (15, 16) have no vice approver or approver either: their handler (infosec_officer_N) is the whole route,
  * like the barber - one answer, approve (3) or reject (4), then the closing (5 / 7) - see officerMoves(). The stages stay the generic ones
  * (vice_approver = "waiting for the handling party", realization), so the screens need no new stage.
  * A hold (TRANSPORTATION: 8, 9, 10) never moves a booking: the stage, the buttons and the visibility stay those of the status it was put on hold
@@ -152,8 +152,8 @@ final class Workflow
             'isControlOfficer' => $has(PermissionEnum::TRANSPORTATION_CONTROL_OFFICER) || $has(PermissionEnum::IN_UNIT_FOOD_CONTROL_OFFICER),
             'isViceApprover' => $has(PermissionEnum::VICE_APPROVER),
             'isApprover' => $has(PermissionEnum::APPROVER),
-            // The domain handler of an infosec / ICT type (15-25): answers and closes the request alone, see officerMoves().
-            'isOfficer' => $has(PermissionEnum::INFOSEC_OFFICER) || $has(PermissionEnum::ICT_HANDLER),
+            // The domain handler of an infosec type (15, 16). ICT (20-25) runs on IctServiceDeskRoute and never reaches here.
+            'isOfficer' => $has(PermissionEnum::INFOSEC_OFFICER),
             // The strongest role of the type: acts at every stage, as whoever's turn it is.
             'isAdmin' => $has(PermissionEnum::ADMIN),
         ];

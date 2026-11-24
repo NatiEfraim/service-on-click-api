@@ -141,9 +141,10 @@ class MetricsService
             ->take(12)
             ->all();
 
-        // An infosec / ICT type has no vice approver or approver: its domain handler answers and closes at those stages.
+        // An infosec type has no vice approver or approver: its domain handler answers and closes at those stages.
+        // ICT (20-25) runs on its own route, whose stages name VICE_APPROVER (the desk representative) as actingRole.
         $domainHandlers = BookingTypeHasRole::query()
-            ->whereIn('role_id', [RoleEnum::INFOSEC_OFFICER->value, RoleEnum::ICT_HANDLER->value])
+            ->whereIn('role_id', [RoleEnum::INFOSEC_OFFICER->value])
             ->get(['booking_type_id', 'role_id'])
             ->mapWithKeys(fn (BookingTypeHasRole $link): array => [(int) $link->booking_type_id => RoleEnum::from((int) $link->role_id)]);
 

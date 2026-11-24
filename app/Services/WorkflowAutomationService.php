@@ -65,6 +65,48 @@ class WorkflowAutomationService
         return ['moved' => $moved, 'checked' => $checked];
     }
 
+    /** Moves on every request whose type's automation (config workflow.ict.automation) reports success. @return array{moved: int, checked: int} */
+    public function advanceAutomated(): array
+    {
+        $moved = 0;
+        $checked = 0;
+        $classes = (array) config('workflow.ict.automation', []);
+
+        foreach ($classes as $bookingTypeId => $class) {
+            $route = $this->workflow->routeFor((int) $bookingTypeId);
+
+            if ($route === null || !is_a($class, \App\Domain\Workflow\Automation\IctAutomation::class, true)) {
+                continue;
+            }
+
+            $automation = app($class);
+
+            foreach ($route->transitions() as $transition) {
+                if ($transition->auto !== Transition::AUTO_AUTOMATION) {
+                    continue;
+                }
+
+                $ids = Booking::query()
+                    ->where('booking_type_id', (int) $bookingTypeId)
+                    ->where('status_id', $transition->from)
+                    ->orderBy('id')
+                    ->pluck('id');
+
+                foreach ($ids as $id) {
+                    $checked++;
+                    $booking = Booking::query()->find($id);
+
+                    if ($booking !== null && $automation->run($booking)
+                        && $this->move((int) $id, $transition, fn (Booking $fresh): bool => (int) $fresh->status_id === $transition->from, 'טופל אוטומטית')) {
+                        $moved++;
+                    }
+                }
+            }
+        }
+
+        return ['moved' => $moved, 'checked' => $checked];
+    }
+
     /**
      * Closes the requests waiting for their clearance whose candidate the registry shows at (or above) the requested level. A registry failure
      * stops the round: nothing moves on a guess.

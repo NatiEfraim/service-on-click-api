@@ -19,6 +19,10 @@ class AdvanceWorkflowCommand extends Command
             $due = $automation->advanceDue();
             $this->info("Due transitions: {$due['moved']} moved of {$due['checked']} checked.");
 
+            // The ICT service desk: nothing runs until config workflow.ict.automation names a type's automation class.
+            $automated = $automation->advanceAutomated();
+            $this->info("Automations: {$automated['moved']} moved of {$automated['checked']} checked.");
+
             if ($this->option('registry') || $this->registryIsDue()) {
                 $registry = $automation->closeGranted();
                 $this->info("Registry: {$registry['moved']} closed of {$registry['checked']} checked" . (isset($registry['skipped']) ? " ({$registry['skipped']})." : '.'));
