@@ -4,7 +4,7 @@ namespace App\Domain\Workflow\Routes;
 
 /**
  * The field_names of the clearance grant form (type 14) the workflow addresses. They are the seeder's names
- * (InfosecIctFormFieldSeeder); FormFieldEnum is the mobile app's and does not know them.
+ * (InfosecFormFieldSeeder); FormFieldEnum is the mobile app's and does not know them.
  */
 final class ClearanceGrantFields
 {

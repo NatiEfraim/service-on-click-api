@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\FormSectionEnum;
+use App\Enums\SystemDomainEnum;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -53,9 +54,53 @@ class FormField extends Model
     /** field_name prefix of fields created in this system (seeded ones follow the mobile FormFieldEnum). */
     public const CUSTOM_PREFIX = 'int_';
 
+    /**
+     * field_name prefix of the mobile-owned "גורם מטפל" fields: the mobile app manages them (its options come from
+     * option_field_has_users, a mobile-only table), the web only mirrors them to display imported values. Never offered
+     * on the web forms (is_active=0), never edited here and never sent in a form_field/option_field op.
+     */
+    public const MOBILE_OWNED_PREFIX = 'vice_approver_handler_';
+
+    // ------------------------------------------------------------------------------------------------------
+    // The id contract of the three systems (SystemDomainEnum - the b2r booking files carry raw field ids, so a
+    // field both the web and the mobile know MUST sit at the same id in both databases; the import maps by id):
+    //   1..MOBILE_SHARED_MAX    מפקדת מחנה: the mobile-shared fields, each at its exact mobile id (incl. 106/107).
+    //   1001-2999 / 3001-4999   ביטחון מידע / תקשוב: each web-only system's own block (SystemDomainEnum::fieldRange).
+    //   WEB_CREATED_FLOOR..     fields created at runtime (the form editor's custom "int_" fields).
+    // SystemDomainContractSeeder enforces the bands on every seeding run.
+    // ------------------------------------------------------------------------------------------------------
+
+    public const MOBILE_SHARED_MAX = 1000;
+    public const WEB_CREATED_FLOOR = 5001;
+
+    /** The next free id inside the given system's field block; its seeders pin every row they create with it. */
+    public static function nextSeededIdFor(SystemDomainEnum $domain): int
+    {
+        [$floor, $ceiling] = $domain->fieldRange();
+
+        $next = max($floor, 1 + (int) self::query()->whereBetween('id', [$floor, $ceiling])->max('id'));
+
+        if ($next > $ceiling) {
+            throw new \RuntimeException("FormField: the {$domain->value} field block {$floor}-{$ceiling} is full.");
+        }
+
+        return $next;
+    }
+
+    /** The next id for a field created at runtime - never auto-increment, which MariaDB resets to max(id)+1 on restart. */
+    public static function nextWebCreatedId(): int
+    {
+        return max(self::WEB_CREATED_FLOOR, 1 + (int) self::query()->max('id'));
+    }
+
     public function isCustom(): bool
     {
         return str_starts_with((string) $this->field_name, self::CUSTOM_PREFIX);
+    }
+
+    public function isMobileOwned(): bool
+    {
+        return str_starts_with((string) $this->field_name, self::MOBILE_OWNED_PREFIX);
     }
 
     public function sectionEnum(): FormSectionEnum

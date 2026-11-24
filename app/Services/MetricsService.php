@@ -151,7 +151,11 @@ class MetricsService
         $pools = $byType
             ->filter(fn (array $row): bool => BookingStageEnum::from($row['stage'])->actingRole() !== null)
             ->map(function (array $row) use ($scope, $unit, $domainHandlers): array {
-                $role = $domainHandlers[$row['booking_type_id']] ?? BookingStageEnum::from($row['stage'])->actingRole();
+                $stage = BookingStageEnum::from($row['stage']);
+                // The control-officer stage belongs to the type's own control officer (transportation 6, in-unit food 7).
+                $role = $domainHandlers[$row['booking_type_id']]
+                    ?? ($stage === BookingStageEnum::CONTROL_OFFICER ? RoleEnum::controlOfficerRoleForBookingType((int) $row['booking_type_id']) : null)
+                    ?? $stage->actingRole();
                 $permissionName = $role->toPermissionEnum()->keyForId($row['booking_type_id']);
 
                 $holders = Permission::query()->where('name', $permissionName)->exists()

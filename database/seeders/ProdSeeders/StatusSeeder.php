@@ -35,9 +35,11 @@ class StatusSeeder extends Seeder
             // Vice approver's answer, sent on to the approver
             'vice_approver_approved' => 'הועברה לאישור סופי',
             'vice_approver_rejected' => 'הועברה לביטול סופי',
-            // TRANSPORTATION_BOOKING: control officer's answer, sent on to the vice approver
+            // Control-officer types (transportation, in-unit food): control officer's answer, sent on to the vice approver
             'control_officer_approved' => 'אושרה ע"י רמ"ד תו"ב',
             'control_officer_rejected' => 'נדחתה ע"י רמ"ד תו"ב',
+            // Types 3, 4, 8, 10, 11, 13: parked until an outside party answers; closed only by the approver/admin
+            'waiting_for_external_party' => 'ממתין לגורם חיצוני',
             // CLEARANCE_GRANT_BOOKING (type 14), web only: its own route, see App\Domain\Workflow\Routes\ClearanceGrantRoute
             'interview_assignment' => 'הקצאה לתחקיר',
             'interview_scheduled' => 'נקבע מול המועמד',

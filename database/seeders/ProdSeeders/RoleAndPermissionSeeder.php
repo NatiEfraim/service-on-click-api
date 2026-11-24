@@ -25,9 +25,10 @@ class RoleAndPermissionSeeder extends Seeder
         RoleEnum::VICE_APPROVER,
         // Everyone else: sees only their own bookings.
         RoleEnum::USER,
-        // Linked to the transportation booking type only (BookingTypeHasRoleSeeder): the first stage of its route.
+        // Control officers (רמ"ד תו"ב), each linked to one booking type (BookingTypeHasRoleSeeder): the first stage of its route.
         RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
-        // Domain-specific handlers for infosec and ICT types.
+        RoleEnum::IN_UNIT_FOOD_CONTROL_OFFICER,
+        // Domain-specific handlers for infosec and ICT types (web-only ids, 101+).
         RoleEnum::INFOSEC_OFFICER,
         RoleEnum::ICT_HANDLER,
         // The clearance grant route (type 14): its requester and its interview coordinator.

@@ -53,7 +53,7 @@ class FormFieldService
             $section = FormSectionEnum::tryFrom((string) ($data['section'] ?? '')) ?? FormSectionEnum::REQUESTER;
             $colSpan = in_array((int) ($data['col_span'] ?? 1), [1, 2, 4], true) ? (int) ($data['col_span'] ?? 1) : 1;
 
-            $field = FormField::query()->create([
+            $field = new FormField([
                 'unit_id' => $unitId,
                 'booking_type_id' => $bookingTypeId,
                 'field_name' => FormFieldRules::newKey((string) Str::uuid()),
@@ -70,13 +70,17 @@ class FormFieldService
                 'version' => 1,
                 'is_active' => true,
             ]);
+            // Ids 1-1000 mirror the mobile app's fields and 1001-4999 are the seeded web-only ones, so a field
+            // made here takes an id from the web-created band, never from auto-increment.
+            $field->id = FormField::nextWebCreatedId();
+            $field->save();
 
             foreach (FormFieldRules::cleanOptions($data['options'] ?? []) as $name) {
                 if (!in_array($type, FormFieldRules::OPTION_TYPES, true)) {
                     break;
                 }
 
-                OptionField::query()->create([
+                $option = new OptionField([
                     'name' => $name,
                     'form_field_id' => $field->id,
                     'field_type_id' => FieldTypeEnum::TEXT->value,
@@ -84,6 +88,9 @@ class FormFieldService
                     'is_input' => false,
                     'payload_section_id' => PayloadSectionEnum::SELECTS->value,
                 ]);
+                // Like the field: options made here take ids from the web-created band (1-10000 are the mobile ids).
+                $option->id = OptionField::nextWebCreatedId();
+                $option->save();
             }
 
             $after = $this->snapshot($field);
@@ -123,6 +130,11 @@ class FormFieldService
 
             if ((int) $field->version !== $expectedVersion) {
                 throw new DomainError('השדה שונה בינתיים על ידי משתמש אחר. יש לרענן ולנסות שוב.', 409);
+            }
+
+            // A mobile-owned field ("גורם מטפל") is managed only in the mobile app: no edit here, no op may travel for it.
+            if ($field->isMobileOwned()) {
+                throw new DomainError('שדה זה מנוהל באפליקציה בלבד ואינו ניתן לעריכה כאן', 422);
             }
 
             $before = $this->snapshot($field);
@@ -307,6 +319,11 @@ class FormFieldService
         }
 
         $field = FormField::query()->where('is_active', true)->findOrFail($fieldId);
+
+        // A mobile-owned field ("גורם מטפל") is managed only in the mobile app: no edit here, no op may travel for it.
+        if ($field->isMobileOwned()) {
+            throw new DomainError('שדה זה מנוהל באפליקציה בלבד ואינו ניתן לעריכה כאן', 422);
+        }
 
         if ($editable && ($error = FormFieldRules::validateEditable((int) $field->field_type_id))) {
             throw new DomainError($error, 422);

@@ -88,9 +88,10 @@ class ManagementInsightTest extends ManagementTestCase
     public function test_the_catalog_has_the_lists_of_the_dropdowns_and_each_role_sees_only_its_own_unit(): void
     {
         $super = $this->as(self::SUPER_ADMIN)->getJson(self::BASE . '/catalog')->assertOk()->json('data');
-        // 18 statuses shared with the mobile app + the 5 of the clearance grant route; 9 stages of the approver chains + the route's 4.
-        $this->assertCount(23, $super['statuses']);
-        $this->assertCount(13, $super['stages']);
+        // 19 statuses shared with the mobile app (the external wait included) + the 5 of the clearance grant route;
+        // 10 stages of the approver chains (external_party included) + the route's 4.
+        $this->assertCount(24, $super['statuses']);
+        $this->assertCount(14, $super['stages']);
         $this->assertSame([101, 102, 103, 104, 105], array_column($super['routes']['14']['steps'], 'status_id'));
         $this->assertSame(['requester', 'handler'], array_column($super['sections'], 'id'));
         $this->assertCount(4, $super['units']);

@@ -135,11 +135,9 @@ class BookingTypeHasRoleSeeder extends Seeder
     /** @return array<int> Roles on top of $commonRoleIds, only for specific booking types. */
     private function extraRoleIdsByBookingType(int $bookingTypeId): array
     {
-        return match ($bookingTypeId) {
-            // Its route starts at the control officer: Workflow::hasControlOfficerStage reads this link.
-            BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId() => [RoleEnum::TRANSPORTATION_CONTROL_OFFICER->value],
+        // A type whose route starts at a control officer (transportation 6, in-unit food 7): Workflow::hasControlOfficerStage reads this link.
+        $controlOfficerRole = RoleEnum::controlOfficerRoleForBookingType($bookingTypeId);
 
-            default => [],
-        };
+        return $controlOfficerRole === null ? [] : [$controlOfficerRole->value];
     }
 }

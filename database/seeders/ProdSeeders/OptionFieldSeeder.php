@@ -40,6 +40,7 @@ class OptionFieldSeeder extends Seeder
         } catch (\Exception $e) {
             Log::error('OptionFieldSeeder failed. message:' . $e->getMessage());
             DB::rollBack();
+            throw $e;
         }
     }
 
@@ -87,7 +88,7 @@ class OptionFieldSeeder extends Seeder
 
         unset($optionField['category_fields']);
 
-        $createdOptionField = OptionField::query()->updateOrCreate(
+        $createdOptionField = $this->upsertOption(
             [
                 'name' => $optionField['name'],
                 'form_field_id' => $formFieldId,
@@ -110,7 +111,7 @@ class OptionFieldSeeder extends Seeder
 
         unset($optionField['category_fields']);
 
-        $createdOptionField = OptionField::query()->updateOrCreate(
+        $createdOptionField = $this->upsertOption(
             [
                 'name' => $optionField['name'],
                 'form_field_id' => $formFieldId,
@@ -131,7 +132,7 @@ class OptionFieldSeeder extends Seeder
 
     private function createCategoryField(int $parentOptionFieldId, int $formFieldId, array $categoryField): void
     {
-        OptionField::query()->updateOrCreate(
+        $this->upsertOption(
             [
                 'name' => $categoryField['name'],
                 'form_field_id' => $formFieldId,
@@ -144,6 +145,37 @@ class OptionFieldSeeder extends Seeder
                 'payload_section_id' => $categoryField['payload_section_id'] ?? PayloadSectionEnum::NONE->value,
             ]),
         );
+    }
+
+    /**
+     * These options are mobile-shared: the b2r booking files carry raw option ids, so every option here must hold the
+     * EXACT id the mobile app seeds it with. On a fresh database the seed order reproduces the mobile ids (1-350); an
+     * option added later to an existing database cannot rely on auto-increment - give its entry an 'id' key with the
+     * mobile id, or the guard below stops the seeding.
+     */
+    private function upsertOption(array $keys, array $values): OptionField
+    {
+        $option = OptionField::query()->where($keys)->first();
+
+        if (!$option) {
+            $option = new OptionField($keys);
+
+            if (isset($values['id'])) {
+                $option->id = (int) $values['id'];
+            }
+        }
+
+        unset($values['id']);
+        $option->fill($values)->save();
+
+        if ((int) $option->id > OptionField::MOBILE_SHARED_MAX) {
+            throw new \RuntimeException(
+                "OptionFieldSeeder: mobile-shared option '{$keys['name']}' landed at id {$option->id}, outside the mobile band - "
+                . "add 'id' => <its mobile id> to the entry (docs/frontend-field-id-alignment-guide.md)."
+            );
+        }
+
+        return $option;
     }
 
     private function textOption(string $name, int $formFieldId, int $fieldTypeId = FieldTypeEnum::TEXT->value, bool $isInput = false, int $payloadSectionId = PayloadSectionEnum::NONE->value): array

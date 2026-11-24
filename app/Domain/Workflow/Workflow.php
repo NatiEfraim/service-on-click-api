@@ -16,6 +16,9 @@ use App\Enums\StatusBookingEnum as Status;
  * The barber booking is the exception: its route has one step, the barber's answer - approve (11) or reject (12) - and none of the vice approver's
  * or the approver's statuses (barberMoves). The barber is the APPROVER of the type (approver_5); the admin holds that turn too, as on every type.
  * The type has no vice approver (BookingTypeHasRoleSeeder), so nobody skips or waits for one.
+ * Status 19 (ממתין לגורם חיצוני, the types of $waitingForExternalPartyBookingTypeIds only): every managing role may park a booking there from its
+ * own turn or skip (externalPartyMoves), and only the approver or the admin closes it - the final approval or rejection. No way back to an earlier
+ * stage, no hold from it, and the requester cannot cancel while it waits there (StatusBookingEnum::canBeCanceledByUser).
  * The infosec and ICT types (15-25) have no vice approver or approver either: their handler (infosec_officer_N / ict_handler_N) is the whole route,
  * like the barber - one answer, approve (3) or reject (4), then the closing (5 / 7) - see officerMoves(). The stages stay the generic ones
  * (vice_approver = "waiting for the handling party", realization), so the screens need no new stage.
@@ -35,12 +38,14 @@ final class Workflow
 
     /**
      * @param array<int, int> $controlOfficerBookingTypeIds types whose route starts at the control officer (none by default, or nobody could act)
+     * @param array<int, int> $waitingForExternalPartyBookingTypeIds types that may be parked at status 19 (none by default)
      * @param array<int, TypeRoute> $routes the types with a route of their own, by booking type id
      */
     public function __construct(
         private readonly array $controlOfficerBookingTypeIds = [],
         private readonly ?int $transportationBookingTypeId = null,
         private readonly ?int $barberBookingTypeId = null,
+        private readonly array $waitingForExternalPartyBookingTypeIds = [],
         private readonly array $routes = [],
     ) {
     }
@@ -143,7 +148,8 @@ final class Workflow
         $has = fn (PermissionEnum $permission): bool => in_array($permission->value . $bookingTypeId, $names, true);
 
         return [
-            'isControlOfficer' => $has(PermissionEnum::TRANSPORTATION_CONTROL_OFFICER),
+            // Each control officer holds "{their prefix}_{their own type}" only, so at most one of these can match a type.
+            'isControlOfficer' => $has(PermissionEnum::TRANSPORTATION_CONTROL_OFFICER) || $has(PermissionEnum::IN_UNIT_FOOD_CONTROL_OFFICER),
             'isViceApprover' => $has(PermissionEnum::VICE_APPROVER),
             'isApprover' => $has(PermissionEnum::APPROVER),
             // The domain handler of an infosec / ICT type (15-25): answers and closes the request alone, see officerMoves().
@@ -156,6 +162,12 @@ final class Workflow
     public function hasControlOfficerStage(int $bookingTypeId): bool
     {
         return in_array($bookingTypeId, $this->controlOfficerBookingTypeIds, true);
+    }
+
+    /** Whether a booking of the type may be parked at status 19 (ממתין לגורם חיצוני). */
+    public function hasWaitingForExternalParty(int $bookingTypeId): bool
+    {
+        return in_array($bookingTypeId, $this->waitingForExternalPartyBookingTypeIds, true);
     }
 
     private function isBarberBooking(int $bookingTypeId): bool
@@ -192,6 +204,7 @@ final class Workflow
             $status === Status::PENDING_FILE => BookingStageEnum::SUPPLIER_FILES,
             $status === Status::PENDING_PROCESSING => BookingStageEnum::SUPPLIER_APPROVAL,
             $status === Status::PENDING_APPROVED => BookingStageEnum::SUPPLIER_NUMBER,
+            $status === Status::WAITING_FOR_EXTERNAL_PARTY => BookingStageEnum::EXTERNAL_PARTY,
             $status === Status::APPROVED => BookingStageEnum::REALIZATION,
             default => BookingStageEnum::CLOSED,
         };
@@ -240,6 +253,8 @@ final class Workflow
             BookingStageEnum::SUPPLIER_FILES,
             BookingStageEnum::SUPPLIER_APPROVAL,
             BookingStageEnum::SUPPLIER_NUMBER => $isApprover ? $this->approverMoves($except, $bookingTypeId) : [],
+            // Only the approver (or the admin) answers the external party's wait: the final approval or rejection, nothing else.
+            BookingStageEnum::EXTERNAL_PARTY => $isApprover ? $this->finalDecisionMoves() : [],
             // The barber is the approver of the type (approver_5); the admin holds the turn too. The type has no vice approver.
             BookingStageEnum::BARBER => $isApprover ? $this->barberMoves() : [],
             BookingStageEnum::REALIZATION => $isApprover || $isOfficer ? $this->closingMoves() : [],
@@ -269,7 +284,7 @@ final class Workflow
         $belowTheApprover = in_array($stage, [BookingStageEnum::CONTROL_OFFICER, BookingStageEnum::VICE_APPROVER], true);
 
         if ((!empty($flags['isApprover']) || !empty($flags['isAdmin'])) && $belowTheApprover) {
-            $moves = [...$moves, ...$this->finalDecisionMoves()];
+            $moves = [...$moves, ...$this->finalDecisionMoves(), ...$this->externalPartyMoves($bookingTypeId)];
         }
 
         return $moves;
@@ -282,6 +297,7 @@ final class Workflow
             ['status' => Status::CONTROL_OFFICER_APPROVED, 'label' => 'אישור והעברה לגורם המטפל'],
             ['status' => Status::CONTROL_OFFICER_REJECTED, 'label' => 'דחייה'],
             ...$this->holdMoves($except, $bookingTypeId),
+            ...$this->externalPartyMoves($bookingTypeId),
         ];
     }
 
@@ -292,13 +308,14 @@ final class Workflow
             ['status' => Status::VICE_APPROVER_APPROVED, 'label' => 'אישור והעברה למפקד התחום'],
             ['status' => Status::VICE_APPROVER_REJECTED, 'label' => 'דחייה'],
             ...$this->holdMoves($except, $bookingTypeId),
+            ...$this->externalPartyMoves($bookingTypeId),
         ];
     }
 
     /** @param Status $except see controlOfficerMoves @return array<int, array{status: Status, label: string}> */
     private function approverMoves(Status $except, int $bookingTypeId): array
     {
-        return [...$this->finalDecisionMoves(), ...$this->holdMoves($except, $bookingTypeId)];
+        return [...$this->finalDecisionMoves(), ...$this->holdMoves($except, $bookingTypeId), ...$this->externalPartyMoves($bookingTypeId)];
     }
 
     /** The approver's decision on a request: the final approval or the final rejection (which needs a comment). @return array<int, array{status: Status, label: string}> */
@@ -335,6 +352,20 @@ final class Workflow
         }
 
         return $moves;
+    }
+
+    /**
+     * Parking a booking for an outside party's answer (status 19), on the types that know it. It never comes up as $except: at 19 itself the
+     * stage is EXTERNAL_PARTY, where only the final decisions are offered - so there is no way from 19 to a hold or back to an earlier stage.
+     * @return array<int, array{status: Status, label: string}>
+     */
+    private function externalPartyMoves(int $bookingTypeId): array
+    {
+        if (!$this->hasWaitingForExternalParty($bookingTypeId)) {
+            return [];
+        }
+
+        return [['status' => Status::WAITING_FOR_EXTERNAL_PARTY, 'label' => 'העבר לממתין לגורם חיצוני']];
     }
 
     /**

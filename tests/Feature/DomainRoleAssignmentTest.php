@@ -121,8 +121,8 @@ class DomainRoleAssignmentTest extends ManagementTestCase
         $permissions = collect($response->json('data.permissions'));
         $roleOptions = $response->json('data.role_options');
 
-        $this->assertSame(9, $roleOptions['department_security_officer']);
-        $this->assertSame(10, $roleOptions['interview_coordinator']);
+        $this->assertSame(\App\Enums\RoleEnum::DEPARTMENT_SECURITY_OFFICER->value, $roleOptions['department_security_officer']);
+        $this->assertSame(\App\Enums\RoleEnum::INTERVIEW_COORDINATOR->value, $roleOptions['interview_coordinator']);
 
         $infosec = $permissions->firstWhere('booking_type_id', $this->infosecTypeId());
         $media = $permissions->firstWhere('booking_type_id', (int) BookingTypeEnum::REMOVABLE_MEDIA_BOOKING->getBookingTypeId());

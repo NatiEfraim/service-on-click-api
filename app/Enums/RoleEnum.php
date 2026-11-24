@@ -10,16 +10,21 @@ enum RoleEnum: int
     case VICE_APPROVER = 4;
     case USER = 5;
 
+    // Control officers (רמ"ד תו"ב), each bound to one booking type; ids shared with the mobile app.
     case TRANSPORTATION_CONTROL_OFFICER = 6;
+    case IN_UNIT_FOOD_CONTROL_OFFICER = 7;
 
-    // Domain-specific handlers for infosec and ICT booking types.
-    case INFOSEC_OFFICER = 7;
-    case ICT_HANDLER = 8;
+    // Web-only roles, banded per system (SystemDomainEnum) so a future mobile role cannot collide and each web
+    // system grows in its own block: ביטחון מידע = 101-149, תקשוב = 151-199.
 
-    // The clearance grant route (type 14): the departmental security officer (קב"ט) submits, the interview coordinator
-    // (במ אט"ל / שלוחת התחקיר) schedules the interview; the infosec officer (במ) owns the route.
-    case DEPARTMENT_SECURITY_OFFICER = 9;
-    case INTERVIEW_COORDINATOR = 10;
+    // ביטחון מידע: the infosec officer (במ) owns its types; on the clearance grant route (type 14) the departmental
+    // security officer (קב"ט) submits and the interview coordinator (במ אט"ל / שלוחת התחקיר) schedules the interview.
+    case INFOSEC_OFFICER = 101;
+    case DEPARTMENT_SECURITY_OFFICER = 103;
+    case INTERVIEW_COORDINATOR = 104;
+
+    // תקשוב (the dev-nati-ict branch's ADMIN_ICT joins this block, e.g. 152, when merged).
+    case ICT_HANDLER = 151;
 
     /** Hebrew display name of the role. */
     public function getPermissionDisplayName(): string
@@ -31,6 +36,7 @@ enum RoleEnum: int
             self::VICE_APPROVER => 'גורם מטפל',
             self::USER => 'משתמש ',
             self::TRANSPORTATION_CONTROL_OFFICER => 'רמ"ד תו"ב',
+            self::IN_UNIT_FOOD_CONTROL_OFFICER => 'רמ"ד תו"ב',
             self::INFOSEC_OFFICER => 'קצין ביטחון מידע',
             self::ICT_HANDLER => 'מנהל תקשוב',
             self::DEPARTMENT_SECURITY_OFFICER => 'קב"ט מחלקתי',
@@ -48,6 +54,7 @@ enum RoleEnum: int
             'vice_approver' => self::VICE_APPROVER,
             'user' => self::USER,
             'transportation_control_officer' => self::TRANSPORTATION_CONTROL_OFFICER,
+            'in_unit_food_control_officer' => self::IN_UNIT_FOOD_CONTROL_OFFICER,
             'infosec_officer' => self::INFOSEC_OFFICER,
             'ict_handler' => self::ICT_HANDLER,
             'department_security_officer' => self::DEPARTMENT_SECURITY_OFFICER,
@@ -66,6 +73,7 @@ enum RoleEnum: int
             self::VICE_APPROVER => PermissionEnum::VICE_APPROVER,
             self::USER => PermissionEnum::USER,
             self::TRANSPORTATION_CONTROL_OFFICER => PermissionEnum::TRANSPORTATION_CONTROL_OFFICER,
+            self::IN_UNIT_FOOD_CONTROL_OFFICER => PermissionEnum::IN_UNIT_FOOD_CONTROL_OFFICER,
             self::INFOSEC_OFFICER => PermissionEnum::INFOSEC_OFFICER,
             self::ICT_HANDLER => PermissionEnum::ICT_HANDLER,
             self::DEPARTMENT_SECURITY_OFFICER => PermissionEnum::DEPARTMENT_SECURITY_OFFICER,
@@ -73,18 +81,49 @@ enum RoleEnum: int
         };
     }
 
-    /** Like toPermissionEnum(), but a control officer acts as VICE_APPROVER outside TRANSPORTATION_BOOKING. */
+    /** Like toPermissionEnum(), but a control officer acts as VICE_APPROVER outside their own booking type. */
     public function toPermissionEnumForBookingType(int $bookingTypeId): PermissionEnum
     {
-        if ($this === self::TRANSPORTATION_CONTROL_OFFICER) {
-            $isTransportationBooking = $bookingTypeId === BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId();
+        $controlOfficerBookingType = $this->controlOfficerBookingType();
 
-            return $isTransportationBooking
-                ? PermissionEnum::TRANSPORTATION_CONTROL_OFFICER
+        if ($controlOfficerBookingType !== null) {
+            return $bookingTypeId === $controlOfficerBookingType->getBookingTypeId()
+                ? $this->toPermissionEnum()
                 : PermissionEnum::VICE_APPROVER;
         }
 
         return $this->toPermissionEnum();
+    }
+
+    /** Every control-officer (רמ"ד תו"ב) role, each bound to one booking type. @return array<int, self> */
+    public static function controlOfficerRoles(): array
+    {
+        return [
+            self::TRANSPORTATION_CONTROL_OFFICER,
+            self::IN_UNIT_FOOD_CONTROL_OFFICER,
+        ];
+    }
+
+    /** The booking type this control-officer role belongs to, or null for a regular role. */
+    public function controlOfficerBookingType(): ?BookingTypeEnum
+    {
+        return match ($this) {
+            self::TRANSPORTATION_CONTROL_OFFICER => BookingTypeEnum::TRANSPORTATION_BOOKING,
+            self::IN_UNIT_FOOD_CONTROL_OFFICER => BookingTypeEnum::IN_UNIT_FOOD_BOOKING,
+            default => null,
+        };
+    }
+
+    /** The control-officer role of a booking type, or null when its route has no רמ"ד תו"ב step. */
+    public static function controlOfficerRoleForBookingType(int $bookingTypeId): ?self
+    {
+        foreach (self::controlOfficerRoles() as $controlOfficerRole) {
+            if ($controlOfficerRole->controlOfficerBookingType()?->getBookingTypeId() === $bookingTypeId) {
+                return $controlOfficerRole;
+            }
+        }
+
+        return null;
     }
 
     /** The Spatie role name, e.g. ADMIN -> "admin". */
@@ -97,6 +136,7 @@ enum RoleEnum: int
             self::VICE_APPROVER => 'vice_approver',
             self::USER => 'user',
             self::TRANSPORTATION_CONTROL_OFFICER => 'transportation_control_officer',
+            self::IN_UNIT_FOOD_CONTROL_OFFICER => 'in_unit_food_control_officer',
             self::INFOSEC_OFFICER => 'infosec_officer',
             self::ICT_HANDLER => 'ict_handler',
             self::DEPARTMENT_SECURITY_OFFICER => 'department_security_officer',

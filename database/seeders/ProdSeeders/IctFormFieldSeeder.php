@@ -4,6 +4,7 @@ namespace Database\Seeders\ProdSeeders;
 
 use App\Enums\BookingTypeEnum;
 use App\Enums\FieldTypeEnum;
+use App\Enums\SystemDomainEnum;
 use App\Enums\UnitEnum;
 use App\Models\FormField;
 use Illuminate\Database\Seeder;
@@ -188,21 +189,40 @@ class IctFormFieldSeeder extends Seeder
         bool $required,
         array $validations = [],
     ): void {
-        FormField::updateOrCreate(
-            [
+        $formField = FormField::query()
+            ->where('booking_type_id', $bookingTypeId)
+            ->where('unit_id', UnitEnum::H->getUnitId())
+            ->where('field_name', $fieldName)
+            ->first();
+
+        // Every תקשוב field lives inside its own block (SystemDomainEnum::ICT->fieldRange()); a row outside it means
+        // an un-renumbered database or a cross-system mixup - stop loudly instead of corrupting another id space.
+        [$floor, $ceiling] = SystemDomainEnum::ICT->fieldRange();
+
+        if ($formField && ((int) $formField->id < $floor || (int) $formField->id > $ceiling)) {
+            throw new \RuntimeException(
+                "IctFormFieldSeeder: field '{$fieldName}' sits at id {$formField->id}, outside the תקשוב block {$floor}-{$ceiling} - "
+                . 'renumber first (docs/frontend-system-domains-guide.md).'
+            );
+        }
+
+        if (!$formField) {
+            $formField = new FormField([
                 'booking_type_id' => $bookingTypeId,
                 'unit_id' => UnitEnum::H->getUnitId(),
                 'field_name' => $fieldName,
-            ],
-            [
-                'field_display_name' => $displayName,
-                'field_type_id' => $fieldType->getFieldTypeId(),
-                'is_required' => $required,
-                // An array: the model casts the column (json_encode here would double-encode it into a JSON string).
-                'field_validations' => empty($validations) ? null : $validations,
-                'editable' => false,
-                'is_input' => false,
-            ]
-        );
+            ]);
+            $formField->id = FormField::nextSeededIdFor(SystemDomainEnum::ICT);
+        }
+
+        $formField->fill([
+            'field_display_name' => $displayName,
+            'field_type_id' => $fieldType->getFieldTypeId(),
+            'is_required' => $required,
+            // An array: the model casts the column (json_encode here would double-encode it into a JSON string).
+            'field_validations' => empty($validations) ? null : $validations,
+            'editable' => false,
+            'is_input' => false,
+        ])->save();
     }
 }

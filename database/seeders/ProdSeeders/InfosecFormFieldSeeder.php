@@ -6,6 +6,7 @@ use App\Domain\Workflow\Routes\ClearanceGrantFields;
 use App\Enums\BookingTypeEnum;
 use App\Enums\FieldTypeEnum;
 use App\Enums\FormSectionEnum;
+use App\Enums\SystemDomainEnum;
 use App\Enums\UnitEnum;
 use App\Models\FormField;
 use App\Models\OptionField;
@@ -14,13 +15,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Form fields of the ביטחון מידע types (14-16). Uses updateOrCreate so the seeder is safe to re-run.
+ * Form fields of the ביטחון מידע system (types 14-16), allocated inside its own id block
+ * (SystemDomainEnum::INFOSEC->fieldRange(), 1001-2999) so neither the mobile app nor the תקשוב system is ever touched
+ * when a field is added here. Uses find-or-create keyed by field_name, safe to re-run.
  *
  * The clearance grant (14) is the legacy screen's form: a requester section (פרטים נוספים) with the candidate's details - the ID number
  * looks the person up and fills personal number, names and rank - and a handler section (למילוי על ידי גורמים רלוונטיים) that the
  * coordinators fill during the route (place, date and time of the interview). Field names the workflow addresses are in ClearanceGrantFields.
  */
-class InfosecIctFormFieldSeeder extends Seeder
+class InfosecFormFieldSeeder extends Seeder
 {
     private const MOBILE_PHONE = 'regex:/^05[012458]\d{7}$/';
 
@@ -36,7 +39,7 @@ class InfosecIctFormFieldSeeder extends Seeder
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('InfosecIctFormFieldSeeder failed: ' . $e->getMessage());
+            Log::error('InfosecFormFieldSeeder failed: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -183,28 +186,47 @@ class InfosecIctFormFieldSeeder extends Seeder
         ?string $lookupSource = null,
         ?string $autofillKey = null,
     ): void {
-        FormField::updateOrCreate(
-            [
+        $formField = FormField::query()
+            ->where('booking_type_id', $bookingTypeId)
+            ->where('unit_id', UnitEnum::H->getUnitId())
+            ->where('field_name', $fieldName)
+            ->first();
+
+        // Every ביטחון מידע field lives inside its own block; a row outside it means an un-renumbered database or a
+        // cross-system mixup - stop loudly instead of corrupting another system's id space.
+        [$floor, $ceiling] = SystemDomainEnum::INFOSEC->fieldRange();
+
+        if ($formField && ((int) $formField->id < $floor || (int) $formField->id > $ceiling)) {
+            throw new \RuntimeException(
+                "InfosecFormFieldSeeder: field '{$fieldName}' sits at id {$formField->id}, outside the ביטחון מידע block {$floor}-{$ceiling} - "
+                . 'renumber first (docs/frontend-system-domains-guide.md).'
+            );
+        }
+
+        if (!$formField) {
+            $formField = new FormField([
                 'booking_type_id' => $bookingTypeId,
                 'unit_id' => UnitEnum::H->getUnitId(),
                 'field_name' => $fieldName,
-            ],
-            [
-                'field_display_name' => $displayName,
-                'field_type_id' => $fieldType->getFieldTypeId(),
-                'is_required' => $required,
-                'field_validations' => $validations === [] ? null : $validations,
-                // Requester fields are not corrected after submission; handler fields are written during the route.
-                'editable' => $section === FormSectionEnum::HANDLER,
-                'is_input' => false,
-                'is_active' => true,
-                'position' => $position,
-                'col_span' => $colSpan,
-                'section' => $section->value,
-                'lookup_source' => $lookupSource,
-                'autofill_key' => $autofillKey,
-            ]
-        );
+            ]);
+            $formField->id = FormField::nextSeededIdFor(SystemDomainEnum::INFOSEC);
+        }
+
+        $formField->fill([
+            'field_display_name' => $displayName,
+            'field_type_id' => $fieldType->getFieldTypeId(),
+            'is_required' => $required,
+            'field_validations' => $validations === [] ? null : $validations,
+            // Requester fields are not corrected after submission; handler fields are written during the route.
+            'editable' => $section === FormSectionEnum::HANDLER,
+            'is_input' => false,
+            'is_active' => true,
+            'position' => $position,
+            'col_span' => $colSpan,
+            'section' => $section->value,
+            'lookup_source' => $lookupSource,
+            'autofill_key' => $autofillKey,
+        ])->save();
     }
 
     /** Fields of the type/unit that are not in the list any more: archived when a request holds a value for them, deleted otherwise. @param array<int, string> $keep */

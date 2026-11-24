@@ -286,10 +286,11 @@ class BookingWorkflowTest extends ManagementTestCase
         $this->booking(['serial_number' => 800000005, 'status_id' => 5]);                            // closed
         $url = '/api/bookings-approver-management/bookings?mine=1&sort=serial_number&dir=asc&ids=800000001,800000002,800000003,800000004,800000005';
 
-        // Everything open is on the approver's list, each with the final decision: the approval and the rejection.
+        // Everything open is on the approver's list, each with the final decision: the approval and the rejection
+        // (and on a type that knows the external wait, parking at 19).
         $rows = $this->as(self::APPROVER)->getJson($url)->assertOk()->json('data');
         $this->assertSame([800000001, 800000002, 800000003, 800000004], array_column($rows, 'serial_number'));
-        $this->assertSame([[3, 4], [3, 4], [3, 4], [3, 4]], array_map(fn (array $row): array => array_column($row['actions'], 'status_id'), $rows));
+        $this->assertSame([[3, 4], [3, 4, 19], [3, 4, 19], [3, 4]], array_map(fn (array $row): array => array_column($row['actions'], 'status_id'), $rows));
         $this->assertSame(['vice_approver', 'vice_approver', 'control_officer', 'approver'], array_column($rows, 'stage'));
 
         foreach ([self::ADMIN, self::SUPER_ADMIN] as $person) {
@@ -300,7 +301,7 @@ class BookingWorkflowTest extends ManagementTestCase
         // control officer, which they may take over - with the same buttons - but not the one waiting for the approver.
         $rows = $this->as(self::VICE_APPROVER)->getJson($url)->assertOk()->json('data');
         $this->assertSame([800000001, 800000002, 800000003], array_column($rows, 'serial_number'));
-        $this->assertSame([[15, 16], [15, 16, 8, 9, 10], [15, 16, 8, 9, 10]], array_map(fn (array $row): array => array_column($row['actions'], 'status_id'), $rows));
+        $this->assertSame([[15, 16], [15, 16, 8, 9, 10, 19], [15, 16, 8, 9, 10, 19]], array_map(fn (array $row): array => array_column($row['actions'], 'status_id'), $rows));
     }
 
     /** A person who is only the control officer of the transportation type, as the seeded system has them: the role and that type's permission. */
@@ -354,8 +355,8 @@ class BookingWorkflowTest extends ManagementTestCase
         // Waiting at the control officer and nobody has answered: the booking is on the vice approver's own list, with their buttons and the holds.
         $row = $this->as(self::VICE_APPROVER)->getJson('/api/bookings-approver-management/bookings?mine=1&ids=' . self::SERIAL)->assertOk()->json('data.0');
         $this->assertSame('control_officer', $row['stage']);
-        $this->assertSame([15, 16, 8, 9, 10], array_column($row['actions'], 'status_id'));
-        $this->assertSame([false, true, false, false, false], array_column($row['actions'], 'comment_required'));
+        $this->assertSame([15, 16, 8, 9, 10, 19], array_column($row['actions'], 'status_id'));
+        $this->assertSame([false, true, false, false, false, false], array_column($row['actions'], 'comment_required'));
 
         // The values stay with the control officer, whose turn it is.
         $this->as(self::VICE_APPROVER)->getJson($url)->assertOk()->assertJsonPath('data.stage', 'control_officer');
@@ -410,9 +411,10 @@ class BookingWorkflowTest extends ManagementTestCase
             ->getJson('/api/bookings-approver-management/bookings/' . self::SERIAL)
             ->assertOk()
             ->assertJsonPath('data.stage', 'control_officer')
-            ->assertJsonCount(2, 'data.actions')
+            ->assertJsonCount(3, 'data.actions')
             ->assertJsonPath('data.actions.0.status_id', 3)
-            ->assertJsonPath('data.actions.1.status_id', 4);
+            ->assertJsonPath('data.actions.1.status_id', 4)
+            ->assertJsonPath('data.actions.2.status_id', 19);
 
         // Not the supplier holds: from the stages below, the approver decides.
         $this->as(self::APPROVER)->postJson(self::STATUS_URL, ['status_id' => 8, 'version' => 1])->assertForbidden();

@@ -13,6 +13,8 @@ enum BookingStageEnum: string
     case SUPPLIER_FILES = 'supplier_files';
     case SUPPLIER_APPROVAL = 'supplier_approval';
     case SUPPLIER_NUMBER = 'supplier_number';
+    // Status 19 (types 3, 4, 8, 10, 11, 13): parked for an outside party; only the approver/admin closes it.
+    case EXTERNAL_PARTY = 'external_party';
     case REALIZATION = 'realization';
     case CLOSED = 'closed';
     // The clearance grant route (type 14): see App\Domain\Workflow\Routes\ClearanceGrantRoute.
@@ -31,6 +33,7 @@ enum BookingStageEnum: string
             self::SUPPLIER_FILES => 'ממתין לקבצים מהלקוח',
             self::SUPPLIER_APPROVAL => 'ממתין לאישור ספק',
             self::SUPPLIER_NUMBER => 'ממתין למספר ספק',
+            self::EXTERNAL_PARTY => 'ממתין לגורם חיצוני',
             self::REALIZATION => 'אושרה - ממתינה למימוש וסגירה',
             self::CLOSED => 'סגורה',
             self::INTERVIEW_ASSIGNMENT => 'ממתין להקצאה ולתיאום תחקיר',
@@ -46,7 +49,7 @@ enum BookingStageEnum: string
         return match ($this) {
             self::CONTROL_OFFICER, self::VICE_APPROVER, self::APPROVER, self::BARBER => 'approval',
             self::SUPPLIER_FILES => 'customer_info',
-            self::SUPPLIER_APPROVAL, self::SUPPLIER_NUMBER => 'supplier',
+            self::SUPPLIER_APPROVAL, self::SUPPLIER_NUMBER, self::EXTERNAL_PARTY => 'supplier',
             self::REALIZATION => 'realization',
             self::CLOSED => null,
             self::INTERVIEW_ASSIGNMENT, self::INTERVIEWED => 'approval',
@@ -58,10 +61,11 @@ enum BookingStageEnum: string
     public function actingRole(): ?RoleEnum
     {
         return match ($this) {
+            // The control officer of the booking type; without the type in hand, the transportation one stands for both (same display name).
             self::CONTROL_OFFICER => RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
             self::VICE_APPROVER => RoleEnum::VICE_APPROVER,
-            // The barber is the approver of the barber type (approver_5).
-            self::APPROVER, self::REALIZATION, self::BARBER => RoleEnum::APPROVER,
+            // The barber is the approver of the barber type (approver_5); only the approver/admin closes status 19.
+            self::APPROVER, self::REALIZATION, self::BARBER, self::EXTERNAL_PARTY => RoleEnum::APPROVER,
             self::INTERVIEW_ASSIGNMENT, self::INTERVIEWED => RoleEnum::INTERVIEW_COORDINATOR,
             self::AWAITING_CLEARANCE => RoleEnum::INFOSEC_OFFICER,
             // The interview is scheduled: the system moves the request on when its moment has passed.

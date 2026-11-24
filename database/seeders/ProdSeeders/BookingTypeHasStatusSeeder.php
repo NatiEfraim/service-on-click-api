@@ -79,16 +79,31 @@ class BookingTypeHasStatusSeeder extends Seeder
     /** @return array<int> Extra statuses on top of $commonStatusIds, only relevant to specific booking types. */
     private function extraStatusIdsByBookingType(int $bookingTypeId): array
     {
-        return match ($bookingTypeId) {
-            BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId() => [
+        $extra = [];
+
+        // The supplier holds stay transportation-only.
+        if ($bookingTypeId === BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId()) {
+            $extra = [
                 StatusBookingEnum::PENDING_FILE->value,
                 StatusBookingEnum::PENDING_PROCESSING->value,
                 StatusBookingEnum::PENDING_APPROVED->value,
+            ];
+        }
+
+        // The control officer's answers (17/18) belong to the types whose route starts at a רמ"ד תו"ב.
+        if (in_array($bookingTypeId, BookingTypeEnum::controlOfficerBookingTypeIds(), true)) {
+            $extra = [
+                ...$extra,
                 StatusBookingEnum::CONTROL_OFFICER_APPROVED->value,
                 StatusBookingEnum::CONTROL_OFFICER_REJECTED->value,
-            ],
+            ];
+        }
 
-            default => [],
-        };
+        // Waiting for an external party (19), only on the types that know it (3, 4, 8, 10, 11, 13).
+        if (in_array($bookingTypeId, BookingTypeEnum::waitingForExternalPartyBookingTypeIds(), true)) {
+            $extra[] = StatusBookingEnum::WAITING_FOR_EXTERNAL_PARTY->value;
+        }
+
+        return $extra;
     }
 }

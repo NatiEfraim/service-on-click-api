@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\TestSeeders;
 
+use App\Enums\BookingTypeEnum;
 use App\Enums\RoleEnum;
 use App\Enums\UnitEnum;
 use App\Models\BookingTypeHasRole;
@@ -51,6 +52,52 @@ class UserSeeder extends Seeder
             ])->save();
 
             self::assignRoleWithRequesterGrants($user, $roleEnum);
+        }
+
+        $this->seedPilotViceApprovers();
+    }
+
+    /**
+     * The five pilot "גורם מטפל" users, shared with the mobile PilotUserSeeder by personal_id: vice approver scoped to
+     * in-unit food (11) + transportation (8) ONLY - assignRoleWithRequesterGrants would spread the role over every type
+     * that has it, and the next users file would then overwrite their narrow mobile grants with wide ones.
+     */
+    private function seedPilotViceApprovers(): void
+    {
+        $typeIds = array_filter([
+            BookingTypeEnum::IN_UNIT_FOOD_BOOKING->getBookingTypeId(),
+            BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId(),
+        ]);
+
+        $pilots = [
+            ['full_name' => 'לירז עזרא', 'personal_id' => '207814310', 'phone' => '0528707372'],
+            ['full_name' => 'עידן עזרא', 'personal_id' => '206923559', 'phone' => '0505784601'],
+            ['full_name' => 'מיה ונונו', 'personal_id' => '214975476', 'phone' => '0586771669'],
+            ['full_name' => 'אופיר אזולאי', 'personal_id' => '322765132', 'phone' => '0526543696'],
+            ['full_name' => 'רוני יעקובי', 'personal_id' => '215236290', 'phone' => '0558866844'],
+        ];
+
+        foreach ($pilots as $pilot) {
+            // Matched by the ID number (their personal numbers arrive with the users xlsx imports and are kept as found).
+            $user = User::where('personal_id', $pilot['personal_id'])->first() ?? new User();
+
+            $user->fill([
+                'full_name' => $user->full_name ?: $pilot['full_name'],
+                'personal_id' => $pilot['personal_id'],
+                'phone' => $user->phone ?: $pilot['phone'],
+                'unit_id' => $user->unit_id ?: UnitEnum::H->value,
+                'is_deleted' => false,
+            ])->save();
+
+            $user->assignRole(RoleEnum::VICE_APPROVER->value);
+            $user->assignRole(RoleEnum::USER->value);
+
+            foreach ($typeIds as $typeId) {
+                $user->givePermissionTo([
+                    RoleEnum::VICE_APPROVER->toPermissionEnum()->keyForId($typeId),
+                    RoleEnum::USER->toPermissionEnum()->keyForId($typeId),
+                ]);
+            }
         }
     }
 

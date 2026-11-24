@@ -10,8 +10,9 @@ enum PermissionEnum: string
     case VICE_APPROVER = 'vice_approver_';
     case USER = 'user_';
 
-    // Only seeded for TRANSPORTATION_BOOKING.
+    // Control officers (רמ"ד תו"ב), each seeded only for their own booking type.
     case TRANSPORTATION_CONTROL_OFFICER = 'transportation_control_officer_';
+    case IN_UNIT_FOOD_CONTROL_OFFICER = 'in_unit_food_control_officer_';
 
     // Domain-specific handlers: seeded only for their own booking types.
     case INFOSEC_OFFICER = 'infosec_officer_';
@@ -86,6 +87,7 @@ enum PermissionEnum: string
             self::VICE_APPROVER => RoleEnum::VICE_APPROVER,
             self::USER => RoleEnum::USER,
             self::TRANSPORTATION_CONTROL_OFFICER => RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
+            self::IN_UNIT_FOOD_CONTROL_OFFICER => RoleEnum::IN_UNIT_FOOD_CONTROL_OFFICER,
             self::INFOSEC_OFFICER => RoleEnum::INFOSEC_OFFICER,
             self::ICT_HANDLER => RoleEnum::ICT_HANDLER,
             self::DEPARTMENT_SECURITY_OFFICER => RoleEnum::DEPARTMENT_SECURITY_OFFICER,

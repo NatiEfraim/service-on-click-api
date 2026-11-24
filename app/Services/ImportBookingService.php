@@ -361,6 +361,8 @@ class ImportBookingService
                 $fieldId = $this->customFieldIds[$node['field_name']];
             }
 
+            // Every other field - the mobile-owned "גורם מטפל" ones (106/107) included - resolves by its raw id:
+            // the shared-id contract (FormField::MOBILE_SHARED_MAX) keeps both systems' ids identical.
             $formField = $formFields[$fieldId] ?? null;
 
             if ($formField === null || (int) $formField->booking_type_id !== $bookingTypeId) {
@@ -388,7 +390,7 @@ class ImportBookingService
                 foreach ($options as $option) {
                     $optionId = (int) ($option['option_id'] ?? 0);
 
-                    // Options of custom fields are matched by name (ids differ between systems).
+                    // Options of custom fields are matched by name (custom ids differ between systems by design).
                     if ($isCustom && is_string($option['display_name'] ?? null)) {
                         $optionId = $this->customOptionIds[$fieldId . '|' . trim($option['display_name'])] ?? 0;
                     }

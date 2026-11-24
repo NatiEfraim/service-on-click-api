@@ -8,16 +8,18 @@ use Database\Seeders\ProdSeeders\BookingTypeHasStatusSeeder;
 use Database\Seeders\ProdSeeders\BookingTypeSeeder;
 use Database\Seeders\ProdSeeders\FieldTypeSeeder;
 use Database\Seeders\ProdSeeders\FormFieldSeeder;
-use Database\Seeders\ProdSeeders\InfosecIctFormFieldSeeder;
-use Database\Seeders\ProdSeeders\InfosecIctOptionFieldSeeder;
 use Database\Seeders\ProdSeeders\IctFormFieldSeeder;
 use Database\Seeders\ProdSeeders\IctOptionFieldSeeder;
+use Database\Seeders\ProdSeeders\InfosecFormFieldSeeder;
+use Database\Seeders\ProdSeeders\InfosecOptionFieldSeeder;
 use Database\Seeders\ProdSeeders\OptionFieldSeeder;
 use Database\Seeders\ProdSeeders\RoleAndPermissionSeeder;
 use Database\Seeders\ProdSeeders\StatusSeeder;
+use Database\Seeders\ProdSeeders\SystemDomainContractSeeder;
 use Database\Seeders\ProdSeeders\SystemReferencesSeeder;
 use Database\Seeders\ProdSeeders\UnitHasBookingTypeSeeder;
 use Database\Seeders\ProdSeeders\UnitSeeder;
+use Database\Seeders\ProdSeeders\ViceApproverHandlerFieldSeeder;
 use Illuminate\Database\Seeder;
 
 /**
@@ -39,13 +41,18 @@ class ProdSeeder extends Seeder
             BookingTypeHasStatusSeeder::class,
             FormFieldSeeder::class,
             OptionFieldSeeder::class,
-            InfosecIctFormFieldSeeder::class,
-            InfosecIctOptionFieldSeeder::class,
+            // The mobile-owned "גורם מטפל" fields, pinned to the mobile ids (fields 106/107, options 351-358).
+            ViceApproverHandlerFieldSeeder::class,
+            // Each web-only system seeds inside its own id blocks (SystemDomainEnum): ביטחון מידע, then תקשוב.
+            InfosecFormFieldSeeder::class,
+            InfosecOptionFieldSeeder::class,
             IctFormFieldSeeder::class,
             IctOptionFieldSeeder::class,
             SystemReferencesSeeder::class,
             UnitHasBookingTypeSeeder::class,
             BookingTypeHasStatementSeeder::class,
+            // Last: aborts loudly if any row broke a system's id block or the camp ids shared with the mobile app.
+            SystemDomainContractSeeder::class,
         ]);
     }
 }

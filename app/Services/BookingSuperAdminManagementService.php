@@ -628,7 +628,7 @@ class BookingSuperAdminManagementService
                     throw new DomainError('יש להגדיר קוד לאפשרות בשדה זה', 422);
                 }
 
-                $option = OptionField::create([
+                $option = new OptionField([
                     'uuid' => Str::uuid(),
                     'name' => trim($optionName),
                     'has_category' => $hasCategory,
@@ -639,6 +639,9 @@ class BookingSuperAdminManagementService
                     'is_input' => $isInput,
                     'code' => $code,
                 ]);
+                // Options made here take ids from the web-created band: 1-10000 mirror the mobile app's option ids.
+                $option->id = OptionField::nextWebCreatedId();
+                $option->save();
             }
 
 
@@ -1161,7 +1164,7 @@ class BookingSuperAdminManagementService
                     ...(array_key_exists('code', $options) ? ['code' => $code] : []),
                 ]);
             } else {
-                $option = OptionField::create([
+                $option = new OptionField([
                     'uuid' => Str::uuid(),
                     'name' => $optionName,
                     'field_type_id' => $fieldType,
@@ -1170,6 +1173,9 @@ class BookingSuperAdminManagementService
                     'option_field_id' => $parentId,
                     'code' => $code,
                 ]);
+                // Options made here take ids from the web-created band: 1-10000 mirror the mobile app's option ids.
+                $option->id = OptionField::nextWebCreatedId();
+                $option->save();
             }
 
             if ($hasChildren) {
@@ -1241,7 +1247,7 @@ class BookingSuperAdminManagementService
     
 
         if (is_null($option)) {
-          $option=OptionField::create([
+          $option = new OptionField([
                 'uuid' => Str::uuid(),
                 'name' => $data['option_name'],
                 'form_field_id' => $formFieldId,
@@ -1249,6 +1255,9 @@ class BookingSuperAdminManagementService
                 'option_field_id' => $data['option_field_id'],
                 'field_type_id' => $data['has_category'] && isset($data['option_fields']) ? FieldTypeEnum::SELECT->value : FieldTypeEnum::TEXT->value
             ]);
+            // Options made here take ids from the web-created band: 1-10000 mirror the mobile app's option ids.
+            $option->id = OptionField::nextWebCreatedId();
+            $option->save();
 
         }else {
             $option->update([

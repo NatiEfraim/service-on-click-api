@@ -186,7 +186,7 @@ class SettingsService
     /** Unit members holding a managing permission on the type (or a role of the type's own route), with their roles on it. @return array<int, array<string, mixed>> */
     private function managers(int $unitId, int $bookingTypeId): array
     {
-        $prefixes = [PermissionEnum::ADMIN, PermissionEnum::APPROVER, PermissionEnum::VICE_APPROVER, PermissionEnum::TRANSPORTATION_CONTROL_OFFICER];
+        $prefixes = [PermissionEnum::ADMIN, PermissionEnum::APPROVER, PermissionEnum::VICE_APPROVER, PermissionEnum::TRANSPORTATION_CONTROL_OFFICER, PermissionEnum::IN_UNIT_FOOD_CONTROL_OFFICER];
 
         foreach (app(Workflow::class)->routeFor($bookingTypeId)?->roles() ?? [] as $role) {
             $prefixes[] = $role->toPermissionEnum();

@@ -18,6 +18,7 @@ enum ActionTypeEnum: int
     case APPROVE_BOOKING_BY_BARBER = 11;
     case DELETE_BOOKING = 12;
     case MOVE_TO_PENDING_BOOKING = 13;
+    case MOVE_TO_WAITING_EXTERNAL_PARTY = 14;
 
     // Route types (web only, from 101 so a future mobile action type cannot collide).
     case ASSIGN_HANDLER = 101;
@@ -41,6 +42,7 @@ enum ActionTypeEnum: int
             self::APPROVE_BOOKING_BY_BARBER => 'approve_booking_by_barber',
             self::DELETE_BOOKING => 'delete_booking',
             self::MOVE_TO_PENDING_BOOKING => 'move_to_pending_booking',
+            self::MOVE_TO_WAITING_EXTERNAL_PARTY => 'move_to_waiting_external_party',
             self::ASSIGN_HANDLER => 'assign_handler',
             self::ADVANCE_STAGE => 'advance_stage',
             self::RETURN_STAGE => 'return_stage',
@@ -64,6 +66,7 @@ enum ActionTypeEnum: int
             self::APPROVE_BOOKING_BY_BARBER => 'אישור על ידי הספר',
             self::DELETE_BOOKING => 'מחיקת הזמנה',
             self::MOVE_TO_PENDING_BOOKING => 'העברה להמתנה',
+            self::MOVE_TO_WAITING_EXTERNAL_PARTY => 'העברה להמתנה לגורם חיצוני',
             self::ASSIGN_HANDLER => 'הוקצה מטפל',
             self::ADVANCE_STAGE => 'קידום שלב',
             self::RETURN_STAGE => 'החזרה לשלב קודם',
@@ -87,6 +90,7 @@ enum ActionTypeEnum: int
             self::APPROVE_BOOKING_BY_BARBER => 'הספר אישר את ההזמנה',
             self::DELETE_BOOKING => 'ההזמנה נמחקה',
             self::MOVE_TO_PENDING_BOOKING => 'ההזמנה הועברה להמתנה - לקבצים מהלקוח, לאישור ספק או למספר ספק',
+            self::MOVE_TO_WAITING_EXTERNAL_PARTY => 'ההזמנה הועברה להמתנה לתשובת גורם חיצוני',
             self::ASSIGN_HANDLER => 'לבקשה הוקצה מטפל',
             self::ADVANCE_STAGE => 'הבקשה קודמה לשלב הבא במסלול הטיפול',
             self::RETURN_STAGE => 'הבקשה הוחזרה לשלב קודם במסלול הטיפול',

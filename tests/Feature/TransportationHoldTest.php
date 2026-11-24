@@ -107,22 +107,22 @@ class TransportationHoldTest extends HatchTestCase
         $row = $this->row($officer);
         $this->assertSame(8, $row['status_id']);
         $this->assertSame('control_officer', $row['stage']);
-        $this->assertSame([17, 18, 9, 10], $this->buttons($officer));
+        $this->assertSame([17, 18, 9, 10, 19], $this->buttons($officer));
         $this->assertSame([self::SERIAL], $this->listed($officer, 'mine=1&ids=' . self::SERIAL), 'on their "waiting for me" list');
         $this->as($officer)->getJson(self::URL)->assertOk()->assertJsonPath('data.stage', 'control_officer');
         $this->assertTrue($this->mayEditValues($officer, self::SERIAL), 'a hold does not take the turn to correct the values away');
 
         // The others see the same stage: the vice approver may take it over, the approver and the admin may decide.
-        $this->assertSame([15, 16, 9, 10], $this->buttons(self::VICE_APPROVER));
-        $this->assertSame([3, 4], $this->buttons(self::APPROVER));
-        $this->assertSame([17, 18, 9, 10, 3, 4], $this->buttons(self::ADMIN));
-        $this->assertSame([17, 18, 9, 10, 3, 4], $this->buttons(self::SUPER_ADMIN));
+        $this->assertSame([15, 16, 9, 10, 19], $this->buttons(self::VICE_APPROVER));
+        $this->assertSame([3, 4, 19], $this->buttons(self::APPROVER));
+        $this->assertSame([17, 18, 9, 10, 19, 3, 4], $this->buttons(self::ADMIN));
+        $this->assertSame([17, 18, 9, 10, 19, 3, 4], $this->buttons(self::SUPER_ADMIN));
 
         // From one hold to another it stays where it is parked; the hold it is on is not offered again.
         $this->move($officer, 8, 2)->assertForbidden();
         $this->move($officer, 9, 2)->assertOk();
         $this->assertSame(1, (int) $booking->fresh()->parked_status_id);
-        $this->assertSame([17, 18, 8, 10], $this->buttons($officer));
+        $this->assertSame([17, 18, 8, 10, 19], $this->buttons($officer));
 
         // Resuming: the control officer answers as always, and from then on the booking is the vice approver's.
         $this->move($officer, 17, 3)->assertOk();
@@ -131,7 +131,7 @@ class TransportationHoldTest extends HatchTestCase
         $this->assertNull($booking->parked_status_id, 'leaving the hold clears where it was parked');
         $this->assertNull($this->row($officer), 'the control officer is done with it');
         $this->assertSame('vice_approver', $this->row(self::VICE_APPROVER)['stage']);
-        $this->assertSame([15, 16, 8, 9, 10], $this->buttons(self::VICE_APPROVER));
+        $this->assertSame([15, 16, 8, 9, 10, 19], $this->buttons(self::VICE_APPROVER));
 
         // The timeline names every step and the audit log says where the holds left the booking.
         $this->assertSame([8, 9, 17], ApplicationLog::where('booking_id', $booking->id)->orderBy('id')->pluck('status_id')->map(fn ($id): int => (int) $id)->all());
@@ -151,9 +151,9 @@ class TransportationHoldTest extends HatchTestCase
 
         $this->assertSame(17, (int) $booking->fresh()->parked_status_id);
         $this->assertSame('vice_approver', $this->row(self::VICE_APPROVER)['stage']);
-        $this->assertSame([15, 16, 8, 10], $this->buttons(self::VICE_APPROVER));
+        $this->assertSame([15, 16, 8, 10, 19], $this->buttons(self::VICE_APPROVER));
         $this->assertNull($this->buttons($officer), 'the control officer had passed it on: still not theirs');
-        $this->assertSame([3, 4], $this->buttons(self::APPROVER), 'the approver may still decide without waiting');
+        $this->assertSame([3, 4, 19], $this->buttons(self::APPROVER), 'the approver may still decide without waiting');
 
         // It goes on to the approver only when the vice approver passes it on.
         $this->move(self::VICE_APPROVER, 15, 2)->assertOk();
@@ -171,7 +171,7 @@ class TransportationHoldTest extends HatchTestCase
         $this->assertSame(15, (int) $booking->fresh()->parked_status_id);
         $row = $this->row(self::APPROVER);
         $this->assertSame('approver', $row['stage'], 'it is no longer shown as waiting at a supplier stage');
-        $this->assertSame([3, 4, 8, 9], $this->buttons(self::APPROVER));
+        $this->assertSame([3, 4, 8, 9, 19], $this->buttons(self::APPROVER));
         $this->assertNull($this->buttons(self::VICE_APPROVER));
 
         $this->move(self::APPROVER, 3, 2)->assertOk();
@@ -189,7 +189,7 @@ class TransportationHoldTest extends HatchTestCase
 
         $this->move(self::SUPER_ADMIN, 10, 2)->assertOk();
         $this->assertSame(1, (int) $booking->fresh()->parked_status_id, 'from one hold to another: still where it was parked');
-        $this->assertSame([17, 18, 8, 9, 3, 4], $this->buttons(self::SUPER_ADMIN));
+        $this->assertSame([17, 18, 8, 9, 19, 3, 4], $this->buttons(self::SUPER_ADMIN));
 
         // A booking at the vice approver's stage stays there for the admin as well.
         $other = $this->booking(18, ['serial_number' => 5802]);
@@ -208,8 +208,8 @@ class TransportationHoldTest extends HatchTestCase
         // The booking did not move up to the vice approver's own stage: it is still waiting at the control officer, who can carry on with it.
         $this->assertSame(1, (int) $booking->fresh()->parked_status_id);
         $this->assertSame('control_officer', $this->row(self::VICE_APPROVER)['stage']);
-        $this->assertSame([17, 18, 9, 10], $this->buttons($officer));
-        $this->assertSame([15, 16, 9, 10], $this->buttons(self::VICE_APPROVER));
+        $this->assertSame([17, 18, 9, 10, 19], $this->buttons($officer));
+        $this->assertSame([15, 16, 9, 10, 19], $this->buttons(self::VICE_APPROVER));
     }
 
     public function test_a_hold_from_before_the_booking_remembered_where_it_was_parked_stays_at_the_supplier_stage(): void
@@ -219,8 +219,8 @@ class TransportationHoldTest extends HatchTestCase
 
         $row = $this->row(self::APPROVER);
         $this->assertSame('supplier_files', $row['stage']);
-        $this->assertSame([3, 4, 9, 10], $this->buttons(self::APPROVER));
-        $this->assertSame([3, 4, 9, 10], $this->buttons(self::ADMIN));
+        $this->assertSame([3, 4, 9, 10, 19], $this->buttons(self::APPROVER));
+        $this->assertSame([3, 4, 9, 10, 19], $this->buttons(self::ADMIN));
         $this->assertNull($this->buttons(self::VICE_APPROVER));
         $this->assertNull($this->buttons(self::OFFICER));
 
@@ -301,14 +301,14 @@ class TransportationHoldTest extends HatchTestCase
         $booking = $booking->fresh();
         $this->assertSame(9, (int) $booking->status_id);
         $this->assertSame(1, (int) $booking->parked_status_id);
-        $this->assertSame([17, 18, 8, 10], $this->buttons($officer));
+        $this->assertSame([17, 18, 8, 10, 19], $this->buttons($officer));
 
         // Any other status is the app's own word on where the booking is: nothing is left parked.
         $this->appShows(1, 180);
         $booking = $booking->fresh();
         $this->assertSame(1, (int) $booking->status_id);
         $this->assertNull($booking->parked_status_id);
-        $this->assertSame([17, 18, 8, 9, 10], $this->buttons($officer));
+        $this->assertSame([17, 18, 8, 9, 10, 19], $this->buttons($officer));
 
         $this->move($officer, 10, $booking->version)->assertOk();
         $this->appShows(6, 240);
@@ -341,7 +341,7 @@ class TransportationHoldTest extends HatchTestCase
         $this->assertSame(8, (int) $kept->status_id);
         $this->assertSame(1, (int) $kept->parked_status_id);
         $this->assertFalse($kept->is_status_exported);
-        $this->assertSame([17, 18, 9, 10], $this->buttons($officer));
+        $this->assertSame([17, 18, 9, 10, 19], $this->buttons($officer));
 
         // Accepting the app's status: the booking is where the app says, and nothing is left parked.
         $resolve($accepted, 'accept_external');

@@ -7,8 +7,8 @@ use Database\Seeders\ProdSeeders\BookingTypeHasStatusSeeder;
 use Database\Seeders\ProdSeeders\BookingTypeSeeder;
 use Database\Seeders\ProdSeeders\IctFormFieldSeeder;
 use Database\Seeders\ProdSeeders\IctOptionFieldSeeder;
-use Database\Seeders\ProdSeeders\InfosecIctFormFieldSeeder;
-use Database\Seeders\ProdSeeders\InfosecIctOptionFieldSeeder;
+use Database\Seeders\ProdSeeders\InfosecFormFieldSeeder;
+use Database\Seeders\ProdSeeders\InfosecOptionFieldSeeder;
 use Database\Seeders\ProdSeeders\RoleAndPermissionSeeder;
 use Database\Seeders\ProdSeeders\StatusSeeder;
 use Database\Seeders\ProdSeeders\UnitHasBookingTypeSeeder;
@@ -33,11 +33,11 @@ class InfosecIctSeeder extends Seeder
             ActionTypeSeeder::class,
             // 4. Assign the statuses to the types (the common ones, or a route's own).
             BookingTypeHasStatusSeeder::class,
-            // 5. Seed form fields: types 14-16, then 20-25.
-            InfosecIctFormFieldSeeder::class,
+            // 5. Seed form fields: types 14-16, then 20-25 (each inside its system's id block).
+            InfosecFormFieldSeeder::class,
             IctFormFieldSeeder::class,
             // 6. Seed dropdown options.
-            InfosecIctOptionFieldSeeder::class,
+            InfosecOptionFieldSeeder::class,
             IctOptionFieldSeeder::class,
             // 7. Link unit H to every booking type including the new ones.
             UnitHasBookingTypeSeeder::class,

@@ -410,8 +410,9 @@ enum BookingTypeEnum
     }
 
     /**
-     * The 6 ICT (תקשוב) booking types whose requester is the plain user role.
+     * The תקשוב system (web only): the 6 ICT booking types, whose requester is the plain user role.
      * Unlike the regular types they are not unit-scoped: any authenticated person may open one.
+     * The system owns its own id block in every reference table (SystemDomainEnum::ICT).
      * @return array<int, self>
      */
     public static function ictCases(): array
@@ -426,20 +427,81 @@ enum BookingTypeEnum
         ];
     }
 
-    /** @return array<int, self> The booking types the mobile app does not know (infosec and ICT): web only. */
-    public static function webOnlyCases(): array
+    /**
+     * The types whose route starts at a control officer (רמ"ד תו"ב): transportation (role 6) and in-unit food (role 7).
+     * They reach the control officer's statuses 17/18 (BookingTypeHasStatusSeeder) and their route has the extra first stage.
+     * @return array<int, self>
+     */
+    public static function controlOfficerCases(): array
+    {
+        return array_values(array_filter(array_map(
+            fn (RoleEnum $role): ?self => $role->controlOfficerBookingType(),
+            RoleEnum::controlOfficerRoles()
+        )));
+    }
+
+    /** @return array<int, int> The DB ids of the control-officer types (a type missing from the DB is skipped). */
+    public static function controlOfficerBookingTypeIds(): array
+    {
+        return array_values(array_filter(array_map(fn (self $type): ?int => $type->getBookingTypeId(), self::controlOfficerCases())));
+    }
+
+    /**
+     * The types a manager may park at status 19 (ממתין לגורם חיצוני), shared with the mobile app: equipment (male and
+     * female), transportation, out-unit food, in-unit food and construction. Only the approver/admin closes 19, to 3 or 4.
+     * @return array<int, self>
+     */
+    public static function waitingForExternalPartyCases(): array
+    {
+        return [
+            self::EQUIPMENT_BOOKING_MALE,
+            self::EQUIPMENT_BOOKING_FEMALE,
+            self::TRANSPORTATION_BOOKING,
+            self::OUT_UNIT_FOOD_BOOKING,
+            self::IN_UNIT_FOOD_BOOKING,
+            self::CONSTRUCTION_BOOKING,
+        ];
+    }
+
+    /** @return array<int, int> The DB ids of the types that may wait for an external party (a type missing from the DB is skipped). */
+    public static function waitingForExternalPartyBookingTypeIds(): array
+    {
+        return array_values(array_filter(array_map(fn (self $type): ?int => $type->getBookingTypeId(), self::waitingForExternalPartyCases())));
+    }
+
+    /**
+     * @return array<int, self> The מפקדת מחנה system: the booking types the mobile app also runs. Their reference
+     * rows (fields, options, statuses, roles) are seeded in lockstep with the mobile at the exact mobile ids.
+     */
+    public static function campCommandCases(): array
+    {
+        return [
+            self::CAR_BOOKING,
+            self::CAR_MAINTENANCE_BOOKING,
+            self::EQUIPMENT_BOOKING_MALE,
+            self::EQUIPMENT_BOOKING_FEMALE,
+            self::BARBER_BOOKING,
+            self::TRANSPORTATION_BOOKING,
+            self::OUT_UNIT_FOOD_BOOKING,
+            self::IN_UNIT_FOOD_BOOKING,
+            self::CONSTRUCTION_BOOKING,
+        ];
+    }
+
+    /** @return array<int, self> The ביטחון מידע system (web only), with its own id block in every reference table. */
+    public static function infosecCases(): array
     {
         return [
             self::CLEARANCE_GRANT_BOOKING,
             self::REMOVABLE_MEDIA_BOOKING,
             self::SECURITY_INCIDENT_BOOKING,
-            self::SOFTWARE_INSTALL_BOOKING,
-            self::PRINTER_INSTALL_BOOKING,
-            self::EMAIL_FAULT_BOOKING,
-            self::USER_RENAME_BOOKING,
-            self::USER_OPEN_BOOKING,
-            self::USER_MOVE_BOOKING,
         ];
+    }
+
+    /** @return array<int, self> The booking types the mobile app does not know (infosec and ICT): web only. */
+    public static function webOnlyCases(): array
+    {
+        return [...self::infosecCases(), ...self::ictCases()];
     }
 
     /** Web only: nothing of this type (bookings, statuses, fields) may reach the mobile side. */

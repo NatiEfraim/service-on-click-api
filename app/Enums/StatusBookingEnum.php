@@ -27,9 +27,11 @@ enum StatusBookingEnum: int
     // The vice approver's decision, sent on to the approver for the final answer.
     case VICE_APPROVER_APPROVED  = 15;
     case VICE_APPROVER_REJECTED  = 16;
-    // TRANSPORTATION_BOOKING: the control officer's decision, sent on to the vice approver.
+    // Control-officer types (transportation, in-unit food): the control officer's decision, sent on to the vice approver.
     case CONTROL_OFFICER_APPROVED  = 17;
     case CONTROL_OFFICER_REJECTED  = 18;
+    // Types 3, 4, 8, 10, 11, 13: parked until an outside party answers; only the approver/admin closes it (to 3 or 4).
+    case WAITING_FOR_EXTERNAL_PARTY = 19;
     // The clearance grant route (type 14, web only - from 101 so a future mobile status cannot collide).
     case INTERVIEW_ASSIGNMENT = 101;
     case INTERVIEW_SCHEDULED = 102;
@@ -59,6 +61,7 @@ enum StatusBookingEnum: int
             'vice_approver_rejected' => self::VICE_APPROVER_REJECTED,
             'control_officer_approved' => self::CONTROL_OFFICER_APPROVED,
             'control_officer_rejected' => self::CONTROL_OFFICER_REJECTED,
+            'waiting_for_external_party' => self::WAITING_FOR_EXTERNAL_PARTY,
             'interview_assignment' => self::INTERVIEW_ASSIGNMENT,
             'interview_scheduled' => self::INTERVIEW_SCHEDULED,
             'interviewed' => self::INTERVIEWED,
@@ -90,6 +93,7 @@ enum StatusBookingEnum: int
             self::VICE_APPROVER_REJECTED => 'vice_approver_rejected',
             self::CONTROL_OFFICER_APPROVED => 'control_officer_approved',
             self::CONTROL_OFFICER_REJECTED => 'control_officer_rejected',
+            self::WAITING_FOR_EXTERNAL_PARTY => 'waiting_for_external_party',
             self::INTERVIEW_ASSIGNMENT => 'interview_assignment',
             self::INTERVIEW_SCHEDULED => 'interview_scheduled',
             self::INTERVIEWED => 'interviewed',
@@ -123,14 +127,16 @@ enum StatusBookingEnum: int
             self::PENDING_FILE => 13,
             self::PENDING_PROCESSING => 14,
             self::PENDING_APPROVED => 15,
-            self::APPROVED_BY_BARBER => 16,
-            self::CANCELED_BY_BARBER => 17,
-            self::CANCELED_BY_CHANGING_TIME => 18,
-            self::INTERVIEW_ASSIGNMENT => 19,
-            self::INTERVIEW_SCHEDULED => 20,
-            self::INTERVIEWED => 21,
-            self::AWAITING_CLEARANCE => 22,
-            self::CLEARANCE_GRANTED => 23,
+            // 19 took position 16 (as on the mobile side); the barber statuses and the route ones shifted down.
+            self::WAITING_FOR_EXTERNAL_PARTY => 16,
+            self::APPROVED_BY_BARBER => 17,
+            self::CANCELED_BY_BARBER => 18,
+            self::CANCELED_BY_CHANGING_TIME => 19,
+            self::INTERVIEW_ASSIGNMENT => 20,
+            self::INTERVIEW_SCHEDULED => 21,
+            self::INTERVIEWED => 22,
+            self::AWAITING_CLEARANCE => 23,
+            self::CLEARANCE_GRANTED => 24,
         };
     }
 
@@ -209,6 +215,7 @@ enum StatusBookingEnum: int
             self::CANCELED_BY_APPROVER, self::CANCELED_BY_BARBER, self::CANCELED_BY_CHANGING_TIME => ActionTypeEnum::CANCEL_BOOKING_BY_APPROVER,
             self::APPROVED_BY_BARBER => ActionTypeEnum::APPROVE_BOOKING_BY_BARBER,
             self::PENDING_FILE, self::PENDING_PROCESSING, self::PENDING_APPROVED => ActionTypeEnum::MOVE_TO_PENDING_BOOKING,
+            self::WAITING_FOR_EXTERNAL_PARTY => ActionTypeEnum::MOVE_TO_WAITING_EXTERNAL_PARTY,
             // A route request arrives at its first status by creation (store_booking, logged by the creator) or by a move back.
             self::INTERVIEW_ASSIGNMENT => ActionTypeEnum::RETURN_STAGE,
             self::INTERVIEW_SCHEDULED, self::INTERVIEWED, self::AWAITING_CLEARANCE, self::CLEARANCE_GRANTED => ActionTypeEnum::ADVANCE_STAGE,
@@ -305,6 +312,7 @@ enum StatusBookingEnum: int
             self::VICE_APPROVER_REJECTED => 'הועברו לביטול סופי',
             self::CONTROL_OFFICER_APPROVED => 'אושרו ע"י רמ"ד תו"ב',
             self::CONTROL_OFFICER_REJECTED => 'נדחו ע"י רמ"ד תו"ב',
+            self::WAITING_FOR_EXTERNAL_PARTY => 'ממתין לגורם חיצוני',
             self::INTERVIEW_ASSIGNMENT => 'הקצאה לתחקיר',
             self::INTERVIEW_SCHEDULED => 'נקבע מול המועמד',
             self::INTERVIEWED => 'תוחקר',
@@ -340,6 +348,7 @@ enum StatusBookingEnum: int
             self::PROCESSING_BY_CONTROL_OFFICER,
             self::CONTROL_OFFICER_APPROVED,
             self::CONTROL_OFFICER_REJECTED => 'ההזמנה בטיפול רמ"ד תו"ב',
+            self::WAITING_FOR_EXTERNAL_PARTY => 'ממתינה לגורם חיצוני',
             default => null,
         };
     }
@@ -366,6 +375,7 @@ enum StatusBookingEnum: int
             self::PROCESSING_BY_CONTROL_OFFICER,
             self::CONTROL_OFFICER_APPROVED,
             self::CONTROL_OFFICER_REJECTED => 'בקשה בטיפול רמ"ד תו"ב',
+            self::WAITING_FOR_EXTERNAL_PARTY => 'בקשה ממתינה לגורם חיצוני',
             default => null,
         };
     }
@@ -396,6 +406,7 @@ enum StatusBookingEnum: int
             self::PROCESSING_BY_CONTROL_OFFICER => 'בקשה בטיפול רמ"ד תו"ב',
             self::CONTROL_OFFICER_APPROVED => 'הבקשה אושרה ע"י רמ"ד תו"ב וממתינה למפקד',
             self::CONTROL_OFFICER_REJECTED => 'הבקשה הועברה לביטול ע"י רמ"ד תו"ב וממתינה למפקד',
+            self::WAITING_FOR_EXTERNAL_PARTY => 'הבקשה ממתינה לתשובת גורם חיצוני',
             default => null,
         };
     }
@@ -434,6 +445,7 @@ enum StatusBookingEnum: int
             self::PROCESSING_BY_CONTROL_OFFICER,
             self::CONTROL_OFFICER_APPROVED,
             self::CONTROL_OFFICER_REJECTED => 'שלב 14',
+            self::WAITING_FOR_EXTERNAL_PARTY => 'שלב 15',
             // The clearance route's own steps, counted along its progress bar.
             self::INTERVIEW_ASSIGNMENT => 'שלב 1',
             self::INTERVIEW_SCHEDULED => 'שלב 2',
@@ -476,6 +488,9 @@ enum StatusBookingEnum: int
             self::PROCESSING_BY_CONTROL_OFFICER,
             self::CONTROL_OFFICER_APPROVED,
             self::CONTROL_OFFICER_REJECTED,
+
+            // Waiting for an outside party (types 3, 4, 8, 10, 11, 13): still holds its slot, like the supplier holds.
+            self::WAITING_FOR_EXTERNAL_PARTY,
 
             // BARBER_BOOKING specific
             self::APPROVED_BY_BARBER,

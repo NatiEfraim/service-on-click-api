@@ -4,6 +4,7 @@ namespace Database\Seeders\ProdSeeders;
 
 use App\Enums\BookingTypeEnum;
 use App\Enums\FieldTypeEnum;
+use App\Enums\SystemDomainEnum;
 use App\Enums\UnitEnum;
 use App\Models\FormField;
 use App\Models\OptionField;
@@ -86,12 +87,29 @@ class IctOptionFieldSeeder extends Seeder
             return;
         }
 
+        [$floor, $ceiling] = SystemDomainEnum::ICT->optionRange();
+
         foreach ($options as $name) {
-            OptionField::updateOrCreate(
-                ['form_field_id' => $formField->id, 'name' => $name],
-                // a plain option (no sub-category), as the admin screens create them
-                ['field_type_id' => FieldTypeEnum::TEXT->value, 'is_active' => true],
-            );
+            $option = OptionField::query()
+                ->where('form_field_id', $formField->id)
+                ->where('name', $name)
+                ->first();
+
+            // Every תקשוב option lives inside its own block - stop loudly on a row outside it.
+            if ($option && ((int) $option->id < $floor || (int) $option->id > $ceiling)) {
+                throw new \RuntimeException(
+                    "IctOptionFieldSeeder: option '{$name}' sits at id {$option->id}, outside the תקשוב block {$floor}-{$ceiling} - "
+                    . 'renumber first (docs/frontend-system-domains-guide.md).'
+                );
+            }
+
+            if (!$option) {
+                $option = new OptionField(['form_field_id' => $formField->id, 'name' => $name]);
+                $option->id = OptionField::nextSeededIdFor(SystemDomainEnum::ICT);
+            }
+
+            // a plain option (no sub-category), as the admin screens create them
+            $option->fill(['field_type_id' => FieldTypeEnum::TEXT->value, 'is_active' => true])->save();
         }
     }
 }

@@ -60,7 +60,7 @@ final class AccessScope
     public function managedBookingTypeIds(): array
     {
         return $this->managed ??= array_values(array_unique([
-            ...$this->bookingTypeIdsOf(['admin_', 'approver_', 'vice_approver_', 'transportation_control_officer_']),
+            ...$this->bookingTypeIdsOf(['admin_', 'approver_', 'vice_approver_', 'transportation_control_officer_', 'in_unit_food_control_officer_']),
             ...$this->officerBookingTypeIds(),
             ...$this->routeBookingTypeIds(),
         ]));

@@ -28,6 +28,7 @@ class FormFieldSeeder extends Seeder
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('FormFieldSeeder failed. message' . $e->getMessage());
+            throw $e;
         }
 
     }
@@ -220,27 +221,50 @@ class FormFieldSeeder extends Seeder
     }
 
     // Helper functions
+    // These fields are mobile-shared: the b2r booking files carry raw field ids, so every field here must hold the
+    // EXACT id the mobile app seeds it with. On a fresh database the seed order reproduces the mobile ids (1-105);
+    // a field added later to an existing database cannot rely on auto-increment - give its entry an 'id' key with
+    // the mobile id, or the guard below stops the seeding.
     private function createFormFields(int $bookingTypeId, array $formFields): void
     {
         foreach ($formFields as $field) {
-            FormField::updateOrCreate(
-                [
+            $values = [
+                'field_display_name' => $field['field_display_name'],
+                'field_type_id' => $field['field_type_id'],
+                'form_field_id' => $field['form_field_id'] ?? null,
+                'is_input' => $field['is_input'] ?? false,
+                'field_validations' => $field['field_validations'] ?? null,
+                'editable' => $field['editable'] ?? true,
+                'is_required' => $field['is_required'] ?? true,
+                'payload_section_id' => $field['payload_section_id'] ?? PayloadSectionEnum::NONE->value,
+            ];
+
+            $formField = FormField::query()
+                ->where('booking_type_id', $bookingTypeId)
+                ->where('unit_id', $field['unit_id'])
+                ->where('field_name', $field['field_name'])
+                ->first();
+
+            if (!$formField) {
+                $formField = new FormField([
                     'booking_type_id' => $bookingTypeId,
                     'unit_id' => $field['unit_id'],
                     'field_name' => $field['field_name'],
-                ],
-                [
-                    'field_display_name' => $field['field_display_name'],
-                    'field_type_id' => $field['field_type_id'],
-                    'form_field_id' => $field['form_field_id'] ?? null,
-                    'is_input' => $field['is_input'] ?? false,
-                    'field_validations' => $field['field_validations'] ?? null,
-                    'editable' => $field['editable'] ?? true,
-                    'is_required' => $field['is_required'] ?? true,
-                    'payload_section_id' => $field['payload_section_id'] ?? PayloadSectionEnum::NONE->value,
+                ]);
 
-                ]
-            );
+                if (isset($field['id'])) {
+                    $formField->id = (int) $field['id'];
+                }
+            }
+
+            $formField->fill($values)->save();
+
+            if ((int) $formField->id > FormField::MOBILE_SHARED_MAX) {
+                throw new \RuntimeException(
+                    "FormFieldSeeder: mobile-shared field '{$field['field_name']}' landed at id {$formField->id}, outside the mobile band - "
+                    . "add 'id' => <its mobile id> to the entry (docs/frontend-field-id-alignment-guide.md)."
+                );
+            }
         }
 
     }
@@ -1441,8 +1465,10 @@ class FormFieldSeeder extends Seeder
                 'field_name' => FormFieldEnum::CONSTRUCTION_BUILDING_NUMBER->getFormFieldName(),
                 'field_display_name' => 'מספר מבנה',
                 'field_type_id' => FieldTypeEnum::NUMBER->value,
+                // 1-4 digits, no leading zero (1-9999) - the same rule the mobile app enforces, so neither side rejects the other's values.
                 'field_validations' => json_encode([
                     'required' => 'יש לספק מספר מבנה',
+                    'regex:/^[1-9][0-9]{0,3}$/' => 'מספר מבנה חייב להיות בין 1 ל-9999',
                 ], JSON_UNESCAPED_UNICODE),
                 'editable' => 0,
                 'is_required' => 1,

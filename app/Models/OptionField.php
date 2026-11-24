@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SystemDomainEnum;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
@@ -35,6 +36,37 @@ class OptionField extends Model
         'created_at',
         'updated_at',
     ];
+
+    // ------------------------------------------------------------------------------------------------------
+    // The id contract of the three systems (SystemDomainEnum), banded like FormField's:
+    //   1..MOBILE_SHARED_MAX    - מפקדת מחנה: the mobile-shared options, each at its exact mobile id (incl. 351-358).
+    //   10001-29999/30001-49999 - ביטחון מידע / תקשוב: each web-only system's own block (SystemDomainEnum::optionRange).
+    //   WEB_CREATED_FLOOR..     - options created at runtime (the option editors).
+    // SystemDomainContractSeeder enforces the bands on every seeding run.
+    // ------------------------------------------------------------------------------------------------------
+
+    public const MOBILE_SHARED_MAX = 10000;
+    public const WEB_CREATED_FLOOR = 50001;
+
+    /** The next free id inside the given system's option block; its seeders pin every row they create with it. */
+    public static function nextSeededIdFor(SystemDomainEnum $domain): int
+    {
+        [$floor, $ceiling] = $domain->optionRange();
+
+        $next = max($floor, 1 + (int) self::query()->whereBetween('id', [$floor, $ceiling])->max('id'));
+
+        if ($next > $ceiling) {
+            throw new \RuntimeException("OptionField: the {$domain->value} option block {$floor}-{$ceiling} is full.");
+        }
+
+        return $next;
+    }
+
+    /** The next id for an option created at runtime - never auto-increment, which MariaDB resets to max(id)+1 on restart. */
+    public static function nextWebCreatedId(): int
+    {
+        return max(self::WEB_CREATED_FLOOR, 1 + (int) self::query()->max('id'));
+    }
 
     protected static function booted()
     {
