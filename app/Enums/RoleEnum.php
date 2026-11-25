@@ -11,8 +11,9 @@ enum RoleEnum: int
     case USER = 5;
 
     // Control officers (רמ"ד תו"ב), each bound to one booking type; ids shared with the mobile app.
+    // 2026-11-25 (the mobile's flow switch): role 7 moved from in-unit (11) to OUT-unit food (10), renamed in place - same id 7.
     case TRANSPORTATION_CONTROL_OFFICER = 6;
-    case IN_UNIT_FOOD_CONTROL_OFFICER = 7;
+    case OUT_UNIT_FOOD_CONTROL_OFFICER = 7;
 
     // Web-only roles, banded per system (SystemDomainEnum) so a future mobile role cannot collide and each web
     // system grows in its own block: ביטחון מידע = 101-149, תקשוב = 151-199.
@@ -39,7 +40,7 @@ enum RoleEnum: int
             self::VICE_APPROVER => 'מש"ק תחום',
             self::USER => 'משתמש ',
             self::TRANSPORTATION_CONTROL_OFFICER => 'רמ"ד תו"ב',
-            self::IN_UNIT_FOOD_CONTROL_OFFICER => 'רמ"ד תו"ב',
+            self::OUT_UNIT_FOOD_CONTROL_OFFICER => 'רמ"ד תו"ב',
             self::INFOSEC_OFFICER => 'קצין ביטחון מידע',
             self::ICT_HANDLER => 'מנהל תקשוב',
             self::DEPARTMENT_SECURITY_OFFICER => 'קב"ט מחלקתי',
@@ -58,7 +59,7 @@ enum RoleEnum: int
             'vice_approver' => self::VICE_APPROVER,
             'user' => self::USER,
             'transportation_control_officer' => self::TRANSPORTATION_CONTROL_OFFICER,
-            'in_unit_food_control_officer' => self::IN_UNIT_FOOD_CONTROL_OFFICER,
+            'out_unit_food_control_officer' => self::OUT_UNIT_FOOD_CONTROL_OFFICER,
             'infosec_officer' => self::INFOSEC_OFFICER,
             'ict_handler' => self::ICT_HANDLER,
             'department_security_officer' => self::DEPARTMENT_SECURITY_OFFICER,
@@ -78,7 +79,7 @@ enum RoleEnum: int
             self::VICE_APPROVER => PermissionEnum::VICE_APPROVER,
             self::USER => PermissionEnum::USER,
             self::TRANSPORTATION_CONTROL_OFFICER => PermissionEnum::TRANSPORTATION_CONTROL_OFFICER,
-            self::IN_UNIT_FOOD_CONTROL_OFFICER => PermissionEnum::IN_UNIT_FOOD_CONTROL_OFFICER,
+            self::OUT_UNIT_FOOD_CONTROL_OFFICER => PermissionEnum::OUT_UNIT_FOOD_CONTROL_OFFICER,
             self::INFOSEC_OFFICER => PermissionEnum::INFOSEC_OFFICER,
             self::ICT_HANDLER => PermissionEnum::ICT_HANDLER,
             self::DEPARTMENT_SECURITY_OFFICER => PermissionEnum::DEPARTMENT_SECURITY_OFFICER,
@@ -106,7 +107,7 @@ enum RoleEnum: int
     {
         return [
             self::TRANSPORTATION_CONTROL_OFFICER,
-            self::IN_UNIT_FOOD_CONTROL_OFFICER,
+            self::OUT_UNIT_FOOD_CONTROL_OFFICER,
         ];
     }
 
@@ -115,7 +116,7 @@ enum RoleEnum: int
     {
         return match ($this) {
             self::TRANSPORTATION_CONTROL_OFFICER => BookingTypeEnum::TRANSPORTATION_BOOKING,
-            self::IN_UNIT_FOOD_CONTROL_OFFICER => BookingTypeEnum::IN_UNIT_FOOD_BOOKING,
+            self::OUT_UNIT_FOOD_CONTROL_OFFICER => BookingTypeEnum::OUT_UNIT_FOOD_BOOKING,
             default => null,
         };
     }
@@ -142,7 +143,7 @@ enum RoleEnum: int
             self::VICE_APPROVER => 'vice_approver',
             self::USER => 'user',
             self::TRANSPORTATION_CONTROL_OFFICER => 'transportation_control_officer',
-            self::IN_UNIT_FOOD_CONTROL_OFFICER => 'in_unit_food_control_officer',
+            self::OUT_UNIT_FOOD_CONTROL_OFFICER => 'out_unit_food_control_officer',
             self::INFOSEC_OFFICER => 'infosec_officer',
             self::ICT_HANDLER => 'ict_handler',
             self::DEPARTMENT_SECURITY_OFFICER => 'department_security_officer',

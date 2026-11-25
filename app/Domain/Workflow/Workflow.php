@@ -149,7 +149,7 @@ final class Workflow
 
         return [
             // Each control officer holds "{their prefix}_{their own type}" only, so at most one of these can match a type.
-            'isControlOfficer' => $has(PermissionEnum::TRANSPORTATION_CONTROL_OFFICER) || $has(PermissionEnum::IN_UNIT_FOOD_CONTROL_OFFICER),
+            'isControlOfficer' => $has(PermissionEnum::TRANSPORTATION_CONTROL_OFFICER) || $has(PermissionEnum::OUT_UNIT_FOOD_CONTROL_OFFICER),
             'isViceApprover' => $has(PermissionEnum::VICE_APPROVER),
             'isApprover' => $has(PermissionEnum::APPROVER),
             // The domain handler of an infosec type (15, 16). ICT (20-25) runs on IctServiceDeskRoute and never reaches here.

@@ -17,7 +17,7 @@ class ResetUsersCommand extends Command
         {--wipe-users : Also delete every user first (cascades to their bookings, logs and comments); needs --force}
         {--force : Confirms --wipe-users}
         {--personalId= : personal_id of a single user to reassign}
-        {--role= : Role id to assign (1=SUPER_ADMIN 2=ADMIN 3=APPROVER 4=VICE_APPROVER 5=USER 6=TRANSPORTATION_CONTROL_OFFICER 7=IN_UNIT_FOOD_CONTROL_OFFICER); required with --personalId}';
+        {--role= : Role id to assign (1=SUPER_ADMIN 2=ADMIN 3=APPROVER 4=VICE_APPROVER 5=USER 6=TRANSPORTATION_CONTROL_OFFICER 7=OUT_UNIT_FOOD_CONTROL_OFFICER); required with --personalId}';
 
     protected $description = 'Local development: rebuild all user role/permission assignments, or reassign a single user with --personalId and --role';
 
@@ -91,7 +91,7 @@ class ResetUsersCommand extends Command
         if (!$roleEnum) {
             $this->error(
                 "Invalid --role value \"{$roleValue}\". " .
-                'Valid: 1=SUPER_ADMIN, 2=ADMIN, 3=APPROVER, 4=VICE_APPROVER, 5=USER, 6=TRANSPORTATION_CONTROL_OFFICER, 7=IN_UNIT_FOOD_CONTROL_OFFICER'
+                'Valid: 1=SUPER_ADMIN, 2=ADMIN, 3=APPROVER, 4=VICE_APPROVER, 5=USER, 6=TRANSPORTATION_CONTROL_OFFICER, 7=OUT_UNIT_FOOD_CONTROL_OFFICER'
             );
 
             return self::FAILURE;

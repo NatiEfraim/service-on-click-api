@@ -11,31 +11,33 @@ use App\Models\OptionField;
 use Illuminate\Database\Seeder;
 
 /**
- * The web rows of the mobile-owned "בחירת רמ"ד תו"ב" selects on the in-unit food (11) and transportation (8) forms,
- * PINNED to the exact mobile ids (fields 106/107, options 351-355 / 356-360): the b2r booking files carry these raw
+ * The web rows of the mobile-owned "בחירת רמ"ד תו"ב" selects on the OUT-unit food (10) and transportation (8) forms,
+ * PINNED to the exact mobile ids (fields 106/107, options 351-356 / 357-362): the b2r booking files carry these raw
  * ids and ImportBookingService maps by id, like every other shared field. The mobile app owns the fields - it decides
  * which options a requester may pick (its option_field_has_users table) - and the web only displays the imported
  * choice, so they are seeded INACTIVE (never on the web forms or the field-management screens) with ACTIVE option rows.
- * Mobile relabel round of 2026-11-25: the field is 'בחירת רמ"ד תו"ב' (was 'גורם מטפל'), the options dropped the
- * 'גורם מטפל - ' prefix ('משקים ומטה' also lost its ה) and a FIFTH group 'אדרת' was appended per field, which moved
- * field 107's block from 355-358 to 356-360.
+ * Mobile flow-switch round of 2026-11-25 (after the relabel round the same day): field 106 moved IN PLACE from
+ * in-unit (11) to out-unit food (10) with the new field_name, and a SIXTH group 'ליד' was appended per field - a
+ * fresh mobile seed now lays the options as 351-356 under field 106 and 357-362 under field 107 (verified against
+ * the live mobile DB).
  */
 class ViceApproverHandlerFieldSeeder extends Seeder
 {
-    /** The option names in mobile id order: 351-355 under field 106, 356-360 under field 107. */
+    /** The option names in mobile id order: 351-356 under field 106, 357-362 under field 107. */
     private const OPTION_NAMES = [
         'משקים ומטה',
         'גבולות וחשיפה',
         'תקיפה ואש',
         'רובוטיקה ותמרון',
         'אדרת',
+        'ליד',
     ];
 
     public function run(): void
     {
         $fields = [
-            106 => ['booking_type' => BookingTypeEnum::IN_UNIT_FOOD_BOOKING, 'field_name' => 'vice_approver_handler_in_unit_food_booking', 'first_option_id' => 351, 'position' => 105],
-            107 => ['booking_type' => BookingTypeEnum::TRANSPORTATION_BOOKING, 'field_name' => 'vice_approver_handler_transportation_booking', 'first_option_id' => 356, 'position' => 135],
+            106 => ['booking_type' => BookingTypeEnum::OUT_UNIT_FOOD_BOOKING, 'field_name' => 'vice_approver_handler_out_unit_food_booking', 'first_option_id' => 351, 'position' => 125],
+            107 => ['booking_type' => BookingTypeEnum::TRANSPORTATION_BOOKING, 'field_name' => 'vice_approver_handler_transportation_booking', 'first_option_id' => 357, 'position' => 135],
         ];
 
         foreach ($fields as $fieldId => $definition) {

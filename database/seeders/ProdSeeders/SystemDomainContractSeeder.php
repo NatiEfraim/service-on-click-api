@@ -46,7 +46,7 @@ class SystemDomainContractSeeder extends Seeder
     private function assertHandlerRowsPinned(): void
     {
         $expected = [
-            106 => 'vice_approver_handler_in_unit_food_booking',
+            106 => 'vice_approver_handler_out_unit_food_booking',
             107 => 'vice_approver_handler_transportation_booking',
         ];
 
@@ -60,8 +60,8 @@ class SystemDomainContractSeeder extends Seeder
 
         $optionIds = OptionField::query()->whereIn('form_field_id', array_keys($expected))->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all();
 
-        if ($optionIds !== range(351, 360)) {
-            $this->violation('the options of fields 106/107 must be exactly ids 351-360, found [' . implode(', ', $optionIds) . ']');
+        if ($optionIds !== range(351, 362)) {
+            $this->violation('the options of fields 106/107 must be exactly ids 351-362, found [' . implode(', ', $optionIds) . ']');
         }
     }
 

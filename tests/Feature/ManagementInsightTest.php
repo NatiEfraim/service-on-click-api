@@ -255,11 +255,11 @@ class ManagementInsightTest extends ManagementTestCase
 
     public function test_a_control_officer_gets_their_own_types_on_the_main_screen(): void
     {
-        // A person whose ONLY role is רמ"ד תו"ב, for each of the two control-officer types.
+        // A person whose ONLY role is רמ"ד תו"ב, for each of the two control-officer types (out-unit food since the flow switch).
         $this->createPerson('1000033', RoleEnum::TRANSPORTATION_CONTROL_OFFICER);
-        $this->createPerson('1000034', RoleEnum::IN_UNIT_FOOD_CONTROL_OFFICER);
+        $this->createPerson('1000034', RoleEnum::OUT_UNIT_FOOD_CONTROL_OFFICER);
 
-        foreach (['1000033' => 8, '1000034' => 11] as $personalNumber => $bookingTypeId) {
+        foreach (['1000033' => 8, '1000034' => 10] as $personalNumber => $bookingTypeId) {
             $me = $this->as((string) $personalNumber)->getJson(self::BASE . '/me')->assertOk()->json('data');
 
             // The main screen is built from these two keys: the officer gets it, with their own type, like a vice approver.

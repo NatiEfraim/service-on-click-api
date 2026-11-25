@@ -45,7 +45,7 @@ class DatabaseStructureTest extends ManagementTestCase
         }
 
         $expected[8][] = 'transportation_control_officer_';
-        $expected[11][] = 'in_unit_food_control_officer_';
+        $expected[10][] = 'out_unit_food_control_officer_';
         // The clearance grant has a route of its own: its requester, its owner and its coordinator - nothing of the approver chain, no plain user.
         $expected[14] = ['department_security_officer_', 'infosec_officer_', 'interview_coordinator_'];
         $expected[15] = $expected[16] = ['user_', 'infosec_officer_'];
@@ -70,7 +70,7 @@ class DatabaseStructureTest extends ManagementTestCase
             RoleEnum::VICE_APPROVER->value => 'vice_approver',
             RoleEnum::USER->value => 'user',
             RoleEnum::TRANSPORTATION_CONTROL_OFFICER->value => 'transportation_control_officer',
-            RoleEnum::IN_UNIT_FOOD_CONTROL_OFFICER->value => 'in_unit_food_control_officer',
+            RoleEnum::OUT_UNIT_FOOD_CONTROL_OFFICER->value => 'out_unit_food_control_officer',
             RoleEnum::INFOSEC_OFFICER->value => 'infosec_officer',
             RoleEnum::DEPARTMENT_SECURITY_OFFICER->value => 'department_security_officer',
             RoleEnum::INTERVIEW_COORDINATOR->value => 'interview_coordinator',
@@ -78,7 +78,7 @@ class DatabaseStructureTest extends ManagementTestCase
             RoleEnum::ADMIN_ICT->value => 'admin_ict',
         ], $roles);
 
-        $this->assertSame(7, RoleEnum::IN_UNIT_FOOD_CONTROL_OFFICER->value, 'shared with the mobile app - never renumber');
+        $this->assertSame(7, RoleEnum::OUT_UNIT_FOOD_CONTROL_OFFICER->value, 'shared with the mobile app - never renumber');
         $this->assertSame(101, RoleEnum::INFOSEC_OFFICER->value, 'the ביטחון מידע role block starts at 101');
         $this->assertSame(151, RoleEnum::ICT_HANDLER->value, 'the תקשוב role block starts at 151');
         $this->assertSame(152, RoleEnum::ADMIN_ICT->value, 'the ICT desk commander lives in the תקשוב block');
@@ -165,7 +165,8 @@ class DatabaseStructureTest extends ManagementTestCase
             DB::table('booking_type_has_roles')->where('booking_type_id', 14)->orderBy('role_id')->pluck('role_id')->map(fn ($id): int => (int) $id)->all()
         );
         $this->assertSame(5, DB::table('booking_type_has_roles')->where('booking_type_id', 8)->count(), 'the other types keep their roles');
-        $this->assertSame(5, DB::table('booking_type_has_roles')->where('booking_type_id', 11)->count(), 'in-unit food has its control officer');
+        $this->assertSame(5, DB::table('booking_type_has_roles')->where('booking_type_id', 10)->count(), 'out-unit food has the control officer since the flow switch');
+        $this->assertSame(4, DB::table('booking_type_has_roles')->where('booking_type_id', 11)->count(), 'in-unit food is back on the standard roles');
         $this->assertSame(62, DB::table('booking_type_has_roles')->count());
     }
 
@@ -177,9 +178,9 @@ class DatabaseStructureTest extends ManagementTestCase
         $this->assertSame([101, 102, 103, 104, 105, 151], DB::table('statuses')->where('id', '>=', 100)->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all());
         $this->assertSame(18, DB::table('action_types')->count());
 
-        // Status 19 reaches types 3, 4, 8, 10, 11, 13; the control officer's 17/18 reach 8 and 11;
-        // an ICT type reaches the service desk route's five statuses (1, 151, 5, 7, 6).
-        $expectedCounts = [1 => 8, 2 => 8, 3 => 9, 4 => 9, 5 => 5, 8 => 14, 10 => 9, 11 => 11, 13 => 9, 14 => 6, 15 => 8, 20 => 5, 25 => 5];
+        // Status 19 reaches types 3, 4, 8, 10, 11, 13; the control officer's 17/18 reach 8 and 10 (the 2026-11-25
+        // flow switch moved them from in-unit 11); an ICT type reaches the service desk route's five statuses (1, 151, 5, 7, 6).
+        $expectedCounts = [1 => 8, 2 => 8, 3 => 9, 4 => 9, 5 => 5, 8 => 14, 10 => 11, 11 => 9, 13 => 9, 14 => 6, 15 => 8, 20 => 5, 25 => 5];
 
         foreach ($expectedCounts as $bookingTypeId => $count) {
             $this->assertSame(
@@ -229,7 +230,8 @@ class DatabaseStructureTest extends ManagementTestCase
         $this->assertSame([4, 101, 102, 103, 104, 105], $this->statusIdsOf(14));
         $this->assertSame(8, count($this->statusIdsOf(1)));
         $this->assertSame(14, count($this->statusIdsOf(8)));
-        $this->assertSame([1, 3, 4, 5, 6, 7, 15, 16, 17, 18, 19], $this->statusIdsOf(11), 'in-unit food: the control officer stage and the external wait');
+        $this->assertSame([1, 3, 4, 5, 6, 7, 15, 16, 17, 18, 19], $this->statusIdsOf(10), 'out-unit food: the control officer stage and the external wait (the flow switch)');
+        $this->assertSame([1, 3, 4, 5, 6, 7, 15, 16, 19], $this->statusIdsOf(11), 'in-unit food: back on the standard route, the external wait kept');
     }
 
     /** The management layer's columns are part of the create-table migrations (the development database is rebuilt with run:all), and its tables exist. */
@@ -263,13 +265,14 @@ class DatabaseStructureTest extends ManagementTestCase
      */
     public function test_form_field_and_option_ids_respect_the_system_domain_contract(): void
     {
-        // The mobile-owned "בחירת רמ"ד תו"ב" fields sit at the exact mobile ids, their options at 351-360 (five per field since the 2026-11-25 mobile relabel).
+        // The mobile-owned "בחירת רמ"ד תו"ב" fields sit at the exact mobile ids, their options at 351-362 (six per field
+        // since the 2026-11-25 flow switch: field 106 moved to out-unit food and 'ליד' joined the groups).
         $this->assertSame(
-            [106 => 'vice_approver_handler_in_unit_food_booking', 107 => 'vice_approver_handler_transportation_booking'],
+            [106 => 'vice_approver_handler_out_unit_food_booking', 107 => 'vice_approver_handler_transportation_booking'],
             DB::table('form_fields')->whereIn('id', [106, 107])->orderBy('id')->pluck('field_name', 'id')->all()
         );
         $this->assertSame(
-            range(351, 360),
+            range(351, 362),
             DB::table('option_fields')->whereIn('form_field_id', [106, 107])->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all()
         );
 
@@ -301,9 +304,9 @@ class DatabaseStructureTest extends ManagementTestCase
         $this->assertSame(0, DB::table('booking_type_has_roles')->whereBetween('role_id', [101, 149])->whereNotIn('booking_type_id', [14, 15, 16])->count());
         $this->assertSame(0, DB::table('booking_type_has_roles')->whereBetween('role_id', [151, 199])->whereNotIn('booking_type_id', [20, 21, 22, 23, 24, 25])->count());
 
-        // The camp band itself is contiguous with the mobile seed (fields 1-107, options 1-360 today).
+        // The camp band itself is contiguous with the mobile seed (fields 1-107, options 1-362 today).
         $this->assertSame(107, DB::table('form_fields')->where('id', '<=', 1000)->count());
-        $this->assertSame(360, DB::table('option_fields')->where('id', '<=', 10000)->count());
+        $this->assertSame(362, DB::table('option_fields')->where('id', '<=', 10000)->count());
     }
 
     public function test_the_production_seeders_can_run_again_without_duplicating_anything(): void

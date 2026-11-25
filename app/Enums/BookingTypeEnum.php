@@ -428,7 +428,8 @@ enum BookingTypeEnum
     }
 
     /**
-     * The types whose route starts at a control officer (רמ"ד תו"ב): transportation (role 6) and in-unit food (role 7).
+     * The types whose route starts at a control officer (רמ"ד תו"ב): transportation (role 6) and, since the mobile's
+     * 2026-11-25 flow switch, OUT-unit food (role 7 - moved from in-unit, which is back on the standard route).
      * They reach the control officer's statuses 17/18 (BookingTypeHasStatusSeeder) and their route has the extra first stage.
      * @return array<int, self>
      */

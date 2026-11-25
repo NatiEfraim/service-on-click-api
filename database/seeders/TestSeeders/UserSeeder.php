@@ -59,13 +59,14 @@ class UserSeeder extends Seeder
 
     /**
      * The five pilot "גורם מטפל" users, shared with the mobile PilotUserSeeder by personal_id: vice approver scoped to
-     * in-unit food (11) + transportation (8) ONLY - assignRoleWithRequesterGrants would spread the role over every type
+     * OUT-unit food (10) + transportation (8) ONLY (the 2026-11-25 flow switch moved the handler select from in-unit;
+     * verified against the live mobile grants) - assignRoleWithRequesterGrants would spread the role over every type
      * that has it, and the next users file would then overwrite their narrow mobile grants with wide ones.
      */
     private function seedPilotViceApprovers(): void
     {
         $typeIds = array_filter([
-            BookingTypeEnum::IN_UNIT_FOOD_BOOKING->getBookingTypeId(),
+            BookingTypeEnum::OUT_UNIT_FOOD_BOOKING->getBookingTypeId(),
             BookingTypeEnum::TRANSPORTATION_BOOKING->getBookingTypeId(),
         ]);
 

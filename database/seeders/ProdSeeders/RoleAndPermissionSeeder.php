@@ -27,7 +27,7 @@ class RoleAndPermissionSeeder extends Seeder
         RoleEnum::USER,
         // Control officers (רמ"ד תו"ב), each linked to one booking type (BookingTypeHasRoleSeeder): the first stage of its route.
         RoleEnum::TRANSPORTATION_CONTROL_OFFICER,
-        RoleEnum::IN_UNIT_FOOD_CONTROL_OFFICER,
+        RoleEnum::OUT_UNIT_FOOD_CONTROL_OFFICER,
         // Domain-specific handlers for infosec and ICT types (web-only ids, 101+).
         RoleEnum::INFOSEC_OFFICER,
         RoleEnum::ICT_HANDLER,

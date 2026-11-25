@@ -12,12 +12,13 @@ use App\Services\UsersExportService;
 use Illuminate\Testing\TestResponse;
 
 /**
- * The in-unit food booking (type 11) joins the three-round flow of transportation: רמ"ד תו"ב (role 7,
- * in_unit_food_control_officer_11) answers first (17/18), the vice approver passes it on (15/16), the approver decides -
- * without the supplier holds, which stay transportation-only. And status 19 (ממתין לגורם חיצוני, types 3/4/8/10/11/13):
- * every managing role may park a booking there, only the approver or the admin closes it (3/4), nothing moves back.
+ * The OUT-unit food booking (type 10) runs the three-round flow of transportation (the mobile's 2026-11-25 switch
+ * moved it from in-unit, which is back on the standard route): רמ"ד תו"ב (role 7, out_unit_food_control_officer_10)
+ * answers first (17/18), the vice approver passes it on (15/16), the approver decides - without the supplier holds,
+ * which stay transportation-only. And status 19 (ממתין לגורם חיצוני, types 3/4/8/10/11/13): every managing role may
+ * park a booking there, only the approver or the admin closes it (3/4), nothing moves back.
  */
-class InUnitFoodControlOfficerTest extends HatchTestCase
+class OutUnitFoodControlOfficerTest extends HatchTestCase
 {
     private const SERIAL = 6801;
     private const LIST = '/api/bookings-approver-management/bookings';
@@ -31,8 +32,8 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
         return $this->actingAsPersonalNumber($personalNumber);
     }
 
-    /** A booking as the mobile app left it (type 11 unless told otherwise). */
-    private function booking(int $statusId = 1, int $bookingTypeId = 11, array $attributes = []): Booking
+    /** A booking as the mobile app left it (type 10 unless told otherwise). */
+    private function booking(int $statusId = 1, int $bookingTypeId = 10, array $attributes = []): Booking
     {
         return Booking::create($attributes + [
             'serial_number' => self::SERIAL,
@@ -47,12 +48,12 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
         ]);
     }
 
-    /** The control officer of the in-unit food type (role 7). */
+    /** The control officer of the out-unit food type (role 7). */
     private function controlOfficer(): string
     {
         $officer = User::factory()->create(['personal_number' => self::OFFICER, 'unit_id' => 1, 'personal_id' => '300000221']);
-        $officer->assignRole(RoleEnum::IN_UNIT_FOOD_CONTROL_OFFICER->value);
-        $officer->givePermissionTo('in_unit_food_control_officer_11');
+        $officer->assignRole(RoleEnum::OUT_UNIT_FOOD_CONTROL_OFFICER->value);
+        $officer->givePermissionTo('out_unit_food_control_officer_10');
 
         return self::OFFICER;
     }
@@ -76,9 +77,9 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
         return $row === null ? null : array_map('intval', array_column($row['actions'], 'status_id'));
     }
 
-    //----------------------------- The three-round route of type 11 ------------------------//
+    //----------------------------- The three-round route of type 10 ------------------------//
 
-    public function test_the_in_unit_food_route_starts_at_the_control_officer(): void
+    public function test_the_out_unit_food_route_starts_at_the_control_officer(): void
     {
         $booking = $this->booking();
         $officer = $this->controlOfficer();
@@ -178,7 +179,7 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
 
     //----------------------------- The users file and the mirror fields ------------------------//
 
-    public function test_the_users_file_carries_role_7_for_the_in_unit_food_control_officer(): void
+    public function test_the_users_file_carries_role_7_for_the_out_unit_food_control_officer(): void
     {
         $this->controlOfficer();
 
@@ -186,8 +187,8 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
         $row = collect($rows)->firstWhere('personal_id', '300000221');
 
         $this->assertNotNull($row, 'the officer waits for the next users file');
-        $this->assertContains(['role_id' => RoleEnum::IN_UNIT_FOOD_CONTROL_OFFICER->value, 'booking_type_ids' => [11]], $row['booking_type_roles']);
-        $this->assertSame(7, RoleEnum::IN_UNIT_FOOD_CONTROL_OFFICER->value, 'the id the mobile app resolves');
+        $this->assertContains(['role_id' => RoleEnum::OUT_UNIT_FOOD_CONTROL_OFFICER->value, 'booking_type_ids' => [10]], $row['booking_type_roles']);
+        $this->assertSame(7, RoleEnum::OUT_UNIT_FOOD_CONTROL_OFFICER->value, 'the id the mobile app resolves');
     }
 
     public function test_the_mobile_owned_handler_fields_sit_at_the_exact_mobile_ids(): void
@@ -195,13 +196,13 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
         $fields = FormField::query()->where('field_name', 'like', FormField::MOBILE_OWNED_PREFIX . '%')->orderBy('id')->get();
 
         // The b2r booking files carry these raw ids and the import resolves them BY ID, so they are pinned:
-        // fields 106 (in-unit food, type 11) and 107 (transportation, type 8), options 351-355 / 356-360 in mobile order.
+        // fields 106 (out-unit food, type 10 since the flow switch) and 107 (transportation, type 8), options 351-356 / 357-362 in mobile order.
         $this->assertSame(
-            [106 => 'vice_approver_handler_in_unit_food_booking', 107 => 'vice_approver_handler_transportation_booking'],
+            [106 => 'vice_approver_handler_out_unit_food_booking', 107 => 'vice_approver_handler_transportation_booking'],
             $fields->pluck('field_name', 'id')->all()
         );
         $this->assertSame(
-            [106 => 11, 107 => 8],
+            [106 => 10, 107 => 8],
             $fields->pluck('booking_type_id', 'id')->map(fn ($id): int => (int) $id)->all()
         );
 
@@ -210,19 +211,19 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
             $this->assertSame('בחירת רמ"ד תו"ב', $field->field_display_name);
         }
 
-        // Five options per field since the 2026-11-25 mobile relabel ('אדרת' appended, prefixes dropped).
+        // Six options per field since the 2026-11-25 flow switch ('ליד' joined the groups), laid as the fresh mobile seed lays them.
         $this->assertSame(
             [
-                351 => 'משקים ומטה', 352 => 'גבולות וחשיפה', 353 => 'תקיפה ואש', 354 => 'רובוטיקה ותמרון', 355 => 'אדרת',
-                356 => 'משקים ומטה', 357 => 'גבולות וחשיפה', 358 => 'תקיפה ואש', 359 => 'רובוטיקה ותמרון', 360 => 'אדרת',
+                351 => 'משקים ומטה', 352 => 'גבולות וחשיפה', 353 => 'תקיפה ואש', 354 => 'רובוטיקה ותמרון', 355 => 'אדרת', 356 => 'ליד',
+                357 => 'משקים ומטה', 358 => 'גבולות וחשיפה', 359 => 'תקיפה ואש', 360 => 'רובוטיקה ותמרון', 361 => 'אדרת', 362 => 'ליד',
             ],
             OptionField::whereIn('form_field_id', [106, 107])->where('is_active', true)->orderBy('id')->pluck('name', 'id')->all(),
             'the incoming option_id resolves one-to-one'
         );
         $this->assertSame(
-            [351 => 106, 352 => 106, 353 => 106, 354 => 106, 355 => 106, 356 => 107, 357 => 107, 358 => 107, 359 => 107, 360 => 107],
+            [351 => 106, 352 => 106, 353 => 106, 354 => 106, 355 => 106, 356 => 106, 357 => 107, 358 => 107, 359 => 107, 360 => 107, 361 => 107, 362 => 107],
             OptionField::whereIn('form_field_id', [106, 107])->orderBy('id')->pluck('form_field_id', 'id')->map(fn ($id): int => (int) $id)->all(),
-            'option 355 belongs to field 106 now (אדרת), not to the transport field'
+            'the 106/107 boundary moved again: 356 is ליד of field 106 now, the transport block starts at 357'
         );
     }
 }
