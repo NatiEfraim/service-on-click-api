@@ -152,15 +152,21 @@ class Booking extends Model
         return $status->isPendingForSupplier() ? $status : null;
     }
 
-    /** What parked_status_id becomes when moving to $target: a hold parks at the status it was entered from; hold-to-hold keeps the same park. */
+    /**
+     * What parked_status_id becomes when moving to $target: a hold (8/9/10) parks at the status it was entered from, and
+     * hold-to-hold keeps the same park. The external wait (19) RECORDS the same "entered from" - the screens draw the
+     * timeline split from it - but stays a real move: positionStatus()/positionSql() ignore it (19 is not in holdIds),
+     * so the turn passes to the approver as before. Any other target clears the park.
+     */
     public function parkedStatusFor(StatusBookingEnum $target): ?int
     {
-        if (!$target->isPendingForSupplier()) {
+        if (!$target->isPendingForSupplier() && $target !== StatusBookingEnum::WAITING_FOR_EXTERNAL_PARTY) {
             return null;
         }
 
         $status = $this->statusEnum();
 
+        // Already parked (on a hold): the park travels with it, into another hold or into the external wait.
         if ($status->isPendingForSupplier()) {
             return $this->parked_status_id === null ? null : (int) $this->parked_status_id;
         }

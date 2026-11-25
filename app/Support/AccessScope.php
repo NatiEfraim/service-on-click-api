@@ -172,9 +172,12 @@ final class AccessScope
             return $this->allManageableBookingTypeIds();
         }
 
-        // Approvers and vice approvers see their own types (a vice approver's numbers are limited to their stage by applyToBookings);
-        // the owner of a route type sees that type's, and the domain handler of an infosec / ICT type sees that type's.
-        $ids = $this->isAdmin() ? $this->adminOfBookingTypeIds() : $this->bookingTypeIdsOf(['approver_', 'vice_approver_']);
+        // Approvers, vice approvers and the control officers (רמ"ד תו"ב) see their own types (a handler's numbers are
+        // limited to their stage by applyToBookings); the owner of a route type sees that type's, and the domain
+        // handler of an infosec / ICT type sees that type's.
+        $ids = $this->isAdmin()
+            ? $this->adminOfBookingTypeIds()
+            : $this->bookingTypeIdsOf(['approver_', 'vice_approver_', 'transportation_control_officer_', 'in_unit_food_control_officer_']);
 
         return array_values(array_unique([...$ids, ...$this->routeOwnerBookingTypeIds(), ...$this->officerBookingTypeIds()]));
     }

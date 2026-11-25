@@ -240,6 +240,9 @@ class BookingQueryService
             'owner_personal_id' => $booking->user?->personal_id,
             'status_id' => $status->value,
             'status_label' => $booking->status?->display_name,
+            // The status the booking was parked from: set on the supplier holds (8/9/10) and on the external wait (19),
+            // null otherwise - the screens draw the timeline split from it instead of guessing from the history.
+            'parked_status_id' => $booking->parked_status_id !== null ? (int) $booking->parked_status_id : null,
             'stage' => $stage->value,
             'stage_label' => $stage->label(),
             'stage_age_hours' => round($stageAgeHours, 1),

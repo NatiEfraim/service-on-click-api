@@ -407,10 +407,11 @@ class RoleAccessTest extends ManagementTestCase
         $this->assertSame(array_values(array_merge($withoutBarber, $this->ictTypeIds())), $vice['managed_booking_types']);
         $this->assertTrue($vice['is_handler_only']);
 
-        // The control officer handles the transportation type only.
+        // The control officer handles the transportation type only - and since 2026-11-25 (the frontend's main-screen
+        // request) gets its dashboard tile too, stage-limited like a vice approver.
         $officer = $this->me(self::CONTROL_OFFICER);
         $this->assertSame([$transport], $officer['managed_booking_types']);
-        $this->assertSame([], $officer['dashboard_booking_types']);
+        $this->assertSame([$transport], $officer['dashboard_booking_types']);
         $this->assertTrue($officer['is_handler_only']);
 
         // The clearance route: the במ owns it, the coordinator works it, the קב"ט only submits.

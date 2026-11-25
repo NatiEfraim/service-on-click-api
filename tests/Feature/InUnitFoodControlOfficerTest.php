@@ -114,6 +114,7 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
 
         // Type 1 has no control officer and no status 19: the vice approver's turn, the approver's skip, nothing else.
         $this->assertSame('vice_approver', $this->row(self::VICE_APPROVER)['stage']);
+        $this->assertNull($this->row(self::VICE_APPROVER)['parked_status_id'], 'not parked: the field is null on an ordinary booking');
         $this->assertSame([15, 16], $this->buttons(self::VICE_APPROVER));
         $this->assertSame([3, 4], $this->buttons(self::APPROVER));
         $this->assertSame([15, 16, 3, 4], $this->buttons(self::ADMIN));
@@ -131,12 +132,15 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
 
         $booking = $booking->fresh();
         $this->assertSame(19, (int) $booking->status_id);
-        $this->assertNull($booking->parked_status_id, 'status 19 moves the booking - it is not a supplier hold');
+        // The park RECORDS where it was sent from (the screens draw the timeline split from it); the turn still moves on -
+        // 19 is not a hold, so positionStatus() ignores the park and the approver is next.
+        $this->assertSame(1, (int) $booking->parked_status_id, 'entered the external wait from the officer stage');
         $this->assertFalse($booking->is_status_exported, 'the next round of the r2b status file carries it');
         $this->assertSame(14, (int) ApplicationLog::where('booking_id', $booking->id)->latest('id')->value('action_type_id'), 'move_to_waiting_external_party');
 
         // Only the approver and the admin act now: the final approval or the final rejection, nothing back, no re-park.
         $this->assertSame('external_party', $this->row(self::APPROVER)['stage']);
+        $this->assertSame(1, $this->row(self::APPROVER)['parked_status_id'], 'the list rows carry where it was parked from');
         $this->assertSame([3, 4], $this->buttons(self::APPROVER));
         $this->assertSame([3, 4], $this->buttons(self::ADMIN));
 
@@ -151,21 +155,24 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
         $this->assertFalse($this->mayEditValues(self::VICE_APPROVER, self::SERIAL));
 
         $this->move(self::APPROVER, 3, 2)->assertOk();
-        $this->assertSame(3, (int) $booking->fresh()->status_id);
+        $booking = $booking->fresh();
+        $this->assertSame(3, (int) $booking->status_id);
+        $this->assertNull($booking->parked_status_id, 'closing the external wait clears the park');
     }
 
-    public function test_a_transportation_hold_moved_to_the_external_wait_forgets_the_park(): void
+    public function test_a_transportation_hold_moved_to_the_external_wait_keeps_the_park(): void
     {
         // A transportation booking on a supplier hold, parked at the vice approver's stage.
         $booking = $this->booking(9, 8, ['parked_status_id' => 17]);
 
-        // The admin may park it for the external party straight from the hold; the park is gone - from 19 only 3/4 follow.
+        // The admin may park it for the external party straight from the hold; the park travels with it (the station that
+        // held it is the timeline's split point) - but from 19 only 3/4 follow, exactly as before.
         $this->assertContains(19, $this->buttons(self::ADMIN));
         $this->move(self::ADMIN, 19, 1)->assertOk();
 
         $booking = $booking->fresh();
         $this->assertSame(19, (int) $booking->status_id);
-        $this->assertNull($booking->parked_status_id);
+        $this->assertSame(17, (int) $booking->parked_status_id, 'the hold was parked at 17 - the external wait keeps that origin');
         $this->assertSame([3, 4], $this->buttons(self::APPROVER), 'no way back to the holds from the external wait');
     }
 
