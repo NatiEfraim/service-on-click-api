@@ -261,7 +261,7 @@ class RoleAccessTest extends ManagementTestCase
         $this->assertGreaterThanOrEqual(1, $pools[0]['holders']);
     }
 
-    public function test_the_officers_have_a_dashboard_and_a_queue_for_their_types_and_no_settings(): void
+    public function test_the_officers_have_a_dashboard_a_queue_and_the_settings_view_for_their_types(): void
     {
         $infosecOpen = $this->openOf($this->infosecTypeIds()[0]);
 
@@ -292,8 +292,13 @@ class RoleAccessTest extends ManagementTestCase
         $this->as(self::ICT_HANDLER)->getJson(self::BASE . '/domain-dashboard?types=' . $this->ictTypeIds()[0])->assertForbidden();
         $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/domain-dashboard?types=' . $this->ictTypeIds()[0])->assertForbidden();
 
-        // No settings: the settings of a type are the commanders' (the desk's: admin_ict, see IctServiceDeskWorkflowTest).
-        $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/settings/1/' . $this->infosecTypeIds()[0])->assertForbidden();
+        // Settings follow the commander tier: the infosec officer commands ביטחון מידע, so their officer types open for
+        // VIEWING (2026-11-25, the frontend's request) - own unit only; the write endpoints stay admin-tier (middleware).
+        $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/settings/1/' . $this->infosecTypeIds()[0])->assertOk();
+        $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/settings/2/' . $this->infosecTypeIds()[0])->assertForbidden();
+        $this->as(self::INFOSEC_OFFICER)->postJson('/api/bookings-super-admin-management/form-fields/1/' . $this->infosecTypeIds()[0], [])->assertForbidden();
+        $this->as(self::INFOSEC_OFFICER)->putJson('/api/bookings-admin-management/targets', ['booking_type_id' => $this->infosecTypeIds()[0], 'target_hours' => 24])->assertForbidden();
+        // A desk representative is a handler, not a commander: the ICT settings stay closed to them.
         $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/settings/1/' . $this->ictTypeIds()[0])->assertForbidden();
     }
 

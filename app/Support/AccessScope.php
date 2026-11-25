@@ -172,14 +172,21 @@ final class AccessScope
             return $this->allManageableBookingTypeIds();
         }
 
-        // Approvers, vice approvers and the control officers (רמ"ד תו"ב) see their own types (a handler's numbers are
-        // limited to their stage by applyToBookings); the owner of a route type sees that type's, and the domain
-        // handler of an infosec / ICT type sees that type's.
-        $ids = $this->isAdmin()
-            ? $this->adminOfBookingTypeIds()
-            : $this->bookingTypeIdsOf(['approver_', 'vice_approver_', 'transportation_control_officer_', 'in_unit_food_control_officer_']);
+        // Every hat counts, MERGED (not either-or): a camp commander gets their administered types AND the types of any
+        // further role they hold - approver, vice approver or control officer (רמ"ד תו"ב) of other types. A handler's
+        // numbers stay limited to their stage by applyToBookings (isHandlerOnlyFor is per type, so an admin who is also
+        // the transport רמ"ד sees type 8 at the officer's stage only); the owner of a route type sees that type's, and
+        // the domain handler of an infosec / ICT type sees that type's.
+        $ids = array_values(array_unique([
+            ...($this->isAdmin() ? $this->adminOfBookingTypeIds() : []),
+            ...$this->bookingTypeIdsOf(['approver_', 'vice_approver_', 'transportation_control_officer_', 'in_unit_food_control_officer_']),
+            ...$this->routeOwnerBookingTypeIds(),
+            ...$this->officerBookingTypeIds(),
+        ]));
 
-        return array_values(array_unique([...$ids, ...$this->routeOwnerBookingTypeIds(), ...$this->officerBookingTypeIds()]));
+        sort($ids);
+
+        return $ids;
     }
 
     /** @return array<int, int> Every booking type that has bookings (outsource types have none). */
@@ -285,12 +292,16 @@ final class AccessScope
         return $this->isSuperAdmin() || in_array($bookingTypeId, $this->managedBookingTypeIds(), true);
     }
 
-    /** Super admin anywhere; otherwise a non-handler who manages the type in their own unit (on a route type: its owner). The domain handler of an infosec / ICT type has no settings. */
+    /**
+     * Super admin anywhere; otherwise a non-handler who manages the type in their own unit (on a route type: its owner).
+     * The infosec officer is the commander of the ביטחון מידע system (the tier of admin / admin_ict), so since 2026-11-25
+     * (the frontend's request) their officer types (15/16) open here too - the settings VIEW: every write endpoint
+     * (form fields, targets, system references) sits behind admin-tier middleware that does not admit the officer.
+     */
     public function canManageSettings(int $unitId, int $bookingTypeId): bool
     {
         return $this->isSuperAdmin()
             || (!$this->isHandlerOnlyFor($bookingTypeId)
-                && !in_array($bookingTypeId, $this->officerBookingTypeIds(), true)
                 && $this->managesBooking($unitId, $bookingTypeId));
     }
 

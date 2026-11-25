@@ -274,6 +274,36 @@ class ManagementInsightTest extends ManagementTestCase
         }
     }
 
+    public function test_an_admin_who_is_also_a_control_officer_gets_both_hats_on_the_main_screen(): void
+    {
+        // Camp commander of type 1 ONLY, and the transportation רמ"ד תו"ב - like the real מפקד מחנה the frontend reported.
+        $both = User::factory()->create(['personal_number' => '1000035', 'unit_id' => 1, 'full_name' => 'מפקד מחנה ורמ"ד']);
+        $both->assignRole('admin');
+        $both->givePermissionTo('admin_1');
+        $both->assignRole('transportation_control_officer');
+        $both->givePermissionTo('transportation_control_officer_8');
+
+        $before = $this->as('1000035')->getJson(self::BASE . '/overview')->assertOk()->json('data.by_type.8') ?? 0;
+
+        // One transport booking at the officer's stage and one past it, at the approver's.
+        $this->booking(['serial_number' => 800000201, 'booking_type_id' => 8, 'status_id' => 1]);
+        $this->booking(['serial_number' => 800000202, 'booking_type_id' => 8, 'status_id' => 15]);
+
+        $me = $this->as('1000035')->getJson(self::BASE . '/me')->assertOk()->json('data');
+
+        // The hats MERGE: the administered type AND the officer's type, not one or the other.
+        $this->assertTrue($me['is_admin']);
+        $this->assertSame([1, 8], $me['dashboard_booking_types']);
+
+        // On type 8 they are only its handler: the overview counts the new booking at the officer's stage, not the one beyond it.
+        $overview = $this->as('1000035')->getJson(self::BASE . '/overview')->assertOk()->json('data');
+        $this->assertSame($before + 1, $overview['by_type'][8] ?? 0);
+
+        // Admin of type 1: its settings open; only the רמ"ד of type 8: its settings stay closed.
+        $this->as('1000035')->getJson(self::BASE . '/settings/1/1')->assertOk();
+        $this->as('1000035')->getJson(self::BASE . '/settings/1/8')->assertForbidden();
+    }
+
     public function test_the_bottlenecks_show_where_bookings_wait_and_how_long_they_took(): void
     {
         $booking = $this->booking(['status_id' => 15, 'status_changed_at' => now()->subHours(5)]);
@@ -351,6 +381,12 @@ class ManagementInsightTest extends ManagementTestCase
         $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/settings/1/1')->assertForbidden();
         $this->as(self::ADMIN)->getJson(self::BASE . '/settings/1/1')->assertOk();
         $this->as(self::ADMIN)->getJson(self::BASE . '/settings/2/1')->assertForbidden();
+
+        // The infosec officer commands the ביטחון מידע system: the settings of their officer types open (view), own unit only.
+        $this->createDomainPeople();
+        $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/settings/1/15')->assertOk();
+        $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/settings/2/15')->assertForbidden();
+        $this->as(self::INFOSEC_OFFICER)->getJson(self::BASE . '/settings/1/1')->assertForbidden();
     }
 
     //----------------------------- Blocking dates ----------------------------//
