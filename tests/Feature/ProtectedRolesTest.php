@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\RoleEnum;
 use App\Models\Department;
 use App\Models\User;
 
@@ -108,6 +109,46 @@ class ProtectedRolesTest extends ManagementTestCase
 
         // The super admin manages admins, so they show for them.
         $this->assertContains(self::OTHER_ADMIN, $numbers(self::SUPER_ADMIN));
+    }
+
+    public function test_the_three_system_commanders_cannot_see_each_other_only_the_super_admin_sees_them(): void
+    {
+        // The commanders of ביטחון מידע (the infosec officer) and of תקשוב (admin_ict), in the admin's own unit.
+        $this->createDomainPeople();
+        $this->createPerson('1000031', RoleEnum::ADMIN_ICT, ['full_name' => 'מפקד תקשוב']);
+
+        // The camp commander sees neither peer commander; the infosec HANDLER tier (קב"ט, מתאם) stays visible.
+        $listed = $this->listedBy(self::ADMIN);
+        $this->assertNotContains(self::INFOSEC_OFFICER, $listed);
+        $this->assertNotContains('1000031', $listed);
+        $this->assertContains(self::SECURITY_OFFICER, $listed);
+        $this->assertContains(self::INTERVIEW_COORDINATOR, $listed);
+
+        foreach ([self::INFOSEC_OFFICER, '1000031'] as $hidden) {
+            $this->assertSame([], $this->listedBy(self::ADMIN, $hidden), "admin looked up {$hidden}");
+            $this->as(self::ADMIN)->getJson(self::ADMIN_BASE . '/get-approver-permissions/' . $this->uuidOf($hidden))->assertStatus(400);
+        }
+
+        $this->as(self::ADMIN)->postJson(self::ADMIN_BASE . '/assign-approver-role', $this->approverBody($this->uuidOf(self::INFOSEC_OFFICER)))->assertForbidden();
+
+        // The approvers list of the admin skips the infosec officer (an approver-management role, so it would otherwise show).
+        $approverNumbers = collect($this->as(self::ADMIN)->getJson(self::ADMIN_BASE . '/get-approvers')->assertOk()->json('data'))->pluck('personal_number')->all();
+        $this->assertNotContains(self::INFOSEC_OFFICER, $approverNumbers);
+
+        // Symmetric: the ICT commander (who has the users screen) sees neither the camp commander nor the infosec officer.
+        $listedByIct = $this->listedBy('1000031');
+        $this->assertNotContains(self::ADMIN, $listedByIct);
+        $this->assertNotContains(self::INFOSEC_OFFICER, $listedByIct);
+        $this->assertContains(self::APPROVER, $listedByIct);
+
+        // The infosec officer has no users screen at all.
+        $this->as(self::INFOSEC_OFFICER)->getJson('/api/users')->assertForbidden();
+
+        // Only the super admin sees the three of them.
+        $listedBySuper = $this->listedBy(self::SUPER_ADMIN);
+        $this->assertContains(self::ADMIN, $listedBySuper);
+        $this->assertContains(self::INFOSEC_OFFICER, $listedBySuper);
+        $this->assertContains('1000031', $listedBySuper);
     }
 
     //----------------------------- Reading permissions -------------------------//

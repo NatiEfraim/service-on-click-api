@@ -324,9 +324,11 @@ class ManagementInsightTest extends ManagementTestCase
 
         $this->as(self::SUPER_ADMIN)->getJson(self::BASE . '/settings/1/1')->assertOk()->assertJsonPath('data.can_edit_global', true);
 
-        // Another unit, and a handler, are refused.
+        // Another unit, and a handler, are refused. The admin too is bound to their own unit, and to the types of their admin_N permissions.
         $this->as(self::APPROVER)->getJson(self::BASE . '/settings/2/1')->assertForbidden();
         $this->as(self::VICE_APPROVER)->getJson(self::BASE . '/settings/1/1')->assertForbidden();
+        $this->as(self::ADMIN)->getJson(self::BASE . '/settings/1/1')->assertOk();
+        $this->as(self::ADMIN)->getJson(self::BASE . '/settings/2/1')->assertForbidden();
     }
 
     //----------------------------- Blocking dates ----------------------------//

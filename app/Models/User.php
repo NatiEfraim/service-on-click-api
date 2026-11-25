@@ -98,14 +98,16 @@ class User extends Authenticatable
         return $role ? RoleEnum::fromSpatieRole($role) : null;
     }
 
-    /** Role names that make a person unmanageable: super_admin for everyone; the commanders (admin, admin_ict) for non-super-admins too. @return array<int, string> */
+    /** Role names that make a person unmanageable: super_admin for everyone; the three system commanders for non-super-admins too. @return array<int, string> */
     public function unmanageableRoleNames(): array
     {
         $names = [RoleEnum::SUPER_ADMIN->toSpatieRoleName()];
 
-        // Only the super admin manages commanders: a camp commander or an ICT commander never changes another commander's grants.
+        // The commanders of the three systems (admin - מפקדת מחנה, infosec_officer - ביטחון מידע, admin_ict - תקשוב) are peers:
+        // none of them sees or changes another (themselves included). Only the super admin manages commanders.
         if (!$this->hasRole(RoleEnum::SUPER_ADMIN->toSpatieRoleName())) {
             $names[] = RoleEnum::ADMIN->toSpatieRoleName();
+            $names[] = RoleEnum::INFOSEC_OFFICER->toSpatieRoleName();
             $names[] = RoleEnum::ADMIN_ICT->toSpatieRoleName();
         }
 
