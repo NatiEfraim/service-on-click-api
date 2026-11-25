@@ -60,8 +60,8 @@ class SystemDomainContractSeeder extends Seeder
 
         $optionIds = OptionField::query()->whereIn('form_field_id', array_keys($expected))->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all();
 
-        if ($optionIds !== range(351, 358)) {
-            $this->violation('the options of fields 106/107 must be exactly ids 351-358, found [' . implode(', ', $optionIds) . ']');
+        if ($optionIds !== range(351, 360)) {
+            $this->violation('the options of fields 106/107 must be exactly ids 351-360, found [' . implode(', ', $optionIds) . ']');
         }
     }
 

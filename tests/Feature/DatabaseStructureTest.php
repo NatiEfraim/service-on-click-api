@@ -263,13 +263,13 @@ class DatabaseStructureTest extends ManagementTestCase
      */
     public function test_form_field_and_option_ids_respect_the_system_domain_contract(): void
     {
-        // The mobile-owned "גורם מטפל" fields sit at the exact mobile ids, their options at 351-358.
+        // The mobile-owned "בחירת רמ"ד תו"ב" fields sit at the exact mobile ids, their options at 351-360 (five per field since the 2026-11-25 mobile relabel).
         $this->assertSame(
             [106 => 'vice_approver_handler_in_unit_food_booking', 107 => 'vice_approver_handler_transportation_booking'],
             DB::table('form_fields')->whereIn('id', [106, 107])->orderBy('id')->pluck('field_name', 'id')->all()
         );
         $this->assertSame(
-            range(351, 358),
+            range(351, 360),
             DB::table('option_fields')->whereIn('form_field_id', [106, 107])->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all()
         );
 
@@ -301,9 +301,9 @@ class DatabaseStructureTest extends ManagementTestCase
         $this->assertSame(0, DB::table('booking_type_has_roles')->whereBetween('role_id', [101, 149])->whereNotIn('booking_type_id', [14, 15, 16])->count());
         $this->assertSame(0, DB::table('booking_type_has_roles')->whereBetween('role_id', [151, 199])->whereNotIn('booking_type_id', [20, 21, 22, 23, 24, 25])->count());
 
-        // The camp band itself is contiguous with the mobile seed (fields 1-107, options 1-358 today).
+        // The camp band itself is contiguous with the mobile seed (fields 1-107, options 1-360 today).
         $this->assertSame(107, DB::table('form_fields')->where('id', '<=', 1000)->count());
-        $this->assertSame(358, DB::table('option_fields')->where('id', '<=', 10000)->count());
+        $this->assertSame(360, DB::table('option_fields')->where('id', '<=', 10000)->count());
     }
 
     public function test_the_production_seeders_can_run_again_without_duplicating_anything(): void

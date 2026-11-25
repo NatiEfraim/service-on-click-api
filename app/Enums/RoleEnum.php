@@ -35,7 +35,8 @@ enum RoleEnum: int
             self::SUPER_ADMIN => 'מנהל מערכת',
             self::ADMIN => 'מפקד מחנה',
             self::APPROVER => 'מפקד תחום',
-            self::VICE_APPROVER => 'גורם מטפל',
+            // Renamed from 'גורם מטפל' on the mobile side (2026-11-25); the ICT types override this to 'נציג מוקד' in the seeder.
+            self::VICE_APPROVER => 'מש"ק תחום',
             self::USER => 'משתמש ',
             self::TRANSPORTATION_CONTROL_OFFICER => 'רמ"ד תו"ב',
             self::IN_UNIT_FOOD_CONTROL_OFFICER => 'רמ"ד תו"ב',

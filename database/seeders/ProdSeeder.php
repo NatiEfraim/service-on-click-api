@@ -41,7 +41,7 @@ class ProdSeeder extends Seeder
             BookingTypeHasStatusSeeder::class,
             FormFieldSeeder::class,
             OptionFieldSeeder::class,
-            // The mobile-owned "גורם מטפל" fields, pinned to the mobile ids (fields 106/107, options 351-358).
+            // The mobile-owned "בחירת רמ"ד תו"ב" fields, pinned to the mobile ids (fields 106/107, options 351-360).
             ViceApproverHandlerFieldSeeder::class,
             // Each web-only system seeds inside its own id blocks (SystemDomainEnum): ביטחון מידע, then תקשוב.
             InfosecFormFieldSeeder::class,

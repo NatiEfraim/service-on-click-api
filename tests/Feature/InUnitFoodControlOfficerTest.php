@@ -188,7 +188,7 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
         $fields = FormField::query()->where('field_name', 'like', FormField::MOBILE_OWNED_PREFIX . '%')->orderBy('id')->get();
 
         // The b2r booking files carry these raw ids and the import resolves them BY ID, so they are pinned:
-        // fields 106 (in-unit food, type 11) and 107 (transportation, type 8), options 351-358 in mobile order.
+        // fields 106 (in-unit food, type 11) and 107 (transportation, type 8), options 351-355 / 356-360 in mobile order.
         $this->assertSame(
             [106 => 'vice_approver_handler_in_unit_food_booking', 107 => 'vice_approver_handler_transportation_booking'],
             $fields->pluck('field_name', 'id')->all()
@@ -200,16 +200,22 @@ class InUnitFoodControlOfficerTest extends HatchTestCase
 
         foreach ($fields as $field) {
             $this->assertFalse((bool) $field->is_active, 'never offered on the web forms');
-            $this->assertSame('גורם מטפל', $field->field_display_name);
+            $this->assertSame('בחירת רמ"ד תו"ב', $field->field_display_name);
         }
 
+        // Five options per field since the 2026-11-25 mobile relabel ('אדרת' appended, prefixes dropped).
         $this->assertSame(
             [
-                351 => 'גורם מטפל - משקים והמטה', 352 => 'גורם מטפל - גבולות וחשיפה', 353 => 'גורם מטפל - תקיפה ואש', 354 => 'גורם מטפל - רובוטיקה ותמרון',
-                355 => 'גורם מטפל - משקים והמטה', 356 => 'גורם מטפל - גבולות וחשיפה', 357 => 'גורם מטפל - תקיפה ואש', 358 => 'גורם מטפל - רובוטיקה ותמרון',
+                351 => 'משקים ומטה', 352 => 'גבולות וחשיפה', 353 => 'תקיפה ואש', 354 => 'רובוטיקה ותמרון', 355 => 'אדרת',
+                356 => 'משקים ומטה', 357 => 'גבולות וחשיפה', 358 => 'תקיפה ואש', 359 => 'רובוטיקה ותמרון', 360 => 'אדרת',
             ],
             OptionField::whereIn('form_field_id', [106, 107])->where('is_active', true)->orderBy('id')->pluck('name', 'id')->all(),
             'the incoming option_id resolves one-to-one'
+        );
+        $this->assertSame(
+            [351 => 106, 352 => 106, 353 => 106, 354 => 106, 355 => 106, 356 => 107, 357 => 107, 358 => 107, 359 => 107, 360 => 107],
+            OptionField::whereIn('form_field_id', [106, 107])->orderBy('id')->pluck('form_field_id', 'id')->map(fn ($id): int => (int) $id)->all(),
+            'option 355 belongs to field 106 now (אדרת), not to the transport field'
         );
     }
 }

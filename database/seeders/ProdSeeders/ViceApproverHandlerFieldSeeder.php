@@ -11,27 +11,31 @@ use App\Models\OptionField;
 use Illuminate\Database\Seeder;
 
 /**
- * The web rows of the mobile-owned "גורם מטפל" selects on the in-unit food (11) and transportation (8) forms,
- * PINNED to the exact mobile ids (fields 106/107, options 351-358): the b2r booking files carry these raw ids and
- * ImportBookingService maps by id, like every other shared field. The mobile app owns the fields - it decides which
- * options a requester may pick (its option_field_has_users table) - and the web only displays the imported choice,
- * so they are seeded INACTIVE (never on the web forms or the field-management screens) with ACTIVE option rows.
+ * The web rows of the mobile-owned "בחירת רמ"ד תו"ב" selects on the in-unit food (11) and transportation (8) forms,
+ * PINNED to the exact mobile ids (fields 106/107, options 351-355 / 356-360): the b2r booking files carry these raw
+ * ids and ImportBookingService maps by id, like every other shared field. The mobile app owns the fields - it decides
+ * which options a requester may pick (its option_field_has_users table) - and the web only displays the imported
+ * choice, so they are seeded INACTIVE (never on the web forms or the field-management screens) with ACTIVE option rows.
+ * Mobile relabel round of 2026-11-25: the field is 'בחירת רמ"ד תו"ב' (was 'גורם מטפל'), the options dropped the
+ * 'גורם מטפל - ' prefix ('משקים ומטה' also lost its ה) and a FIFTH group 'אדרת' was appended per field, which moved
+ * field 107's block from 355-358 to 356-360.
  */
 class ViceApproverHandlerFieldSeeder extends Seeder
 {
-    /** The option names in mobile id order: 351-354 under field 106, 355-358 under field 107. */
+    /** The option names in mobile id order: 351-355 under field 106, 356-360 under field 107. */
     private const OPTION_NAMES = [
-        'גורם מטפל - משקים והמטה',
-        'גורם מטפל - גבולות וחשיפה',
-        'גורם מטפל - תקיפה ואש',
-        'גורם מטפל - רובוטיקה ותמרון',
+        'משקים ומטה',
+        'גבולות וחשיפה',
+        'תקיפה ואש',
+        'רובוטיקה ותמרון',
+        'אדרת',
     ];
 
     public function run(): void
     {
         $fields = [
-            106 => ['booking_type' => BookingTypeEnum::IN_UNIT_FOOD_BOOKING, 'field_name' => 'vice_approver_handler_in_unit_food_booking', 'first_option_id' => 351],
-            107 => ['booking_type' => BookingTypeEnum::TRANSPORTATION_BOOKING, 'field_name' => 'vice_approver_handler_transportation_booking', 'first_option_id' => 355],
+            106 => ['booking_type' => BookingTypeEnum::IN_UNIT_FOOD_BOOKING, 'field_name' => 'vice_approver_handler_in_unit_food_booking', 'first_option_id' => 351, 'position' => 105],
+            107 => ['booking_type' => BookingTypeEnum::TRANSPORTATION_BOOKING, 'field_name' => 'vice_approver_handler_transportation_booking', 'first_option_id' => 356, 'position' => 135],
         ];
 
         foreach ($fields as $fieldId => $definition) {
@@ -41,7 +45,7 @@ class ViceApproverHandlerFieldSeeder extends Seeder
                 continue;
             }
 
-            $formField = $this->pinField($fieldId, $bookingTypeId, $definition['field_name']);
+            $formField = $this->pinField($fieldId, $bookingTypeId, $definition['field_name'], $definition['position']);
 
             foreach (self::OPTION_NAMES as $index => $name) {
                 $this->pinOption($definition['first_option_id'] + $index, $formField, $name);
@@ -50,7 +54,7 @@ class ViceApproverHandlerFieldSeeder extends Seeder
     }
 
     /** Upserts the field at its pinned mobile id; a row in the way means an un-renumbered database - stop loudly. */
-    private function pinField(int $fieldId, int $bookingTypeId, string $fieldName): FormField
+    private function pinField(int $fieldId, int $bookingTypeId, string $fieldName, int $position): FormField
     {
         $formField = FormField::query()
             ->where('unit_id', UnitEnum::H->value)
@@ -84,13 +88,15 @@ class ViceApproverHandlerFieldSeeder extends Seeder
         }
 
         $formField->fill([
-            'field_display_name' => 'גורם מטפל',
+            'field_display_name' => 'בחירת רמ"ד תו"ב',
             'field_type_id' => FieldTypeEnum::SELECT->value,
+            // The mobile validates ('יש לבחור רמ"ד תו"ב'); here the field is display-only, so no rules and not required.
             'field_validations' => null,
             'editable' => 0,
             'is_required' => 0,
             'is_input' => 0,
             'payload_section_id' => PayloadSectionEnum::NONE->value,
+            'position' => $position,
             // Display-only: never offered on the web forms or the field-management screens.
             'is_active' => 0,
         ])->save();
