@@ -45,7 +45,7 @@ class ShowBookingResource extends JsonResource
     {
         $cancellationData = $this->getCancellationData();
 
-        return $this->removeNullValues([
+        $data = $this->removeNullValues([
             'uuid' => $this->uuid,
             'serial_number' => $this->serial_number,
             'booking_type' => $this->getBookingTypeData(),
@@ -64,6 +64,11 @@ class ShowBookingResource extends JsonResource
             'cancellation_advance_days' => $cancellationData['cancellation_advance_days'],
         ]);
 
+        // After removeNullValues: null is an answer here (not parked), not a missing field; when the booking is
+        // parked (19, and the supplier holds 8/9/10) this is the status it left - where the timeline splits.
+        $data['parked_status_id'] = $this->parked_status_id !== null ? (int) $this->parked_status_id : null;
+
+        return $data;
     }
 
     /** The assigned handler of a route-type request, as the requester may see it (the name only). */

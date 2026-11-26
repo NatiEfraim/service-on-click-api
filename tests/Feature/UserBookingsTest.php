@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\PaginationEnum;
 use App\Enums\RoleEnum;
+use App\Enums\StatusBookingEnum;
 use App\Models\Booking;
 use App\Models\File;
 use App\Models\Image;
@@ -112,6 +113,42 @@ class UserBookingsTest extends ManagementTestCase
             ->getJson('/api/bookings/my-bookings?serial_number=' . $car->serial_number)
             ->assertOk()->json('data');
         $this->assertContains($car->uuid, array_column($bySerial, 'uuid'));
+    }
+
+    public function test_the_requester_sees_where_a_parked_booking_left_from(): void
+    {
+        // Parked for an outside party (19) after the control officer's answer (17): the requester's timeline
+        // splits at that station, so both requester endpoints must say where the booking left from.
+        $booking = $this->bookingOf(self::PLAIN_USER);
+        $booking->forceFill([
+            'status_id' => StatusBookingEnum::WAITING_FOR_EXTERNAL_PARTY->value,
+            'parked_status_id' => StatusBookingEnum::CONTROL_OFFICER_APPROVED->value,
+        ])->save();
+
+        $row = collect(
+            $this->actingAsPersonalNumber(self::PLAIN_USER)
+                ->getJson('/api/bookings/my-bookings?serial_number=' . $booking->serial_number)
+                ->assertOk()
+                ->json('data')
+        )->firstWhere('uuid', $booking->uuid);
+
+        $this->assertSame(StatusBookingEnum::CONTROL_OFFICER_APPROVED->value, $row['parked_status_id']);
+
+        $this->actingAsPersonalNumber(self::PLAIN_USER)
+            ->getJson('/api/bookings/' . $booking->uuid)
+            ->assertOk()
+            ->assertJsonPath('data.parked_status_id', StatusBookingEnum::CONTROL_OFFICER_APPROVED->value);
+
+        // Not parked: the field is present and null (removeNullValues must not swallow it).
+        $booking->forceFill(['status_id' => StatusBookingEnum::RECEIVED->value, 'parked_status_id' => null])->save();
+
+        $details = $this->actingAsPersonalNumber(self::PLAIN_USER)
+            ->getJson('/api/bookings/' . $booking->uuid)
+            ->assertOk()
+            ->json('data');
+
+        $this->assertArrayHasKey('parked_status_id', $details);
+        $this->assertNull($details['parked_status_id']);
     }
 
     public function test_a_plain_user_opens_their_own_booking_with_its_formatted_values(): void
