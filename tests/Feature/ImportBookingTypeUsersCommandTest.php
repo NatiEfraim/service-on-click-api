@@ -35,8 +35,8 @@ class ImportBookingTypeUsersCommandTest extends TestCase
     /** The real header row of car_booking_users.xlsx (the unit column is ignored). */
     private const CAR_HEADERS = ['מספר אישי', 'ת.ז', 'תיאור יחידה', 'שם פרטי', 'שם משפחה', 'מספר נייד'];
 
-    /** The real header row of out_unit_food_booking.xlsx (unit, rank and service type are ignored). */
-    private const OUT_UNIT_FOOD_HEADERS = ['מספר אישי', 'ת.ז', 'תיאור יחידה', 'שם פרטי', 'שם משפחה', 'דרגה', 'תיאור דרגה', 'מספר נייד', 'תיאור סוג שירות'];
+    /** The real header row of in_unit_food_booking.xlsx (unit, rank and service type are ignored). */
+    private const IN_UNIT_FOOD_HEADERS = ['מספר אישי', 'ת.ז', 'תיאור יחידה', 'שם פרטי', 'שם משפחה', 'דרגה', 'תיאור דרגה', 'מספר נייד', 'תיאור סוג שירות'];
 
     /** The real header row of users.xlsx. */
     private const USERS_HEADERS = ['מספר אישי', 'ת.ז', 'שם פרטי', 'שם משפחה', 'מספר נייד'];
@@ -122,7 +122,7 @@ class ImportBookingTypeUsersCommandTest extends TestCase
 
     public function test_each_command_grants_its_file_types_plus_the_common_types(): void
     {
-        // Each file in its real shape: car with headers, maintenance without a header row, the out-unit food file with
+        // Each file in its real shape: car with headers, maintenance without a header row, the in-unit food file with
         // its extra (and mislabeled) columns, and users.xlsx with its 5-column layout.
         $this->putXlsx('car_booking_users.xlsx', [
             [7716506, 123456782, 'חט"ל 99', 'ליאה', 'טל-אור', 528434874],
@@ -132,9 +132,9 @@ class ImportBookingTypeUsersCommandTest extends TestCase
             [7492966, 300000221, 'חט"ל 99', 'תם', 'ברנד', 547477456],
         ], null);
 
-        $this->putXlsx('out_unit_food_booking.xlsx', [
+        $this->putXlsx('in_unit_food_booking.xlsx', [
             [99808781, 300000338, 'חט"ל 99', 'לירז', 'עזרא', 'משקים ומטה', 'ע"ץ', 528707372, 'עובד צה"ל'],
-        ], self::OUT_UNIT_FOOD_HEADERS);
+        ], self::IN_UNIT_FOOD_HEADERS);
 
         $this->putXlsx('users.xlsx', [
             // Everyone from the other three files is in users.xlsx too: the grants of both commands add up on one user.
@@ -148,7 +148,7 @@ class ImportBookingTypeUsersCommandTest extends TestCase
         $this->artisan('importUser:xlsx')->assertSuccessful();
         $this->artisan('importCarBooking:xlsx')->assertSuccessful();
         $this->artisan('importCarMaintenanceBooking:xlsx')->assertSuccessful();
-        $this->artisan('importOutUnitFoodBooking:xlsx')->assertSuccessful();
+        $this->artisan('importInUnitFoodBooking:xlsx')->assertSuccessful();
 
         // The common list today: infosec 15-16 and the 6 ICT types. user_14 has no USER role, so it must not exist
         // and the commands must have succeeded without it.
@@ -161,7 +161,6 @@ class ImportBookingTypeUsersCommandTest extends TestCase
             BookingTypeEnum::EQUIPMENT_BOOKING_FEMALE,
             BookingTypeEnum::BARBER_BOOKING,
             BookingTypeEnum::TRANSPORTATION_BOOKING,
-            BookingTypeEnum::IN_UNIT_FOOD_BOOKING,
             BookingTypeEnum::CONSTRUCTION_BOOKING,
         ];
 
@@ -179,12 +178,12 @@ class ImportBookingTypeUsersCommandTest extends TestCase
         $this->assertSame('תם ברנד', $maintenance->full_name);
         $this->assertSame($this->expectedNames(BookingTypeEnum::CAR_MAINTENANCE_BOOKING, ...$usersTypes), $this->namesOf($maintenance));
 
-        // The out-unit food file was read by header names, its extra columns ignored; 8-digit personal numbers pass.
-        // Transportation now comes from users.xlsx, not from this file.
+        // The in-unit food file was read by header names, its extra columns ignored; 8-digit personal numbers pass.
+        // In-unit food comes from this file alone now - users.xlsx no longer grants it.
         $food = User::where('personal_number', '99808781')->firstOrFail();
         $this->assertSame('לירז עזרא', $food->full_name);
         $this->assertSame('0528707372', $food->phone);
-        $this->assertSame($this->expectedNames(BookingTypeEnum::OUT_UNIT_FOOD_BOOKING, ...$usersTypes), $this->namesOf($food));
+        $this->assertSame($this->expectedNames(BookingTypeEnum::IN_UNIT_FOOD_BOOKING, ...$usersTypes), $this->namesOf($food));
 
         // Someone only in users.xlsx: the ID zero-padded back to 9 digits, the brackets unflipped, and only that file's grants.
         $onlyUsers = User::where('personal_number', '7000111')->firstOrFail();
@@ -193,7 +192,7 @@ class ImportBookingTypeUsersCommandTest extends TestCase
         $this->assertSame($this->expectedNames(...$usersTypes), $this->namesOf($onlyUsers));
 
         // All four files moved on.
-        foreach (['car_booking_users.xlsx', 'car_maintenance_booking.xlsx', 'out_unit_food_booking.xlsx', 'users.xlsx'] as $name) {
+        foreach (['car_booking_users.xlsx', 'car_maintenance_booking.xlsx', 'in_unit_food_booking.xlsx', 'users.xlsx'] as $name) {
             Storage::disk('minio')->assertMissing(self::INBOX . '/' . $name);
             Storage::disk('minio')->assertExists(self::LOADED . '/' . $name);
         }
@@ -202,14 +201,14 @@ class ImportBookingTypeUsersCommandTest extends TestCase
     public function test_only_the_people_in_the_file_keep_its_own_permissions(): void
     {
         $car = $this->permission(BookingTypeEnum::CAR_BOOKING);
-        $outUnitFood = $this->permission(BookingTypeEnum::OUT_UNIT_FOOD_BOOKING);
+        $inUnitFood = $this->permission(BookingTypeEnum::IN_UNIT_FOOD_BOOKING);
         $transportation = $this->permission(BookingTypeEnum::TRANSPORTATION_BOOKING);
         $removableMedia = $this->permission(BookingTypeEnum::REMOVABLE_MEDIA_BOOKING);
 
-        // Someone who holds car, out-unit food, transportation and a common permission, but is in no file.
+        // Someone who holds car, in-unit food, transportation and a common permission, but is in no file.
         $absent = User::factory()->create(['personal_number' => '7000999', 'personal_id' => '300000999', 'unit_id' => UnitEnum::H->value]);
         $absent->assignRole(RoleEnum::USER->value);
-        $absent->givePermissionTo([$car, $outUnitFood, $transportation, $removableMedia]);
+        $absent->givePermissionTo([$car, $inUnitFood, $transportation, $removableMedia]);
         $absent->forceFill(['is_exported_role' => true])->save();
 
         $this->putXlsx('car_booking_users.xlsx', [
@@ -220,20 +219,20 @@ class ImportBookingTypeUsersCommandTest extends TestCase
         // The car file is now the full list of CAR_BOOKING - nothing else was touched.
         $absent->refresh();
         $this->assertFalse($absent->hasDirectPermission($car));
-        $this->assertTrue($absent->hasDirectPermission($outUnitFood));
+        $this->assertTrue($absent->hasDirectPermission($inUnitFood));
         $this->assertTrue($absent->hasDirectPermission($transportation));
         $this->assertTrue($absent->hasDirectPermission($removableMedia));
         $this->assertFalse((bool) $absent->is_exported_role);
         $this->assertTrue(User::where('personal_number', '7716506')->firstOrFail()->hasDirectPermission($car));
 
-        // The out-unit food file takes only out-unit food: transportation now belongs to users.xlsx.
-        $this->putXlsx('out_unit_food_booking.xlsx', [
+        // The in-unit food file takes only in-unit food: users.xlsx no longer owns it, transportation stays users.xlsx's.
+        $this->putXlsx('in_unit_food_booking.xlsx', [
             [99808781, 300000338, 'חט"ל 99', 'לירז', 'עזרא', 'משקים ומטה', 'ע"ץ', 528707372, 'עובד צה"ל'],
-        ], self::OUT_UNIT_FOOD_HEADERS);
-        $this->artisan('importOutUnitFoodBooking:xlsx')->assertSuccessful();
+        ], self::IN_UNIT_FOOD_HEADERS);
+        $this->artisan('importInUnitFoodBooking:xlsx')->assertSuccessful();
 
         $absent->refresh();
-        $this->assertFalse($absent->hasDirectPermission($outUnitFood));
+        $this->assertFalse($absent->hasDirectPermission($inUnitFood));
         $this->assertTrue($absent->hasDirectPermission($transportation));
         $this->assertFalse(User::where('personal_number', '99808781')->firstOrFail()->hasDirectPermission($transportation));
 

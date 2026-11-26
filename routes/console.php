@@ -3,7 +3,9 @@
 use App\Console\Commands\AdvanceWorkflowCommand;
 use App\Console\Commands\ExportBookingStatusJsonFtpCommand;
 use App\Console\Commands\ExportUsersJsonFtpCommand;
+use App\Console\Commands\ImportApplicationLogJsonFtpCommand;
 use App\Console\Commands\ImportBookingJsonFtpCommand;
+use App\Console\Commands\ImportFileFtpCommand;
 use Illuminate\Support\Facades\Schedule;
 
 // Route types (the clearance grant): a request whose interview moment has passed moves on, and - when CLEARANCE_AUTO_CLOSE is on - a request
@@ -30,11 +32,27 @@ Schedule::command(ExportBookingStatusJsonFtpCommand::class)
     ->onOneServer()
     ->withoutOverlapping(15);
 
+// b2r: each import runs on its own clock, nothing chains. The bookings come most often; the files and the logs
+// belong to bookings, so their 20-minute slots make sure the bookings are already loaded and saved, and one that
+// arrives before its booking simply waits for its next run.
+
 // b2r: the booking json files are taken from the FTP into the bucket and imported - every 15 minutes.
-// A clean run chains, in this order: importBookingJson:ftp -> importFile:ftp -> importApplicationLogJson:ftp
-// (ImportBookingJsonFtpCommand::followUpCommands), so the files and the logs are not scheduled on their own.
 Schedule::command(ImportBookingJsonFtpCommand::class)
     ->everyFifteenMinutes()
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping(15);
+
+// b2r: the attachment files - every 20 minutes (defined before the logs: in a shared minute the files run first).
+Schedule::command(ImportFileFtpCommand::class)
+    ->cron('*/20 * * * *')
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping(15);
+
+// b2r: the application logs - every 20 minutes, after the files; a log belongs to a booking that is already saved.
+Schedule::command(ImportApplicationLogJsonFtpCommand::class)
+    ->cron('*/20 * * * *')
     ->timezone(config('app.timezone'))
     ->onOneServer()
     ->withoutOverlapping(15);

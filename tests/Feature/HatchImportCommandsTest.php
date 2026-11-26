@@ -454,24 +454,30 @@ class HatchImportCommandsTest extends HatchTestCase
         return collect(app(Schedule::class)->events());
     }
 
-    public function test_the_ftp_imports_are_scheduled_in_order_bookings_then_logs_then_files_and_the_fetch_only_commands_are_gone(): void
+    public function test_the_ftp_imports_each_have_their_own_schedule_bookings_15_then_files_and_logs_20(): void
     {
-        $find = fn (string $name) => $this->scheduled()->first(fn ($event) => str_contains($event->command, $name));
+        $events = $this->scheduled();
+        $find = fn (string $name) => $events->first(fn ($event) => str_contains($event->command, $name));
+        $at = fn (string $name) => $events->search(fn ($event) => str_contains($event->command, $name));
 
-        // A log and a file belong to a booking, so they come after the bookings.
-        $this->assertSame('2-59/5 * * * *', $find('importBookingJson:ftp')->expression);
-        $this->assertSame('3-59/5 * * * *', $find('importApplicationLogJson:ftp')->expression);
-        $this->assertSame('4-59/5 * * * *', $find('importFile:ftp')->expression);
+        // Nothing chains (2026-11-26): each command has its own clock. A file and a log belong to a booking, so the
+        // bookings run most often, and in a shared minute the definition order runs bookings, then files, then logs.
+        $this->assertSame('*/15 * * * *', $find('importBookingJson:ftp')->expression);
+        $this->assertSame('*/20 * * * *', $find('importFile:ftp')->expression);
+        $this->assertSame('*/20 * * * *', $find('importApplicationLogJson:ftp')->expression);
+        $this->assertTrue($at('importBookingJson:ftp') < $at('importFile:ftp'), 'bookings must be defined before the files');
+        $this->assertTrue($at('importFile:ftp') < $at('importApplicationLogJson:ftp'), 'files must be defined before the logs');
 
         $this->assertNull($find('digital-hatch:fetch'), 'the :ftp imports take the files themselves');
     }
 
-    public function test_the_bucket_imports_are_scheduled_in_the_same_order(): void
+    public function test_the_bucket_imports_are_not_scheduled(): void
     {
         $find = fn (string $name) => $this->scheduled()->first(fn ($event) => str_contains($event->command, $name));
 
-        $this->assertSame('*/5 * * * *', $find('importBookingJson:bucket')?->expression, 'importBookingJson:bucket is not in routes/console.php');
-        $this->assertSame('1-59/5 * * * *', $find('importApplicationLogJson:bucket')?->expression, 'importApplicationLogJson:bucket is not in routes/console.php');
-        $this->assertSame('4-59/5 * * * *', $find('importFile:bucket')?->expression, 'importFile:bucket is not in routes/console.php');
+        // The :bucket variants run from the digital-hatch screen or the CLI; only the :ftp ones are on the clock.
+        foreach (['importBookingJson:bucket', 'importApplicationLogJson:bucket', 'importFile:bucket'] as $command) {
+            $this->assertNull($find($command), "{$command} must not be scheduled");
+        }
     }
 }

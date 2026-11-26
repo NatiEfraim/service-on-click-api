@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Base for the four *:xlsx user imports (IMPORT_BOOKING_TYPE_USERS.md): importCarBooking:xlsx, importCarMaintenanceBooking:xlsx,
- * importOutUnitFoodBooking:xlsx and importUser:xlsx. Each one imports its own file from the bucket's import-xlsx folder and makes it
+ * importInUnitFoodBooking:xlsx and importUser:xlsx. Each one imports its own file from the bucket's import-xlsx folder and makes it
  * the full list of its booking types: everyone in the file gets their user_{booking type id} permissions plus the common
  * infosec + ICT ones (ImportUsersXlsxService::COMMON_BOOKING_TYPES), and everyone else loses the file's own permissions
  * (never the common ones). The file moves to loaded-xlsx when done and stays put when the run failed.
